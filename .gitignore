@@ -1,0 +1,11 @@
+.kiro/
+backend/node_modules/
+
+backend/.env
+backend/.env.example
+
+backend/firebase-service-account.json
+
+backend/ARCHITECTURE_REVIEW.md
+backend/ENV_SETUP_GUIDE.md
+backend/srs.md
