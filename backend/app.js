@@ -1,41 +1,107 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+/**
+ * Express Application Entry Point
+ * E-commerce Platform Backend - Modular Monolith Architecture
+ */
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
+const path = require('path');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+// Import shared utilities
+const { errorHandler, notFoundHandler } = require('./src/shared/utils/error.util');
+const { initializeServices } = require('./src/shared/init');
 
-var app = express();
+// Import module routes
+const authRoutes = require('./src/modules/auth/auth.routes');
+const productRoutes = require('./src/modules/product/product.routes');
+const orderRoutes = require('./src/modules/order/order.routes');
+const paymentRoutes = require('./src/modules/order/payment.routes');
+const shippingWebhookRoutes = require('./src/modules/order/shipping-webhook.routes');
+const shopRoutes = require('./src/modules/shop/shop.routes');
+const chatRoutes = require('./src/modules/chat/chat.routes');
+const notificationRoutes = require('./src/modules/notification/notification.routes');
+const shipperRoutes = require('./src/modules/shipper/shipper.routes');
+const shipmentRoutes = require('./src/modules/shipper/shipment.routes');
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
+const app = express();
 
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Security middleware
+app.use(helmet());
+app.use(cors({
+    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
+    credentials: true
+}));
+
+// Request parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+// Logging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || '1.0.0'
+    });
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
+// API Routes - v1
+const API_PREFIX = '/api/v1';
+
+// Auth & User Module
+app.use(`${API_PREFIX}/auth`, authRoutes);
+
+// Shop & Social Module
+app.use(`${API_PREFIX}/shops`, shopRoutes);
+
+// Catalog & Search Module
+app.use(`${API_PREFIX}/products`, productRoutes);
+
+// Order Module
+app.use(`${API_PREFIX}/orders`, orderRoutes);
+
+// Payment Module
+app.use(`${API_PREFIX}/payments`, paymentRoutes);
+
+// Shipping Webhooks (external providers)
+app.use(`${API_PREFIX}/webhooks/shipping`, shippingWebhookRoutes);
+
+// Communication Module
+app.use(`${API_PREFIX}/chat`, chatRoutes);
+app.use(`${API_PREFIX}/notifications`, notificationRoutes);
+
+// Shipper Module
+app.use(`${API_PREFIX}/shippers`, shipperRoutes);
+app.use(`${API_PREFIX}/shipments`, shipmentRoutes);
+
+// Error handling
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// Initialize services on startup
+const startServer = async () => {
+    try {
+        await initializeServices();
+        console.log('✅ All services initialized successfully');
+    } catch (error) {
+        console.error('❌ Failed to initialize services:', error);
+        process.exit(1);
+    }
+};
+
+// Only initialize if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+    startServer();
+}
 
 module.exports = app;

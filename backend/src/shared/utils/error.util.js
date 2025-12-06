@@ -103,6 +103,55 @@ function createAuthError(errorCode) {
   return new AppError('UNKNOWN_ERROR', 'An unknown error occurred', 500);
 }
 
+/**
+ * Not Found Handler Middleware
+ */
+function notFoundHandler(req, res, next) {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: `Route ${req.method} ${req.originalUrl} not found`
+    }
+  });
+}
+
+/**
+ * Global Error Handler Middleware
+ */
+function errorHandler(err, req, res, next) {
+  // Log error
+  console.error('Error:', {
+    message: err.message,
+    code: err.code,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+
+  // Determine status code
+  const statusCode = err.statusCode || err.status || 500;
+
+  // Build error response
+  const errorResponse = {
+    success: false,
+    error: {
+      code: err.code || 'INTERNAL_ERROR',
+      message: err.isOperational ? err.message : 'An unexpected error occurred'
+    }
+  };
+
+  // Add details if available (validation errors)
+  if (err.details) {
+    errorResponse.error.details = err.details;
+  }
+
+  // Add stack trace in development
+  if (process.env.NODE_ENV === 'development') {
+    errorResponse.error.stack = err.stack;
+  }
+
+  res.status(statusCode).json(errorResponse);
+}
+
 module.exports = {
   AppError,
   AuthenticationError,
@@ -113,4 +162,6 @@ module.exports = {
   RateLimitError,
   AUTH_ERRORS,
   createAuthError,
+  notFoundHandler,
+  errorHandler,
 };

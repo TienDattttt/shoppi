@@ -7,6 +7,7 @@ const orderRepository = require('../order.repository');
 const cartRepository = require('../cart.repository');
 const voucherService = require('./voucher.service');
 const shippingService = require('./shipping.service');
+const unifiedShippingService = require('./shipping/unified-shipping.service');
 const paymentService = require('./payment.service');
 const orderDTO = require('../order.dto');
 const { AppError } = require('../../../shared/utils/error.util');
@@ -253,6 +254,77 @@ async function getShippingAddress(addressId) {
   };
 }
 
+/**
+ * Get shipping options for checkout
+ * Uses unified shipping service to aggregate fees from all providers
+ * 
+ * Feature: shipping-provider-integration
+ * Requirements: 2.1, 2.4
+ */
+async function getShippingOptions(shopId, deliveryAddress, items, codAmount = 0) {
+  // Get shop pickup address (placeholder - would fetch from shop settings)
+  const pickupAddress = {
+    province: 'Hồ Chí Minh',
+    district: 'Quận 1',
+    ward: 'Phường Bến Nghé',
+    address: '123 Nguyễn Huệ',
+    name: 'Shop Name',
+    phone: '0901234567',
+  };
+
+  // Get delivery address details
+  const delivery = {
+    province: deliveryAddress.province || 'Hồ Chí Minh',
+    district: deliveryAddress.district || 'Quận 3',
+    ward: deliveryAddress.ward || 'Phường 1',
+    address: deliveryAddress.address || '',
+    name: deliveryAddress.name || '',
+    phone: deliveryAddress.phone || '',
+  };
+
+  // Get shipping options from unified service
+  const { options, errors } = await unifiedShippingService.getShippingOptions(
+    shopId,
+    pickupAddress,
+    delivery,
+    items,
+    codAmount
+  );
+
+  return {
+    options: options.map(opt => ({
+      provider: opt.provider,
+      providerName: opt.providerName,
+      fee: opt.fee,
+      estimatedDays: opt.estimatedDays,
+      serviceName: opt.serviceName,
+    })),
+    errors,
+  };
+}
+
+/**
+ * Create external shipment after order confirmation
+ * 
+ * Feature: shipping-provider-integration
+ * Requirements: 3.1, 3.3
+ */
+async function createExternalShipment(subOrderId, providerCode, orderData) {
+  try {
+    const result = await unifiedShippingService.createShippingOrder(
+      subOrderId,
+      providerCode,
+      orderData
+    );
+
+    return result;
+  } catch (error) {
+    console.error(`Failed to create external shipment for ${subOrderId}:`, error.message);
+    // Don't throw - order can still proceed with manual shipping assignment
+    return null;
+  }
+}
+
 module.exports = {
   createOrder,
   groupItemsByShop,
@@ -260,4 +332,6 @@ module.exports = {
   calculateOrderTotals,
   reserveStock,
   getShippingAddress,
+  getShippingOptions,
+  createExternalShipment,
 };
