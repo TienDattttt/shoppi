@@ -1,63 +1,83 @@
 import { create } from 'zustand';
-import { notificationService, type Notification } from '@/services/notification.service';
+
+export interface Notification {
+    id: string;
+    type: 'ORDER' | 'PROMOTION' | 'WALLET' | 'SYSTEM';
+    title: string;
+    description: string;
+    timestamp: Date;
+    isRead: boolean;
+    image?: string;
+    link?: string;
+}
 
 interface NotificationState {
     notifications: Notification[];
     unreadCount: number;
-    loading: boolean;
-    fetchNotifications: () => Promise<void>;
-    markAsRead: (id: string) => Promise<void>;
-    markAllAsRead: () => Promise<void>;
+    markAsRead: (id: string) => void;
+    markAllAsRead: () => void;
+    addNotification: (notification: Notification) => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
-    notifications: [],
-    unreadCount: 0,
-    loading: false,
-
-    fetchNotifications: async () => {
-        set({ loading: true });
-        try {
-            const data = await notificationService.getNotifications();
-            set({
-                notifications: data,
-                unreadCount: data.filter(n => !n.isRead).length,
-                loading: false
-            });
-        } catch (error) {
-            console.error("Failed to fetch notifications", error);
-            set({ loading: false });
-        }
+const MOCK_NOTIFICATIONS: Notification[] = [
+    {
+        id: 'n1',
+        type: 'ORDER',
+        title: 'Order Completed',
+        description: 'Order #ORD-001 has been delivered successfully. Please rate the product.',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
+        isRead: false,
+        image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&q=60',
+        link: '/user/purchase/order/ORD-001'
     },
-
-    markAsRead: async (id: string) => {
-        // Optimistic update
-        const { notifications, unreadCount } = get();
-        const updated = notifications.map(n =>
-            n._id === id ? { ...n, isRead: true } : n
-        );
-
-        // Only decrease count if it was unread
-        const wasUnread = notifications.find(n => n._id === id)?.isRead === false;
-
-        set({
-            notifications: updated,
-            unreadCount: wasUnread ? Math.max(0, unreadCount - 1) : unreadCount
-        });
-
-        await notificationService.markAsRead(id);
+    {
+        id: 'n2',
+        type: 'PROMOTION',
+        title: 'Super Sale 12.12',
+        description: 'Get up to 50% off on all Fashion items today!',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
+        isRead: false,
+        image: 'https://via.placeholder.com/100x100.png?text=Sale',
+        link: '/'
     },
-
-    markAllAsRead: async () => {
-        // Optimistic update
-        const { notifications } = get();
-        const updated = notifications.map(n => ({ ...n, isRead: true }));
-
-        set({
-            notifications: updated,
-            unreadCount: 0
-        });
-
-        await notificationService.markAllAsRead();
+    {
+        id: 'n3',
+        type: 'WALLET',
+        title: 'Refund Processed',
+        description: 'Refund for order #ORD-000 has been initiated to your wallet.',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
+        isRead: true,
+        link: '/user/wallet'
     }
+];
+
+export const useNotificationStore = create<NotificationState>((set) => ({
+    notifications: MOCK_NOTIFICATIONS,
+    unreadCount: MOCK_NOTIFICATIONS.filter(n => !n.isRead).length,
+
+    markAsRead: (id) => set((state) => {
+        const newNotifications = state.notifications.map(n =>
+            n.id === id ? { ...n, isRead: true } : n
+        );
+        return {
+            notifications: newNotifications,
+            unreadCount: newNotifications.filter(n => !n.isRead).length
+        };
+    }),
+
+    markAllAsRead: () => set((state) => {
+        const newNotifications = state.notifications.map(n => ({ ...n, isRead: true }));
+        return {
+            notifications: newNotifications,
+            unreadCount: 0
+        };
+    }),
+
+    addNotification: (notification) => set((state) => {
+        const newNotifications = [notification, ...state.notifications];
+        return {
+            notifications: newNotifications,
+            unreadCount: newNotifications.filter(n => !n.isRead).length
+        };
+    })
 }));

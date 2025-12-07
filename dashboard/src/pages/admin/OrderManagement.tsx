@@ -1,18 +1,14 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Order } from "@/services/order.service";
 import { orderService } from "@/services/order.service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Truck, CheckCircle, XCircle } from "lucide-react";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Eye, Download } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
 
 export default function OrderManagement() {
+    const navigate = useNavigate();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -82,7 +78,7 @@ export default function OrderManagement() {
             className: "text-right",
             cell: (order: Order) => (
                 <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/admin/orders/${order._id}`)}>
                         <Eye className="h-4 w-4" />
                     </Button>
                 </div>
@@ -97,6 +93,9 @@ export default function OrderManagement() {
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">Order Management</h1>
                     <p className="text-muted-foreground mt-1">Track and manage all system orders</p>
                 </div>
+                <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" /> Export Report
+                </Button>
             </div>
 
             <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">

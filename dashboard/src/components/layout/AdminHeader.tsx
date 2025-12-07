@@ -11,11 +11,13 @@ import {
 import { NotificationDropdown } from "@/components/common/NotificationDropdown";
 import { ModeToggle } from "@/components/mode-toggle";
 
+import { Breadcrumbs } from "@/components/common/Breadcrumbs";
+
 export function AdminHeader() {
     return (
         <header className="h-16 bg-white/80 backdrop-blur-md border-b border-border/40 fixed top-0 right-0 left-64 z-40 flex items-center justify-between px-6 shadow-sm z-[40]">
             <div className="flex items-center">
-                <h2 className="text-xl font-semibold text-foreground tracking-tight">Dashboard Overview</h2>
+                <Breadcrumbs />
             </div>
 
             <div className="flex items-center gap-4">

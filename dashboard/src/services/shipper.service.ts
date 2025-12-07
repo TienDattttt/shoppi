@@ -56,7 +56,7 @@ export const shipperService = {
         }
     },
 
-    updateShipperStatus: async (id: string, status: string) => {
+    updateShipperStatus: async (_id: string, _status: string) => {
         return new Promise(resolve => setTimeout(resolve, 500));
     },
 

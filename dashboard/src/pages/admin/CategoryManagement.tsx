@@ -12,14 +12,11 @@ import { categoryService, type Category } from "@/services/category.service";
 import { CategoryFormModal } from "@/components/modals/CategoryFormModal";
 import { toast } from "sonner";
 
-import { ConfirmModal } from "@/components/common/ConfirmModal";
-
 export default function CategoryManagement() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-    const [categoryToDelete, setCategoryToDelete] = useState<{ id: string, name: string } | null>(null);
 
     useEffect(() => {
         loadCategories();

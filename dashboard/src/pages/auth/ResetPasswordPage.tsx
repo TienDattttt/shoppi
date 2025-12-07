@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Lock, ArrowLeft, ShoppingBag, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
-    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");

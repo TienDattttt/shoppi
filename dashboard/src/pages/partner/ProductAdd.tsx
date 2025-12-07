@@ -44,7 +44,8 @@ export default function ProductAdd() {
                 product_price: String(data.product_price),
                 product_quantity: String(data.product_quantity),
                 product_description: data.product_description || "",
-                product_type: data.product_type || "Physical"
+                product_type: data.product_type || "Physical",
+                product_images: data.product_images || []
             });
         } catch (error) {
             toast.error("Failed to load product details");

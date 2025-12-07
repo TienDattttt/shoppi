@@ -4,7 +4,7 @@ import { productService } from "@/services/product.service";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, PlusCircle, MoreHorizontal, Eye } from "lucide-react";
+import { Edit, Trash2, PlusCircle, MoreHorizontal, Eye, Download } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -121,10 +121,15 @@ export default function ProductManagement() {
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">Product Management</h1>
                     <p className="text-muted-foreground mt-1">Manage your shop inventory</p>
                 </div>
-                <Button className="shadow-lg hover:shadow-xl transition-all" onClick={() => window.location.href = '/partner/products/add'}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    New Product
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2">
+                        <Download className="h-4 w-4" /> Export Products
+                    </Button>
+                    <Button className="shadow-lg hover:shadow-xl transition-all" onClick={() => window.location.href = '/partner/products/add'}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        New Product
+                    </Button>
+                </div>
             </div>
 
             <Tabs defaultValue="published" onValueChange={setActiveTab} className="space-y-4">

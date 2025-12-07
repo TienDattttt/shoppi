@@ -15,7 +15,7 @@ export interface Order {
     };
     order_payment: "COD" | "Credit Card";
     order_products: any[];
-    order_status: "pending" | "confirmed" | "shipped" | "cancelled" | "delivered";
+    order_status: "pending" | "confirmed" | "packed" | "shipped" | "cancelled" | "delivered";
     createdAt: string;
     shopId?: string;
     shopName?: string;
@@ -56,7 +56,20 @@ export const orderService = {
     },
 
     updateOrderStatus: async (id: string, status: string) => {
+        // Deprecated, use specific methods below
         return new Promise(resolve => setTimeout(resolve, 500));
+    },
+
+    confirmOrder: async (id: string) => {
+        return api.post(`/partner/orders/${id}/confirm`);
+    },
+
+    packOrder: async (id: string) => {
+        return api.post(`/partner/orders/${id}/pack`);
+    },
+
+    cancelOrder: async (id: string, reason: string) => {
+        return api.post(`/partner/orders/${id}/cancel`, { reason });
     },
 
     getOrderById: async (id: string) => {

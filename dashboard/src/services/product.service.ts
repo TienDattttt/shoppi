@@ -107,10 +107,10 @@ export const productService = {
     },
 
     approveProduct: async (id: string) => {
-        return new Promise(resolve => setTimeout(resolve, 500));
+        return api.post(`/admin/products/${id}/approve`);
     },
 
-    rejectProduct: async (id: string) => {
-        return new Promise(resolve => setTimeout(resolve, 500));
+    rejectProduct: async (id: string, reason: string) => {
+        return api.post(`/admin/products/${id}/reject`, { reason });
     }
 };

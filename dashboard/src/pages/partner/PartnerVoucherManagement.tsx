@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Ticket, Edit, Ban, CheckCircle } from "lucide-react";
+import { Plus, Ticket, Edit, Ban, CheckCircle, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { voucherService, type Voucher } from "@/services/voucher.service";
 import { VoucherFormModal } from "@/components/modals/VoucherFormModal";
@@ -78,7 +78,14 @@ export default function PartnerVoucherManagement() {
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">Shop Vouchers</h1>
                     <p className="text-muted-foreground mt-1">Manage your shop's discount codes</p>
                 </div>
-                <Button className="shadow-lg" onClick={handleCreate}><Plus className="mr-2 h-4 w-4" /> Create New Voucher</Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2">
+                        <Download className="h-4 w-4" /> Export Vouchers
+                    </Button>
+                    <Button className="shadow-lg" onClick={handleCreate}>
+                        <Plus className="mr-2 h-4 w-4" /> Create New Voucher
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

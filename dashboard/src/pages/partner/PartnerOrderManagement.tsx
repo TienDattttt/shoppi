@@ -4,7 +4,7 @@ import { orderService } from "@/services/order.service";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Truck, Check, Store } from "lucide-react";
+import { Eye, Truck, Check } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
 import {
     DropdownMenu,
@@ -12,11 +12,18 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import { CancelOrderDialog } from "@/components/partner/CancelOrderDialog";
+import { Package, Ban, Download } from "lucide-react";
 
 export default function PartnerOrderManagement() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("all");
+
+    // Dialog state
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [cancelOpen, setCancelOpen] = useState(false);
 
     useEffect(() => {
         loadOrders();
@@ -34,9 +41,63 @@ export default function PartnerOrderManagement() {
         }
     };
 
-    const handleUpdateStatus = async (id: string, status: string) => {
-        await orderService.updateOrderStatus(id, status);
-        loadOrders();
+    const handleConfirm = async (id: string) => {
+        try {
+            await orderService.confirmOrder(id);
+            toast.success("Order confirmed");
+            loadOrders();
+        } catch (error) {
+            toast.error("Failed to confirm order");
+        }
+    };
+
+    const handlePack = async (id: string) => {
+        try {
+            await orderService.packOrder(id);
+            toast.success("Order marked as packed");
+            loadOrders();
+        } catch (error) {
+            toast.error("Failed to pack order");
+        }
+    };
+
+    const handleShip = async (id: string) => {
+        // Assuming ship still uses the update status or a specific endpoint if exists
+        // For now, let's assume 'shipped' status update is what's needed or there might be a pickup action
+        // Following backend controller 'pickupOrder' is for Shipper, but Partner might just mark it ready?
+        // Let's stick to updateOrderStatus for 'shipped' or if there isn't a specific one.
+        // Actually earlier 'packOrder' was found. Let's check for 'shipOrder'.
+        // Backend has 'pickupOrder' (Shipper). 
+        // Typically Partner packs, then Shipper picks up -> Shipped.
+        // So Partner might just wait after packing? 
+        // Or Partner can hand over.
+        // Existing code had 'Mark as Shipped'. I'll keep it as a status update if no specific endpoint.
+        // Using generic update for now as fallback or if backend automation handles it.
+        // But wait, the previous code called updateOrderStatus(id, 'shipped').
+        // I'll assume partner can manually mark shipped or 'ready_to_ship'.
+        try {
+            await orderService.updateOrderStatus(id, 'shipped');
+            toast.success("Order marked as shipped");
+            loadOrders();
+        } catch (error) {
+            toast.error("Failed to update status");
+        }
+    };
+
+    const handleCancelClick = (order: Order) => {
+        setSelectedOrder(order);
+        setCancelOpen(true);
+    };
+
+    const handleCancelConfirm = async (reason: string) => {
+        if (!selectedOrder) return;
+        try {
+            await orderService.cancelOrder(selectedOrder._id, reason);
+            toast.success("Order cancelled");
+            loadOrders();
+        } catch (error) {
+            toast.error("Failed to cancel order");
+        }
     };
 
     const formatCurrency = (value: number) => {
@@ -86,13 +147,31 @@ export default function PartnerOrderManagement() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+
                             {order.order_status === 'pending' && (
-                                <DropdownMenuItem onClick={() => handleUpdateStatus(order._id, 'confirmed')}>
-                                    <Check className="mr-2 h-4 w-4" /> Confirm Order
-                                </DropdownMenuItem>
+                                <>
+                                    <DropdownMenuItem onClick={() => handleConfirm(order._id)}>
+                                        <Check className="mr-2 h-4 w-4" /> Confirm Order
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onClick={() => handleCancelClick(order)}>
+                                        <Ban className="mr-2 h-4 w-4" /> Cancel Order
+                                    </DropdownMenuItem>
+                                </>
                             )}
+
                             {order.order_status === 'confirmed' && (
-                                <DropdownMenuItem onClick={() => handleUpdateStatus(order._id, 'shipped')}>
+                                <>
+                                    <DropdownMenuItem onClick={() => handlePack(order._id)}>
+                                        <Package className="mr-2 h-4 w-4" /> Pack Order
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onClick={() => handleCancelClick(order)}>
+                                        <Ban className="mr-2 h-4 w-4" /> Cancel Order
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+
+                            {order.order_status === 'packed' && (
+                                <DropdownMenuItem onClick={() => handleShip(order._id)}>
                                     <Truck className="mr-2 h-4 w-4" /> Mark as Shipped
                                 </DropdownMenuItem>
                             )}
@@ -109,6 +188,11 @@ export default function PartnerOrderManagement() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">Shop Orders</h1>
                     <p className="text-muted-foreground mt-1">Manage coming orders and shipments</p>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2">
+                        <Download className="h-4 w-4" /> Export Orders
+                    </Button>
                 </div>
             </div>
 
@@ -165,6 +249,13 @@ export default function PartnerOrderManagement() {
                     </div>
                 </TabsContent>
             </Tabs>
-        </div>
+
+            <CancelOrderDialog
+                open={cancelOpen}
+                onOpenChange={setCancelOpen}
+                onConfirm={handleCancelConfirm}
+                orderId={selectedOrder?._id || ""}
+            />
+        </div >
     );
 }

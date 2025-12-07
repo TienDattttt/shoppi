@@ -24,8 +24,38 @@ export const shopService = {
         }
     },
 
-    updateShopStatus: async (id: string, status: string) => {
-        // Mock call
+    approveShop: async (id: string) => {
+        try {
+            const response = await api.post(`/admin/shops/${id}/approve`);
+            return response.data;
+        } catch (error) {
+            console.error("Approve shop error", error);
+            throw error;
+        }
+    },
+
+    rejectShop: async (id: string, reason: string) => {
+        try {
+            const response = await api.post(`/admin/shops/${id}/reject`, { reason });
+            return response.data;
+        } catch (error) {
+            console.error("Reject shop error", error);
+            throw error;
+        }
+    },
+
+    requestRevision: async (id: string, changes: string) => {
+        try {
+            const response = await api.post(`/admin/shops/${id}/revision`, { changes });
+            return response.data;
+        } catch (error) {
+            console.error("Request revision error", error);
+            throw error;
+        }
+    },
+
+    updateShopStatus: async (_id: string, _status: string) => {
+        // Deprecated, use specific methods above
         return new Promise((resolve) => setTimeout(resolve, 500));
     },
 

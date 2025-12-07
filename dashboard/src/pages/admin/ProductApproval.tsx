@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Eye, Store } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
-import { toast } from "sonner"; // Assuming sonner is installed or handle toast differently if not
+import { toast } from "sonner";
+import { RejectProductDialog } from "@/components/admin/RejectProductDialog";
 
 export default function ProductApproval() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [rejectOpen, setRejectOpen] = useState(false);
 
     useEffect(() => {
         loadPendingProducts();
@@ -28,16 +31,29 @@ export default function ProductApproval() {
     };
 
     const handleApprove = async (id: string) => {
-        // Implement approve logic
-        await productService.approveProduct(id);
-        // Refresh
-        loadPendingProducts();
+        try {
+            await productService.approveProduct(id);
+            toast.success("Product approved successfully");
+            loadPendingProducts();
+        } catch (error) {
+            toast.error("Failed to approve product");
+        }
     };
 
-    const handleReject = async (id: string) => {
-        // Implement reject logic
-        await productService.rejectProduct(id);
-        loadPendingProducts();
+    const handleRejectClick = (product: Product) => {
+        setSelectedProduct(product);
+        setRejectOpen(true);
+    };
+
+    const handleRejectConfirm = async (reason: string) => {
+        if (!selectedProduct) return;
+        try {
+            await productService.rejectProduct(selectedProduct._id, reason);
+            toast.success(`Product ${selectedProduct.product_name} rejected`);
+            loadPendingProducts();
+        } catch (error) {
+            toast.error("Failed to reject product");
+        }
     };
 
     const formatCurrency = (value: number) => {
@@ -91,7 +107,7 @@ export default function ProductApproval() {
                     <Button variant="default" size="sm" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(product._id)}>
                         <Check className="h-4 w-4" />
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-8" onClick={() => handleReject(product._id)}>
+                    <Button variant="destructive" size="sm" className="h-8" onClick={() => handleRejectClick(product)}>
                         <X className="h-4 w-4" />
                     </Button>
                 </div>
@@ -117,6 +133,13 @@ export default function ProductApproval() {
                     isLoading={loading}
                 />
             </div>
+
+            <RejectProductDialog
+                open={rejectOpen}
+                onOpenChange={setRejectOpen}
+                onConfirm={handleRejectConfirm}
+                productName={selectedProduct?.product_name || ""}
+            />
         </div>
     );
 }

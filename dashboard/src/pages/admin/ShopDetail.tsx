@@ -93,18 +93,91 @@ export default function ShopDetail() {
                     <TabsTrigger value="reviews">Reviews</TabsTrigger>
                 </TabsList>
                 <TabsContent value="products" className="pt-6">
-                    <div className="bg-card rounded-xl border p-6 shadow-sm min-h-[300px] flex items-center justify-center text-muted-foreground">
-                        Products list will be here (Component reusable)
+                    <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                        <table className="w-full">
+                            <thead className="bg-muted/50">
+                                <tr>
+                                    <th className="text-left p-3 text-sm font-medium">Product</th>
+                                    <th className="text-left p-3 text-sm font-medium">Price</th>
+                                    <th className="text-left p-3 text-sm font-medium">Stock</th>
+                                    <th className="text-left p-3 text-sm font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[
+                                    { name: "Áo thun Premium", price: "250,000đ", stock: 45, status: "Active" },
+                                    { name: "Quần Jeans Slim", price: "450,000đ", stock: 23, status: "Active" },
+                                    { name: "Giày Sneaker", price: "890,000đ", stock: 0, status: "Out of stock" },
+                                ].map((product, idx) => (
+                                    <tr key={idx} className="border-t hover:bg-muted/30">
+                                        <td className="p-3 text-sm font-medium">{product.name}</td>
+                                        <td className="p-3 text-sm">{product.price}</td>
+                                        <td className="p-3 text-sm">{product.stock}</td>
+                                        <td className="p-3">
+                                            <Badge variant={product.status === 'Active' ? 'default' : 'secondary'}>
+                                                {product.status}
+                                            </Badge>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </TabsContent>
                 <TabsContent value="orders" className="pt-6">
-                    <div className="bg-card rounded-xl border p-6 shadow-sm min-h-[300px] flex items-center justify-center text-muted-foreground">
-                        Shop orders will be here
+                    <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+                        <table className="w-full">
+                            <thead className="bg-muted/50">
+                                <tr>
+                                    <th className="text-left p-3 text-sm font-medium">Order ID</th>
+                                    <th className="text-left p-3 text-sm font-medium">Customer</th>
+                                    <th className="text-left p-3 text-sm font-medium">Total</th>
+                                    <th className="text-left p-3 text-sm font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {[
+                                    { id: "#ORD-001", customer: "Nguyen Van A", total: "1,250,000đ", status: "Delivered" },
+                                    { id: "#ORD-002", customer: "Tran Thi B", total: "890,000đ", status: "Shipping" },
+                                    { id: "#ORD-003", customer: "Le Van C", total: "2,100,000đ", status: "Pending" },
+                                ].map((order, idx) => (
+                                    <tr key={idx} className="border-t hover:bg-muted/30">
+                                        <td className="p-3 text-sm font-mono">{order.id}</td>
+                                        <td className="p-3 text-sm">{order.customer}</td>
+                                        <td className="p-3 text-sm font-medium">{order.total}</td>
+                                        <td className="p-3">
+                                            <Badge variant={order.status === 'Delivered' ? 'default' : order.status === 'Shipping' ? 'secondary' : 'outline'}>
+                                                {order.status}
+                                            </Badge>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </TabsContent>
                 <TabsContent value="reviews" className="pt-6">
-                    <div className="bg-card rounded-xl border p-6 shadow-sm min-h-[300px] flex items-center justify-center text-muted-foreground">
-                        Reviews will be here
+                    <div className="bg-card rounded-xl border p-6 shadow-sm space-y-4">
+                        {[
+                            { customer: "Nguyen Van A", rating: 5, comment: "Sản phẩm tuyệt vời, giao hàng nhanh!", date: "2024-01-15" },
+                            { customer: "Tran Thi B", rating: 4, comment: "Chất lượng tốt, đóng gói cẩn thận", date: "2024-01-10" },
+                            { customer: "Le Van C", rating: 3, comment: "Sản phẩm OK, giao hàng hơi chậm", date: "2024-01-05" },
+                        ].map((review, idx) => (
+                            <div key={idx} className="p-4 bg-muted/30 rounded-lg">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p className="font-medium">{review.customer}</p>
+                                        <div className="flex items-center gap-1 text-yellow-500">
+                                            {[...Array(5)].map((_, i) => (
+                                                <Star key={i} className={`h-3 w-3 ${i < review.rating ? 'fill-current' : ''}`} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{review.date}</span>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{review.comment}</p>
+                            </div>
+                        ))}
                     </div>
                 </TabsContent>
             </Tabs>

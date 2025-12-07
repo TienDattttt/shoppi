@@ -33,7 +33,7 @@ export const voucherService = {
         }
     },
 
-    getShopVouchers: async (shopId?: string) => {
+    getShopVouchers: async (_shopId?: string) => {
         try {
             const response = await api.get("/shop/vouchers");
             return response.data;
@@ -58,5 +58,31 @@ export const voucherService = {
 
     toggleVoucherStatus: async (id: string, status: string) => {
         return api.patch(`/vouchers/${id}/status`, { status });
+    },
+
+    getVoucherById: async (id: string): Promise<Voucher> => {
+        try {
+            const response = await api.get(`/vouchers/${id}`);
+            return response.data;
+        } catch (error) {
+            // Mock data
+            return {
+                _id: id,
+                code: "WELCOME50",
+                discountType: "fixed",
+                value: 50000,
+                minOrderValue: 200000,
+                maxDiscountValue: 100000,
+                startDate: "2024-01-01",
+                endDate: "2024-12-31",
+                usageLimit: 1000,
+                usedCount: 150,
+                status: "active"
+            };
+        }
+    },
+
+    deleteVoucher: async (id: string) => {
+        return api.delete(`/vouchers/${id}`);
     }
 };

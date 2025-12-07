@@ -3,7 +3,7 @@ import { shopService } from "@/services/shop.service";
 import type { Shop } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, Ban, CheckCircle, Store, Eye } from "lucide-react";
+import { MoreHorizontal, Ban, CheckCircle, Store, Eye, Download } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,10 +13,21 @@ import {
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/common/DataTable";
+import { RejectShopDialog } from "@/components/admin/RejectShopDialog";
+import { RequestRevisionDialog } from "@/components/admin/RequestRevisionDialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { Edit3 } from "lucide-react";
 
 export default function ShopManagement() {
     const [shops, setShops] = useState<Shop[]>([]);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState("all");
+
+    // Dialog states
+    const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
+    const [rejectOpen, setRejectOpen] = useState(false);
+    const [revisionOpen, setRevisionOpen] = useState(false);
 
     useEffect(() => {
         loadShops();
@@ -29,10 +40,57 @@ export default function ShopManagement() {
             setShops(data.data);
         } catch (error) {
             console.error(error);
+            toast.error("Failed to load shops");
         } finally {
             setLoading(false);
         }
     };
+
+    const handleApprove = async (shop: Shop) => {
+        try {
+            await shopService.approveShop(shop._id);
+            toast.success(`Shop ${shop.name} approved successfully`);
+            loadShops();
+        } catch (error) {
+            toast.error("Failed to approve shop");
+        }
+    };
+
+    const handleReject = async (reason: string) => {
+        if (!selectedShop) return;
+        try {
+            await shopService.rejectShop(selectedShop._id, reason);
+            toast.success(`Shop ${selectedShop.name} rejected`);
+            loadShops();
+        } catch (error) {
+            toast.error("Failed to reject shop");
+        }
+    };
+
+    const handleRevision = async (changes: string) => {
+        if (!selectedShop) return;
+        try {
+            await shopService.requestRevision(selectedShop._id, changes);
+            toast.success(`Revision requested for ${selectedShop.name}`);
+            loadShops();
+        } catch (error) {
+            toast.error("Failed to request revision");
+        }
+    };
+
+    const openRejectDialog = (shop: Shop) => {
+        setSelectedShop(shop);
+        setRejectOpen(true);
+    };
+
+    const openRevisionDialog = (shop: Shop) => {
+        setSelectedShop(shop);
+        setRevisionOpen(true);
+    };
+
+    const filteredShops = statusFilter === "all"
+        ? shops
+        : shops.filter(shop => shop.status.toLowerCase() === statusFilter);
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -89,13 +147,30 @@ export default function ShopManagement() {
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {shop.status === 'active' ? (
+
+                            {shop.status === 'pending' && (
+                                <>
+                                    <DropdownMenuItem className="text-green-600" onClick={() => handleApprove(shop)}>
+                                        <CheckCircle className="mr-2 h-4 w-4" /> Approve
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-amber-600" onClick={() => openRevisionDialog(shop)}>
+                                        <Edit3 className="mr-2 h-4 w-4" /> Request Revision
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onClick={() => openRejectDialog(shop)}>
+                                        <Ban className="mr-2 h-4 w-4" /> Reject
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+
+                            {shop.status === 'active' && (
                                 <DropdownMenuItem className="text-destructive">
                                     <Ban className="mr-2 h-4 w-4" /> Suspend Shop
                                 </DropdownMenuItem>
-                            ) : (
-                                <DropdownMenuItem className="text-green-600">
-                                    <CheckCircle className="mr-2 h-4 w-4" /> Activate Shop
+                            )}
+
+                            {shop.status === 'rejected' && (
+                                <DropdownMenuItem className="text-muted-foreground" disabled>
+                                    <Ban className="mr-2 h-4 w-4" /> Already Rejected
                                 </DropdownMenuItem>
                             )}
                         </DropdownMenuContent>
@@ -113,19 +188,47 @@ export default function ShopManagement() {
                     <p className="text-muted-foreground mt-1">Manage partner shops and approvals</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline">Pending Approvals</Button>
+                    <Button variant="outline" className="gap-2">
+                        <Download className="h-4 w-4" /> Export List
+                    </Button>
+                    <Button variant="outline" onClick={() => setStatusFilter("pending")}>Pending Approvals</Button>
                 </div>
             </div>
 
-            <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
-                <DataTable
-                    data={shops}
-                    columns={columns}
-                    searchKey="name"
-                    searchPlaceholder="Search shops..."
-                    isLoading={loading}
-                />
-            </div>
+            <Tabs defaultValue="all" value={statusFilter} onValueChange={setStatusFilter} className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="all">All Shops</TabsTrigger>
+                    <TabsTrigger value="pending" className="text-amber-600">Pending</TabsTrigger>
+                    <TabsTrigger value="active" className="text-green-600">Active</TabsTrigger>
+                    <TabsTrigger value="rejected" className="text-red-600">Rejected</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value={statusFilter} className="mt-0">
+                    <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
+                        <DataTable
+                            data={filteredShops}
+                            columns={columns}
+                            searchKey="name"
+                            searchPlaceholder="Search shops..."
+                            isLoading={loading}
+                        />
+                    </div>
+                </TabsContent>
+            </Tabs>
+
+            <RejectShopDialog
+                open={rejectOpen}
+                onOpenChange={setRejectOpen}
+                onConfirm={handleReject}
+                shopName={selectedShop?.name || ""}
+            />
+
+            <RequestRevisionDialog
+                open={revisionOpen}
+                onOpenChange={setRevisionOpen}
+                onConfirm={handleRevision}
+                shopName={selectedShop?.name || ""}
+            />
         </div>
     );
 }
