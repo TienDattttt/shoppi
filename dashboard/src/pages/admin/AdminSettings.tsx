@@ -1,10 +1,66 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import api from "@/services/api";
 
 export default function AdminSettings() {
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [siteName, setSiteName] = useState("Shoppi");
+    const [contactEmail, setContactEmail] = useState("contact@shoppi.com");
+    const [maintenanceMode, setMaintenanceMode] = useState(false);
+    const [autoApprove, setAutoApprove] = useState(true);
+
+    useEffect(() => {
+        loadSettings();
+    }, []);
+
+    const loadSettings = async () => {
+        try {
+            const response = await api.get('/admin/settings');
+            const settings = response.data;
+            setSiteName(settings.site_name || "Shoppi");
+            setContactEmail(settings.contact_email || "contact@shoppi.com");
+            setMaintenanceMode(settings.maintenance_mode || false);
+            setAutoApprove(settings.auto_approve_products !== false);
+        } catch (error) {
+            console.error('Load settings error:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            await api.patch('/admin/settings', {
+                site_name: siteName,
+                contact_email: contactEmail,
+                maintenance_mode: maintenanceMode,
+                auto_approve_products: autoApprove,
+            });
+            toast.success("Đã lưu cài đặt thành công!");
+        } catch (error: any) {
+            console.error('Save settings error:', error);
+            toast.error(error.response?.data?.error?.message || "Không thể lưu cài đặt");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div>
@@ -21,11 +77,19 @@ export default function AdminSettings() {
                     <CardContent className="space-y-4">
                         <div className="grid gap-2">
                             <Label htmlFor="siteName">Tên sàn thương mại</Label>
-                            <Input id="siteName" defaultValue="Shoppi" />
+                            <Input 
+                                id="siteName" 
+                                value={siteName}
+                                onChange={(e) => setSiteName(e.target.value)}
+                            />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="contactEmail">Email liên hệ</Label>
-                            <Input id="contactEmail" defaultValue="contact@shoppi.com" />
+                            <Input 
+                                id="contactEmail" 
+                                value={contactEmail}
+                                onChange={(e) => setContactEmail(e.target.value)}
+                            />
                         </div>
                     </CardContent>
                 </Card>
@@ -41,17 +105,32 @@ export default function AdminSettings() {
                                 <Label>Bảo trì hệ thống</Label>
                                 <p className="text-sm text-muted-foreground">Tạm ngưng truy cập để bảo trì</p>
                             </div>
-                            <Switch />
+                            <Switch 
+                                checked={maintenanceMode}
+                                onCheckedChange={setMaintenanceMode}
+                            />
                         </div>
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
                                 <Label>Duyệt tự động</Label>
                                 <p className="text-sm text-muted-foreground">Tự động duyệt sản phẩm từ shop uy tín</p>
                             </div>
-                            <Switch defaultChecked />
+                            <Switch 
+                                checked={autoApprove}
+                                onCheckedChange={setAutoApprove}
+                            />
                         </div>
                         <div className="pt-4">
-                            <Button>Lưu thay đổi</Button>
+                            <Button onClick={handleSave} disabled={isSaving}>
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Đang lưu...
+                                    </>
+                                ) : (
+                                    "Lưu thay đổi"
+                                )}
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
