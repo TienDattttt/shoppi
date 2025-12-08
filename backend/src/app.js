@@ -77,10 +77,12 @@ const adminSettingsRoutes = require('./modules/admin/settings.routes');
 const adminUsersRoutes = require('./modules/admin/users.routes');
 const adminShopsRoutes = require('./modules/admin/shops.routes');
 const adminCategoriesRoutes = require('./modules/admin/categories.routes');
+const adminOrdersRoutes = require('./modules/admin/orders.routes');
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/admin/shops', adminShopsRoutes);
 app.use('/api/admin/categories', adminCategoriesRoutes);
+app.use('/api/admin/orders', adminOrdersRoutes);
 // Note: /api/admin/products is handled by product.module.js
 
 // 404 handler

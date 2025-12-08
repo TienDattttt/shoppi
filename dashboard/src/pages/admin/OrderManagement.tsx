@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Order } from "@/services/order.service";
 import { orderService } from "@/services/order.service";
+
+// Extended Order type for admin view
+interface AdminOrder {
+    id: string;
+    _id: string;
+    userName: string;
+    shopName: string;
+    order_status: string;
+    order_checkout: { totalPrice: number };
+    order_products: any[];
+    createdAt: string;
+    total_amount: number;
+}
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Download } from "lucide-react";
@@ -9,7 +21,7 @@ import { DataTable } from "@/components/common/DataTable";
 
 export default function OrderManagement() {
     const navigate = useNavigate();
-    const [orders, setOrders] = useState<Order[]>([]);
+    const [orders, setOrders] = useState<AdminOrder[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,8 +31,9 @@ export default function OrderManagement() {
     const loadOrders = async () => {
         setLoading(true);
         try {
-            const data = await orderService.getAllOrders();
-            setOrders(data.data || []);
+            const response = await orderService.getAllOrders();
+            const data = response?.data || response || [];
+            setOrders(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error(error);
         } finally {
@@ -46,37 +59,37 @@ export default function OrderManagement() {
     const columns = [
         {
             header: "Order ID",
-            cell: (order: Order) => <span className="font-mono font-medium text-xs">{order._id}</span>
+            cell: (order: AdminOrder) => <span className="font-mono font-medium text-xs">{order._id?.slice(0, 8)}...</span>
         },
         {
             header: "Customer",
-            accessorKey: "userName" as keyof Order,
+            accessorKey: "userName" as keyof AdminOrder,
         },
         {
             header: "Shop",
-            accessorKey: "shopName" as keyof Order,
+            accessorKey: "shopName" as keyof AdminOrder,
             className: "hidden md:table-cell"
         },
         {
             header: "Total",
-            cell: (order: Order) => <span className="font-medium">{formatCurrency(order.order_checkout.totalPrice)}</span>
+            cell: (order: AdminOrder) => <span className="font-medium">{formatCurrency(order.order_checkout?.totalPrice || order.total_amount || 0)}</span>
         },
         {
             header: "Items",
-            cell: (order: Order) => <span>{order.order_products.length} items</span>
+            cell: (order: AdminOrder) => <span>{order.order_products?.length || 0} items</span>
         },
         {
             header: "Status",
-            cell: (order: Order) => getStatusBadge(order.order_status)
+            cell: (order: AdminOrder) => getStatusBadge(order.order_status)
         },
         {
             header: "Date",
-            cell: (order: Order) => <span className="text-xs text-muted-foreground">{order.createdAt}</span>
+            cell: (order: AdminOrder) => <span className="text-xs text-muted-foreground">{order.createdAt}</span>
         },
         {
             header: "Actions",
             className: "text-right",
-            cell: (order: Order) => (
+            cell: (order: AdminOrder) => (
                 <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/admin/orders/${order._id}`)}>
                         <Eye className="h-4 w-4" />

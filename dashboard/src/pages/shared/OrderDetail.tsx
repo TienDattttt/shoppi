@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { orderService } from "@/services/order.service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +11,12 @@ import { toast } from "sonner";
 export default function OrderDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [order, setOrder] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+
+    // Check if we're in admin context
+    const isAdmin = location.pathname.startsWith('/admin');
 
     useEffect(() => {
         if (id) loadOrder(id);
@@ -21,7 +25,38 @@ export default function OrderDetail() {
     const loadOrder = async (orderId: string) => {
         setLoading(true);
         try {
-            const data = await orderService.getOrderById(orderId);
+            // Use admin endpoint if in admin context
+            const response = isAdmin 
+                ? await orderService.getAdminOrderById(orderId)
+                : await orderService.getOrderById(orderId);
+            const data = response?.data || response;
+            
+            // Transform admin response to match expected format
+            if (data && isAdmin) {
+                // Flatten items from sub_orders
+                const allItems = data.sub_orders?.flatMap((so: any) => 
+                    (so.items || []).map((item: any) => ({
+                        product_name: item.product_name,
+                        product_thumb: item.product_image || '',
+                        product_price: item.unit_price,
+                        product_quantity: item.quantity
+                    }))
+                ) || [];
+                
+                data.order_products = allItems;
+                data.order_status = data.status;
+                data.order_checkout = { 
+                    totalPrice: data.grand_total || data.subtotal,
+                    shippingFee: data.shipping_total || 0
+                };
+                data.order_shipping = {
+                    fullName: data.shipping_name || data.user?.full_name,
+                    phone: data.shipping_phone || data.user?.phone,
+                    address: data.shipping_address
+                };
+                data.createdAt = new Date(data.created_at).toLocaleDateString('vi-VN');
+            }
+            
             setOrder(data);
         } catch (error) {
             toast.error("Failed to load order");
@@ -31,7 +66,7 @@ export default function OrderDetail() {
     };
 
     const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
     };
 
     if (loading) return <div>Loading...</div>;
@@ -60,13 +95,13 @@ export default function OrderDetail() {
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-semibold flex items-center gap-2">
                                 <Package className="h-5 w-5 text-primary" /> Order Items
-                                <span className="text-sm font-normal text-muted-foreground">({order.order_products.length})</span>
+                                <span className="text-sm font-normal text-muted-foreground">({order.order_products?.length || 0})</span>
                             </h2>
                             <Badge variant="outline">{order.order_status}</Badge>
                         </div>
                         <Separator className="mb-4" />
                         <div className="space-y-4">
-                            {order.order_products.map((item: any, idx: number) => (
+                            {(order.order_products || []).map((item: any, idx: number) => (
                                 <div key={idx} className="flex gap-4">
                                     <div className="h-16 w-16 bg-muted rounded-md overflow-hidden border">
                                         <img src={item.product_thumb} alt={item.product_name} className="h-full w-full object-cover" />
@@ -84,15 +119,15 @@ export default function OrderDetail() {
                         <Separator className="my-4" />
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Subtotal</span>
-                            <span>{formatCurrency(order.order_checkout.totalPrice)}</span>
+                            <span>{formatCurrency(order.order_checkout?.totalPrice || order.subtotal || 0)}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm mt-2">
                             <span className="text-muted-foreground">Shipping Fee</span>
-                            <span>{formatCurrency(30000)}</span>
+                            <span>{formatCurrency(order.order_checkout?.shippingFee || order.shipping_total || 30000)}</span>
                         </div>
                         <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t">
                             <span>Total</span>
-                            <span className="text-primary">{formatCurrency(order.order_checkout.totalPrice + 30000)}</span>
+                            <span className="text-primary">{formatCurrency(order.grand_total || (order.order_checkout?.totalPrice || 0) + 30000)}</span>
                         </div>
                     </div>
 
@@ -122,11 +157,11 @@ export default function OrderDetail() {
                         <div className="space-y-3">
                             <div className="flex items-center gap-3">
                                 <Avatar className="h-10 w-10">
-                                    <AvatarFallback>C</AvatarFallback>
+                                    <AvatarFallback>{(order.userName || order.user?.full_name || 'C')[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <p className="font-medium text-sm">{order.userName}</p>
-                                    <p className="text-xs text-muted-foreground">{order.userPhone}</p>
+                                    <p className="font-medium text-sm">{order.userName || order.user?.full_name || 'N/A'}</p>
+                                    <p className="text-xs text-muted-foreground">{order.userPhone || order.user?.phone || 'N/A'}</p>
                                 </div>
                             </div>
                         </div>
@@ -140,7 +175,7 @@ export default function OrderDetail() {
                         <div className="flex items-start gap-3 text-sm">
                             <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                             <p className="text-muted-foreground">
-                                {order.order_shipping.street}, {order.order_shipping.city}, {order.order_shipping.state}, {order.order_shipping.country}
+                                {order.order_shipping?.address || order.shipping_address || 'N/A'}
                             </p>
                         </div>
                     </div>
@@ -152,7 +187,7 @@ export default function OrderDetail() {
                         </h2>
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Method</span>
-                            <span className="font-medium">{order.order_payment}</span>
+                            <span className="font-medium uppercase">{order.order_payment || order.payment_method || 'N/A'}</span>
                         </div>
                     </div>
                 </div>

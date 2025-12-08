@@ -258,4 +258,10 @@ export const orderService = {
         const response = await api.get("/admin/orders", { params });
         return response.data;
     },
+
+    // Get order by ID (Admin)
+    getAdminOrderById: async (id: string) => {
+        const response = await api.get(`/admin/orders/${id}`);
+        return response.data;
+    },
 };
