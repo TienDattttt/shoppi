@@ -28,9 +28,16 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle errors
+// Response interceptor - handle errors and extract data
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // Backend wraps response in { success: true, data: {...} }
+        // Extract the data for convenience
+        if (response.data && response.data.success && response.data.data) {
+            response.data = response.data.data;
+        }
+        return response;
+    },
     async (error) => {
         const originalRequest = error.config;
         

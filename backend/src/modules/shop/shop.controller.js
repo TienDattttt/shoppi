@@ -23,7 +23,7 @@ const { sendSuccess, sendCreated, sendError } = require('../../shared/utils/resp
  */
 async function createShop(req, res, next) {
   try {
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     
     const shop = await shopService.createShop(partnerId, req.body);
     
@@ -120,7 +120,7 @@ async function getShopBySlug(req, res, next) {
  */
 async function getMyShop(req, res, next) {
   try {
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     
     const shop = await shopService.getShopByPartnerId(partnerId);
     
@@ -142,7 +142,7 @@ async function getMyShop(req, res, next) {
 async function updateShop(req, res, next) {
   try {
     const { id } = req.params;
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     
     const shop = await shopService.updateShop(id, partnerId, req.body);
     
@@ -247,7 +247,7 @@ async function getPendingShops(req, res, next) {
 async function approveShop(req, res, next) {
   try {
     const { id } = req.params;
-    const adminId = req.user.id;
+    const adminId = req.user.userId;
     
     const shop = await shopService.approveShop(id, adminId);
     
@@ -270,7 +270,7 @@ async function approveShop(req, res, next) {
 async function rejectShop(req, res, next) {
   try {
     const { id } = req.params;
-    const adminId = req.user.id;
+    const adminId = req.user.userId;
     const { reason } = req.body;
     
     if (!reason || reason.trim().length === 0) {
@@ -298,7 +298,7 @@ async function rejectShop(req, res, next) {
 async function requestRevision(req, res, next) {
   try {
     const { id } = req.params;
-    const adminId = req.user.id;
+    const adminId = req.user.userId;
     const { changes } = req.body;
     
     if (!changes || changes.trim().length === 0) {
@@ -331,7 +331,7 @@ async function requestRevision(req, res, next) {
 async function followShop(req, res, next) {
   try {
     const { id } = req.params;
-    const customerId = req.user.id;
+    const customerId = req.user.userId;
     
     const result = await followService.followShop(customerId, id);
     
@@ -354,7 +354,7 @@ async function followShop(req, res, next) {
 async function unfollowShop(req, res, next) {
   try {
     const { id } = req.params;
-    const customerId = req.user.id;
+    const customerId = req.user.userId;
     
     const result = await followService.unfollowShop(customerId, id);
     
@@ -398,7 +398,7 @@ async function getFollowerCount(req, res, next) {
  */
 async function getFollowedShops(req, res, next) {
   try {
-    const customerId = req.user.id;
+    const customerId = req.user.userId;
     const { page, limit } = req.query;
     
     const result = await followService.getFollowedShops(customerId, {
@@ -419,7 +419,7 @@ async function getFollowedShops(req, res, next) {
 async function getShopFollowers(req, res, next) {
   try {
     const { id } = req.params;
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     const { page, limit } = req.query;
     
     // Verify ownership
@@ -451,7 +451,7 @@ async function getShopFollowers(req, res, next) {
 async function uploadLogo(req, res, next) {
   try {
     const { id } = req.params;
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     
     if (!req.file) {
       return sendError(res, 'IMAGE_001', 'Logo file is required', 400);
@@ -480,7 +480,7 @@ async function uploadLogo(req, res, next) {
 async function uploadBanner(req, res, next) {
   try {
     const { id } = req.params;
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     
     if (!req.file) {
       return sendError(res, 'IMAGE_001', 'Banner file is required', 400);

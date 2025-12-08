@@ -62,13 +62,17 @@ const addressSchema = Joi.string()
     'string.max': 'Address must not exceed 500 characters',
   });
 
-// Operating hours schema
+// Operating hours schema - supports both short (mon) and full (monday) day names
 const operatingHoursSchema = Joi.object().pattern(
-  Joi.string().valid('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'),
+  Joi.string().valid(
+    'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun',
+    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+  ),
   Joi.object({
     open: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
     close: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
-    isClosed: Joi.boolean().default(false),
+    isClosed: Joi.boolean().optional(),
+    isOpen: Joi.boolean().optional(), // Frontend uses isOpen instead of isClosed
   })
 ).messages({
   'string.pattern.base': 'Time must be in HH:MM format',
@@ -105,16 +109,16 @@ const updateShopSchema = Joi.object({
   shop_name: Joi.string().min(1).max(100).optional().messages({
     'string.max': 'Shop name must not exceed 100 characters',
   }),
-  description: shopDescriptionSchema.optional(),
+  description: shopDescriptionSchema.optional().allow(null),
   phone: phoneSchema.optional(),
-  email: emailSchema.optional(),
-  address: Joi.string().max(500).optional(),
-  city: Joi.string().max(100).optional(),
-  district: Joi.string().max(100).optional(),
-  ward: Joi.string().max(100).optional(),
-  logo_url: Joi.string().uri().optional().allow(null),
-  banner_url: Joi.string().uri().optional().allow(null),
-  operating_hours: operatingHoursSchema.optional(),
+  email: emailSchema.optional().allow(null, ''),
+  address: Joi.string().max(500).optional().allow(null, ''),
+  city: Joi.string().max(100).optional().allow(null, ''),
+  district: Joi.string().max(100).optional().allow(null, ''),
+  ward: Joi.string().max(100).optional().allow(null, ''),
+  logo_url: Joi.string().uri().optional().allow(null, ''),
+  banner_url: Joi.string().uri().optional().allow(null, ''),
+  operating_hours: operatingHoursSchema.optional().allow(null),
   category_ids: Joi.array().items(Joi.string().uuid()).optional(),
 }).min(1).messages({
   'object.min': 'At least one field must be provided for update',

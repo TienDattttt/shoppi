@@ -116,6 +116,7 @@ async function registerCustomer(data) {
 
 /**
  * Register a new Partner
+ * Auto-creates a Shop for the Partner (1 Partner = 1 Shop)
  * @param {object} data - Registration data
  * @returns {Promise<object>}
  */
@@ -147,6 +148,25 @@ async function registerPartner(data) {
     business_name: businessName,
     tax_id: taxId,
   });
+
+  // Auto-create Shop for Partner (1 Partner = 1 Shop)
+  try {
+    const shopRepository = require('../shop/shop.repository');
+    const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    
+    await shopRepository.createShop({
+      partner_id: user.id,
+      shop_name: businessName || fullName + "'s Shop",
+      slug: slugify(businessName || fullName) + '-' + Date.now(),
+      description: null,
+      phone: authRepository.normalizePhone(phone),
+      email: email.toLowerCase(),
+      status: 'pending', // Shop also pending until admin approves
+    });
+  } catch (shopError) {
+    console.error('Failed to auto-create shop for partner:', shopError.message);
+    // Don't fail registration if shop creation fails
+  }
 
   return {
     user: serializeUser(user),

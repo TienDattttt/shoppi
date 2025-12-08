@@ -14,6 +14,7 @@ export interface Notification {
 interface NotificationState {
     notifications: Notification[];
     unreadCount: number;
+    fetchNotifications: () => void;
     markAsRead: (id: string) => void;
     markAllAsRead: () => void;
     addNotification: (notification: Notification) => void;
@@ -54,6 +55,15 @@ const MOCK_NOTIFICATIONS: Notification[] = [
 export const useNotificationStore = create<NotificationState>((set) => ({
     notifications: MOCK_NOTIFICATIONS,
     unreadCount: MOCK_NOTIFICATIONS.filter(n => !n.isRead).length,
+
+    fetchNotifications: () => {
+        // TODO: Fetch from API when backend is ready
+        // For now, use mock data already loaded
+        set((state) => ({
+            notifications: state.notifications,
+            unreadCount: state.notifications.filter(n => !n.isRead).length
+        }));
+    },
 
     markAsRead: (id) => set((state) => {
         const newNotifications = state.notifications.map(n =>

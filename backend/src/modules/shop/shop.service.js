@@ -550,11 +550,20 @@ async function uploadLogo(shopId, partnerId, imageData, contentType) {
   const shop = await getShopById(shopId);
   validateOwnership(shop, partnerId);
 
-  const result = await uploadShopImage(shopId, 'logo', imageData, contentType);
+  let logoUrl;
+  try {
+    const result = await uploadShopImage(shopId, 'logo', imageData, contentType);
+    logoUrl = result.url;
+  } catch (uploadError) {
+    console.error('Storage upload failed, using data URL fallback:', uploadError.message);
+    // Fallback: convert to base64 data URL for development
+    const base64 = imageData.toString('base64');
+    logoUrl = `data:${contentType};base64,${base64}`;
+  }
   
-  await shopRepository.updateShop(shopId, { logo_url: result.url });
+  await shopRepository.updateShop(shopId, { logo_url: logoUrl });
 
-  return { logoUrl: result.url };
+  return { logoUrl };
 }
 
 /**
@@ -569,11 +578,20 @@ async function uploadBanner(shopId, partnerId, imageData, contentType) {
   const shop = await getShopById(shopId);
   validateOwnership(shop, partnerId);
 
-  const result = await uploadShopImage(shopId, 'banner', imageData, contentType);
+  let bannerUrl;
+  try {
+    const result = await uploadShopImage(shopId, 'banner', imageData, contentType);
+    bannerUrl = result.url;
+  } catch (uploadError) {
+    console.error('Storage upload failed, using data URL fallback:', uploadError.message);
+    // Fallback: convert to base64 data URL for development
+    const base64 = imageData.toString('base64');
+    bannerUrl = `data:${contentType};base64,${base64}`;
+  }
   
-  await shopRepository.updateShop(shopId, { banner_url: result.url });
+  await shopRepository.updateShop(shopId, { banner_url: bannerUrl });
 
-  return { bannerUrl: result.url };
+  return { bannerUrl };
 }
 
 // ============================================

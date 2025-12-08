@@ -23,9 +23,9 @@ export function NotificationDropdown() {
         // In a real app, you might set up a socket listener here for real-time updates
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const handleNotificationClick = (notification: Notification) => {
+    const handleNotificationClick = (notification: any) => {
         if (!notification.isRead) {
-            markAsRead(notification._id);
+            markAsRead(notification._id || notification.id);
         }
         setIsOpen(false);
     };
@@ -76,9 +76,9 @@ export function NotificationDropdown() {
                         </div>
                     ) : (
                         <div className="py-1">
-                            {displayNotifications.map((notification) => (
+                            {displayNotifications.map((notification: any) => (
                                 <DropdownMenuItem
-                                    key={notification._id}
+                                    key={notification._id || notification.id}
                                     className={cn(
                                         "flex items-start gap-3 p-3 cursor-pointer focus:bg-muted/50",
                                         !notification.isRead && "bg-muted/30"

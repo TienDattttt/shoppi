@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { authService } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ interface LoginModalProps {
 }
 
 export function LoginModal({ open, onOpenChange, onSwitchToRegister, onSwitchToForgot }: LoginModalProps) {
+    const navigate = useNavigate();
     const login = useAuthStore((state) => state.login);
     const [isLoading, setIsLoading] = useState(false);
     const [email, setEmail] = useState("");
@@ -32,12 +34,26 @@ export function LoginModal({ open, onOpenChange, onSwitchToRegister, onSwitchToF
         e.preventDefault();
         setIsLoading(true);
         try {
-            const data: any = await authService.login({ email, password });
-            login(data.user, data.token);
-            toast.success(`Welcome back, ${data.user.name}!`);
+            const data = await authService.login({ identifier: email, password });
+            login(data.user, data.accessToken, data.refreshToken);
+            toast.success(`Welcome back, ${data.user.fullName}!`);
             onOpenChange(false);
+            
+            // Redirect based on role
+            switch (data.user.role) {
+                case 'admin':
+                    navigate('/admin');
+                    break;
+                case 'partner':
+                    navigate('/partner');
+                    break;
+                case 'customer':
+                default:
+                    navigate('/');
+                    break;
+            }
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Login failed");
+            toast.error(error.response?.data?.error?.message || "Login failed");
         } finally {
             setIsLoading(false);
         }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
+import { authService } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,35 +13,52 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError("");
 
-        // Simulate API call
-        setTimeout(() => {
-            // Mock login logic
-            if (email.includes("partner")) {
-                login({
-                    id: "2",
-                    name: "Partner Demo",
-                    email: email,
-                    role: "partner",
-                    avatar: "https://github.com/shadcn.png"
-                }, "mock-jwt-token");
-                navigate("/partner");
-            } else {
-                login({
-                    id: "1",
-                    name: "Admin Demo",
-                    email: email,
-                    role: "admin",
-                    avatar: "https://github.com/shadcn.png"
-                }, "mock-jwt-token");
-                navigate("/admin");
+        try {
+            const response = await authService.login({
+                identifier: email,
+                password: password
+            });
+
+            // Map API response to store format
+            const user = {
+                id: response.user.id,
+                email: response.user.email,
+                phone: response.user.phone,
+                fullName: response.user.fullName,
+                role: response.user.role,
+                status: response.user.status,
+                avatarUrl: response.user.avatarUrl
+            };
+
+            login(user, response.accessToken, response.refreshToken);
+
+            // Navigate based on role
+            switch (response.user.role) {
+                case 'admin':
+                    navigate("/admin");
+                    break;
+                case 'partner':
+                    navigate("/partner");
+                    break;
+                case 'customer':
+                    navigate("/customer");
+                    break;
+                default:
+                    navigate("/");
             }
+        } catch (err: any) {
+            console.error('Login error:', err);
+            setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+        } finally {
             setIsLoading(false);
-        }, 1000);
+        }
     };
 
     return (
@@ -59,6 +77,11 @@ export default function LoginPage() {
                 </div>
 
                 <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+                    {error && (
+                        <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-lg">
+                            {error}
+                        </div>
+                    )}
                     <div className="space-y-4">
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
