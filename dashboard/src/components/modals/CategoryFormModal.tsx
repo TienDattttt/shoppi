@@ -21,31 +21,32 @@ export function CategoryFormModal({
     initialData,
     categories
 }: CategoryFormModalProps) {
-    const [formData, setFormData] = useState<Partial<Category>>({
+    const [formData, setFormData] = useState({
         name: "",
         slug: "",
-        parentId: "none",
-        displayOrder: 0,
-        status: "active"
+        parent_id: "none",
+        sort_order: 0,
+        is_active: true
     });
 
     useEffect(() => {
         if (isOpen) {
             if (initialData) {
+                const data = initialData as any;
                 setFormData({
-                    name: initialData.name,
-                    slug: initialData.slug,
-                    parentId: initialData.parentId || "none",
-                    displayOrder: initialData.displayOrder,
-                    status: initialData.status
+                    name: data.name || "",
+                    slug: data.slug || "",
+                    parent_id: data.parent_id || "none",
+                    sort_order: data.sort_order || 0,
+                    is_active: data.is_active !== false
                 });
             } else {
                 setFormData({
                     name: "",
                     slug: "",
-                    parentId: "none",
-                    displayOrder: 0,
-                    status: "active"
+                    parent_id: "none",
+                    sort_order: 0,
+                    is_active: true
                 });
             }
         }
@@ -53,10 +54,16 @@ export function CategoryFormModal({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const submitData = { ...formData };
-        if (submitData.parentId === "none") delete submitData.parentId;
+        const submitData: any = { 
+            name: formData.name,
+            slug: formData.slug,
+            sort_order: formData.sort_order,
+            is_active: formData.is_active
+        };
+        if (formData.parent_id !== "none") {
+            submitData.parent_id = formData.parent_id;
+        }
         onSubmit(submitData);
-        onClose();
     };
 
     return (
@@ -90,36 +97,45 @@ export function CategoryFormModal({
                 <div className="space-y-2">
                     <Label htmlFor="parent">Parent Category</Label>
                     <Select
-                        value={formData.parentId}
-                        onValueChange={(value) => setFormData({ ...formData, parentId: value })}
+                        value={formData.parent_id}
+                        onValueChange={(value) => setFormData({ ...formData, parent_id: value })}
                     >
                         <SelectTrigger>
                             <SelectValue placeholder="Select parent" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="none">None (Root Category)</SelectItem>
-                            {categories.map((cat) => (
-                                <SelectItem key={cat._id} value={cat._id}>{cat.name}</SelectItem>
-                            ))}
+                            {categories
+                                .filter((cat: any) => {
+                                    // Exclude current category (can't be its own parent)
+                                    const catId = cat.id || cat._id;
+                                    const editId = initialData ? ((initialData as any).id || (initialData as any)._id) : null;
+                                    return catId !== editId;
+                                })
+                                .map((cat: any) => (
+                                    <SelectItem key={cat.id || cat._id} value={cat.id || cat._id}>
+                                        {cat.parent_id ? `└─ ${cat.name}` : cat.name}
+                                    </SelectItem>
+                                ))}
                         </SelectContent>
                     </Select>
                 </div>
 
                 <div className="flex gap-4">
                     <div className="space-y-2 flex-1">
-                        <Label htmlFor="order">Display Order</Label>
+                        <Label htmlFor="order">Sort Order</Label>
                         <Input
                             id="order"
                             type="number"
-                            value={formData.displayOrder}
-                            onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) })}
+                            value={formData.sort_order}
+                            onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
                         />
                     </div>
                     <div className="space-y-2 flex-1">
                         <Label htmlFor="status">Status</Label>
                         <Select
-                            value={formData.status}
-                            onValueChange={(value: any) => setFormData({ ...formData, status: value })}
+                            value={formData.is_active ? "active" : "inactive"}
+                            onValueChange={(value) => setFormData({ ...formData, is_active: value === "active" })}
                         >
                             <SelectTrigger>
                                 <SelectValue />
