@@ -1,7 +1,7 @@
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/failures.dart';
-import 'shipper.dart';
-import 'register_params.dart';
+import '../entities/shipper.dart';
+import '../entities/register_params.dart';
 
 abstract class AuthRepository {
   Future<Either<Failure, ShipperEntity>> login(String phone, String password); // Changing to password based on common flows, or OTP if strict

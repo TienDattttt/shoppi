@@ -1,12 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
-import '../errors/failures.dart';
+import 'auth_interceptor.dart';
 
 @lazySingleton
 class ApiClient {
   final Dio _dio;
+  final AuthInterceptor _authInterceptor;
 
-  ApiClient(this._dio) {
+  ApiClient(this._dio, this._authInterceptor) {
     _dio.options.baseUrl = 'https://api.shoppi.app/v1'; // Replace with actual API URL
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
@@ -15,7 +16,7 @@ class ApiClient {
       requestBody: true,
       responseBody: true,
     ));
-    // Add auth interceptor here later
+    _dio.interceptors.add(_authInterceptor);
   }
 
   Future<dynamic> get(String path, {Map<String, dynamic>? queryParameters}) async {

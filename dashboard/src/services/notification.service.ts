@@ -1,76 +1,149 @@
+import api from "./api";
 
 export interface Notification {
-    _id: string;
+    id: string;
+    user_id: string;
+    type: string;
     title: string;
-    message: string;
-    type: 'info' | 'success' | 'warning' | 'error';
-    isRead: boolean;
-    createdAt: string;
-    link?: string;
+    body: string;
+    data: Record<string, any> | null;
+    is_read: boolean;
+    read_at: string | null;
+    created_at: string;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-    {
-        _id: "n1",
-        title: "New Order Received",
-        message: "You have received a new order #ORD-001 from John Doe.",
-        type: "success",
-        isRead: false,
-        createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 mins ago
-        link: "/partner/orders/o1"
-    },
-    {
-        _id: "n2",
-        title: "Low Stock Alert",
-        message: "Product 'Gaming Headset' is running low on stock (5 items left).",
-        type: "warning",
-        isRead: false,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(), // 1 hour ago
-        link: "/partner/products/p2"
-    },
-    {
-        _id: "n3",
-        title: "System Update",
-        message: "The system will be under maintenance tonight at 2 AM.",
-        type: "info",
-        isRead: true,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-    },
-    {
-        _id: "n4",
-        title: "Payment Failed",
-        message: "Payment for order #ORD-999 failed.",
-        type: "error",
-        isRead: true,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-    }
-];
+export interface NotificationPreference {
+    id: string;
+    user_id: string;
+    channel: 'push' | 'email' | 'sms' | 'in_app';
+    notification_type: string;
+    is_enabled: boolean;
+}
+
+export interface DeviceToken {
+    id: string;
+    user_id: string;
+    token: string;
+    platform: 'ios' | 'android' | 'web';
+    device_name: string | null;
+    is_active: boolean;
+}
 
 export const notificationService = {
-    getNotifications: async () => {
-        // Simulate API delay
-        return new Promise<Notification[]>((resolve) => {
-            setTimeout(() => {
-                resolve([...MOCK_NOTIFICATIONS]);
-            }, 500);
-        });
+    // ============================================
+    // NOTIFICATION OPERATIONS
+    // ============================================
+
+    // Get notifications
+    getNotifications: async (params?: { page?: number; limit?: number; isRead?: boolean }) => {
+        const response = await api.get("/notifications", { params });
+        return response.data;
     },
 
+    // Get unread count
+    getUnreadCount: async () => {
+        const response = await api.get("/notifications/unread/count");
+        return response.data;
+    },
+
+    // Mark as read
     markAsRead: async (id: string) => {
-        return new Promise<void>((resolve) => {
-            setTimeout(() => {
-                console.log(`Notification ${id} marked as read`);
-                resolve();
-            }, 200);
-        });
+        const response = await api.patch(`/notifications/${id}/read`);
+        return response.data;
     },
 
+    // Mark all as read
     markAllAsRead: async () => {
-        return new Promise<void>((resolve) => {
-            setTimeout(() => {
-                console.log("All notifications marked as read");
-                resolve();
-            }, 500);
+        const response = await api.patch("/notifications/read-all");
+        return response.data;
+    },
+
+    // Delete notification
+    deleteNotification: async (id: string) => {
+        const response = await api.delete(`/notifications/${id}`);
+        return response.data;
+    },
+
+    // ============================================
+    // PREFERENCE OPERATIONS
+    // ============================================
+
+    // Get preferences
+    getPreferences: async () => {
+        const response = await api.get("/notifications/preferences");
+        return response.data;
+    },
+
+    // Update preference
+    updatePreference: async (channel: string, notificationType: string, isEnabled: boolean) => {
+        const response = await api.patch("/notifications/preferences", {
+            channel,
+            notificationType,
+            isEnabled,
         });
-    }
+        return response.data;
+    },
+
+    // ============================================
+    // DEVICE TOKEN OPERATIONS
+    // ============================================
+
+    // Register device token
+    registerDeviceToken: async (token: string, platform: 'ios' | 'android' | 'web', deviceName?: string) => {
+        const response = await api.post("/notifications/devices", {
+            token,
+            platform,
+            deviceName,
+        });
+        return response.data;
+    },
+
+    // Unregister device token
+    unregisterDeviceToken: async (token: string) => {
+        const response = await api.delete("/notifications/devices", {
+            data: { token },
+        });
+        return response.data;
+    },
+
+    // ============================================
+    // ADMIN OPERATIONS
+    // ============================================
+
+    // Send notification (Admin)
+    sendNotification: async (data: {
+        userIds?: string[];
+        role?: string;
+        type: string;
+        title: string;
+        body: string;
+        data?: Record<string, any>;
+    }) => {
+        const response = await api.post("/admin/notifications/send", data);
+        return response.data;
+    },
+
+    // Get notification templates (Admin)
+    getTemplates: async () => {
+        const response = await api.get("/admin/notifications/templates");
+        return response.data;
+    },
+
+    // Create template (Admin)
+    createTemplate: async (data: {
+        name: string;
+        type: string;
+        titleTemplate: string;
+        bodyTemplate: string;
+        channels: string[];
+    }) => {
+        const response = await api.post("/admin/notifications/templates", data);
+        return response.data;
+    },
+
+    // Update template (Admin)
+    updateTemplate: async (id: string, data: any) => {
+        const response = await api.put(`/admin/notifications/templates/${id}`, data);
+        return response.data;
+    },
 };

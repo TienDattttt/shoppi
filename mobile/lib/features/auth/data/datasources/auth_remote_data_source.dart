@@ -1,7 +1,7 @@
 import 'package:injectable/injectable.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/register_params.dart';
-import 'auth_models.dart';
+import '../models/auth_models.dart';
 
 abstract class AuthRemoteDataSource {
   Future<LoginResponseModel> login(String phone, String password); // Or OTP verify
@@ -45,7 +45,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<LoginResponseModel> register(RegisterParams params) async {
-    final response = await _client.post('/shipper/auth/register', data: {
+    final response = await _client.post('/shippers', data: {
       'fullName': params.fullName,
       'phone': params.phone,
       'password': params.password,
@@ -60,7 +60,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<ShipperModel> getCurrentShipper() async {
-    final response = await _client.get('/shipper/profile/me');
+    final response = await _client.get('/shippers/me');
     return ShipperModel.fromJson(response);
   }
 }

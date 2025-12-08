@@ -27,14 +27,25 @@ jest.mock('../../../shared/supabase/supabase.client', () => ({
 const { supabaseAdmin } = require('../../../shared/supabase/supabase.client');
 const notificationRepository = require('../notification.repository');
 
-// Arbitrary generators
+// Arbitrary generators for device token data
 const platformArb = fc.constantFrom('ios', 'android', 'web');
 
 const deviceTokenArb = fc.record({
   user_id: fc.uuid(),
-  token: fc.stringOf(fc.constantFrom(...'abcdef0123456789'.split('')), { minLength: 50, maxLength: 100 }).map(s => 'fcm_' + s),
+  token: fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), { minLength: 100, maxLength: 150 }).map(s => `fcm_${s}`),
   platform: platformArb,
   device_info: fc.constant({}),
+});
+
+const storedDeviceTokenArb = fc.record({
+  id: fc.uuid(),
+  user_id: fc.uuid(),
+  token: fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), { minLength: 100, maxLength: 150 }).map(s => `fcm_${s}`),
+  platform: platformArb,
+  device_info: fc.constant({}),
+  is_active: fc.constant(true),
+  last_used_at: fc.date().map(d => d.toISOString()),
+  created_at: fc.date().map(d => d.toISOString()),
 });
 
 describe('Notification Repository Property Tests', () => {
@@ -111,12 +122,40 @@ describe('Notification Repository Property Tests', () => {
       await fc.assert(
         fc.asyncProperty(
           fc.uuid(),
+          fc.array(storedDeviceTokenArb, { minLength: 1, maxLength: 5 }),
+          async (userId, devices) => {
+            const userDevices = devices.map(d => ({ ...d, user_id: userId }));
+
+            const mockChain = {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              order: jest.fn().mockResolvedValue({ data: userDevices, error: null }),
+            };
+            supabaseAdmin.from.mockReturnValue(mockChain);
+
+            const result = await notificationRepository.getDevicesByUser(userId);
+
+            expect(result.length).toBe(userDevices.length);
+            result.forEach(device => {
+              expect(device.user_id).toBe(userId);
+              expect(device.is_active).toBe(true);
+            });
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should maintain device count after multiple registrations', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
           fc.integer({ min: 1, max: 5 }),
           async (userId, deviceCount) => {
             const mockDevices = Array.from({ length: deviceCount }, (_, i) => ({
-              id: 'device-' + i,
+              id: `device-${i}`,
               user_id: userId,
-              token: 'token-' + i,
+              token: `token-${i}`,
               platform: 'ios',
               is_active: true,
               device_info: {},
@@ -131,12 +170,7 @@ describe('Notification Repository Property Tests', () => {
             supabaseAdmin.from.mockReturnValue(mockChain);
 
             const result = await notificationRepository.getDevicesByUser(userId);
-
             expect(result.length).toBe(deviceCount);
-            result.forEach(device => {
-              expect(device.user_id).toBe(userId);
-              expect(device.is_active).toBe(true);
-            });
           }
         ),
         { numRuns: 100 }
@@ -150,9 +184,7 @@ describe('Notification Repository Property Tests', () => {
         fc.asyncProperty(fc.uuid(), fc.uuid(), async (userId, token) => {
           const mockChain = {
             delete: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockImplementation(() => ({
-              eq: jest.fn().mockResolvedValue({ error: null }),
-            })),
+            eq: jest.fn().mockResolvedValue({ error: null }),
           };
           supabaseAdmin.from.mockReturnValue(mockChain);
 

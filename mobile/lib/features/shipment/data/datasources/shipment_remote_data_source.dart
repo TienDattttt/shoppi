@@ -1,8 +1,7 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import '../../../../core/network/api_client.dart';
-import 'shipment_model.dart';
+import '../models/shipment_model.dart';
 
 abstract class ShipmentRemoteDataSource {
   Future<List<ShipmentModel>> getActiveShipments();
@@ -42,7 +41,9 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
 
   @override
   Future<ShipmentModel> markPickedUp(String id) async {
-    final response = await _client.post('/shipper/shipments/$id/pickup');
+    final response = await _client.post('/shipments/$id/status', data: {
+      'status': 'picked_up',
+    });
     return ShipmentModel.fromJson(response);
   }
 
@@ -52,12 +53,13 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
     // but good to check here or ensure we send multipart correctly.
     
     final formData = FormData.fromMap({
+      'status': 'delivered',
       'photo': await MultipartFile.fromFile(photoPath),
       if (signaturePath != null) 'signature': await MultipartFile.fromFile(signaturePath),
     });
 
     final response = await _client.post(
-      '/shipper/shipments/$id/deliver',
+      '/shipments/$id/status',
       data: formData,
     );
     return ShipmentModel.fromJson(response);
@@ -65,8 +67,9 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
 
   @override
   Future<ShipmentModel> markFailed(String id, String reason) async {
-    final response = await _client.post('/shipper/shipments/$id/fail', data: {
-      'reason': reason,
+    final response = await _client.post('/shipments/$id/status', data: {
+      'status': 'failed',
+      'failureReason': reason,
     });
     return ShipmentModel.fromJson(response);
   }

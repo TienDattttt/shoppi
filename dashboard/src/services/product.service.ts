@@ -1,116 +1,268 @@
 import api from "./api";
 
 export interface Product {
-    _id: string;
-    product_name: string;
-    product_thumb: string;
-    product_description?: string;
-    product_price: number;
-    product_quantity: number;
-    product_type: "Electronic" | "Clothing" | "Furniture" | "Other";
-    product_attributes?: any;
-    product_ratingsAverage?: number;
-    isDraft?: boolean;
-    isPublished?: boolean;
+    id: string;
+    shop_id: string;
+    category_id: string | null;
+    name: string;
+    slug: string;
+    description: string | null;
+    short_description: string | null;
+    base_price: number;
+    compare_at_price: number | null;
+    currency: string;
+    status: 'pending' | 'active' | 'rejected' | 'revision_required' | 'deleted';
+    meta_title: string | null;
+    meta_description: string | null;
+    view_count: number;
+    created_at: string;
+    updated_at: string;
+    // Relations
+    variants?: ProductVariant[];
+    images?: ProductImage[];
+    category?: Category;
+    shop?: { id: string; shop_name: string };
+}
+
+export interface ProductVariant {
+    id: string;
+    product_id: string;
+    sku: string | null;
+    name: string | null;
+    attributes: Record<string, any>;
+    price: number | null;
+    compare_at_price: number | null;
+    quantity: number;
+    low_stock_threshold: number;
+    image_url: string | null;
+    is_active: boolean;
+}
+
+export interface ProductImage {
+    id: string;
+    product_id: string;
+    url: string;
+    alt_text: string | null;
+    sort_order: number;
+    is_primary: boolean;
+}
+
+export interface Category {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    parent_id: string | null;
+    image_url: string | null;
+    is_active: boolean;
+}
+
+export interface CreateProductData {
+    name: string;
+    description?: string;
+    short_description?: string;
+    category_id?: string;
+    base_price: number;
+    compare_at_price?: number;
+    currency?: string;
+    meta_title?: string;
+    meta_description?: string;
+}
+
+export interface ProductFilters {
+    q?: string;
+    categoryId?: string;
     shopId?: string;
-    shopName?: string;
-    createdAt?: string;
+    status?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
 }
 
 export const productService = {
-    getAllDraftsForShop: async () => {
-        try {
-            const response = await api.get("/products/drafts/all");
-            return response.data;
-        } catch (error) {
-            console.error("Fetch drafts error", error);
-            return {
-                data: [
-                    { _id: "p1", product_name: "Áo Polo Nam Premium", product_thumb: "https://placehold.co/100", product_price: 250000, product_quantity: 100, product_type: "Clothing", isDraft: true, createdAt: "2023-10-20" },
-                    { _id: "p3", product_name: "Ghế Sofa Mini", product_thumb: "https://placehold.co/100", product_price: 1200000, product_quantity: 20, product_type: "Furniture", isDraft: true, createdAt: "2023-10-21" },
-                ],
-                total: 2
-            };
-        }
+    // ============================================
+    // PRODUCT OPERATIONS
+    // ============================================
+
+    // Search/list products (public)
+    searchProducts: async (filters: ProductFilters = {}) => {
+        const response = await api.get("/products", { params: filters });
+        return response.data;
     },
 
-    getAllPublishedForShop: async () => {
-        try {
-            const response = await api.get("/products/published/all");
-            return response.data;
-        } catch (error) {
-            console.error("Fetch published error", error);
-            return {
-                data: [
-                    { _id: "p2", product_name: "iPhone 15 Pro Max", product_thumb: "https://placehold.co/100", product_price: 32000000, product_quantity: 5, product_type: "Electronic", isPublished: true, product_ratingsAverage: 4.8, createdAt: "2023-09-15" }
-                ],
-                total: 1
-            };
-        }
-    },
-
-    getPendingProducts: async () => {
-        try {
-            const response = await api.get("/admin/products/pending");
-            return response.data;
-        } catch (error) {
-            console.error("Fetch pending error", error);
-            return {
-                data: [
-                    { _id: "p_pend_1", product_name: "Tai nghe Sony WH-1000XM5", product_thumb: "https://placehold.co/100", product_price: 6990000, product_quantity: 50, product_type: "Electronic", shopName: "Tech Store", createdAt: "10 mins ago" },
-                    { _id: "p_pend_2", product_name: "Áo Tshirt Basic", product_thumb: "https://placehold.co/100", product_price: 150000, product_quantity: 200, product_type: "Clothing", shopName: "Fashion Hub", createdAt: "1 hour ago" },
-                    { _id: "p_pend_3", product_name: "Bàn phím cơ Keychron K2", product_thumb: "https://placehold.co/100", product_price: 1800000, product_quantity: 15, product_type: "Electronic", shopName: "Gear Shop", createdAt: "2 hours ago" },
-                ],
-                total: 3
-            };
-        }
-    },
-
-    createProduct: async (data: any) => {
-        return api.post("/products", data);
-    },
-
-    publishProduct: async (id: string) => {
-        return api.post(`/products/publish/${id}`);
-    },
-
-    unpublishProduct: async (id: string) => {
-        return api.post(`/products/unpublish/${id}`);
-    },
-
+    // Get product by ID
     getProductById: async (id: string) => {
-        try {
-            // In real app, fetch from API
-            const response = await api.get(`/products/${id}`);
-            return response.data;
-        } catch (error) {
-            // Mock
-            return {
-                _id: id,
-                product_name: "Mock Product Edit",
-                product_thumb: "https://placehold.co/100",
-                product_description: "This is a mock description for editing.",
-                product_price: 500000,
-                product_quantity: 100,
-                product_type: "Electronic",
-                isPublished: true,
-                product_attributes: {
-                    brand: "MockBrand",
-                    model: "M1"
-                }
-            };
-        }
+        const response = await api.get(`/products/${id}`);
+        return response.data;
     },
 
-    updateProduct: async (id: string, data: any) => {
-        return api.put(`/products/${id}`, data);
+    // Create product (Partner)
+    createProduct: async (data: CreateProductData) => {
+        const response = await api.post("/products", data);
+        return response.data;
     },
 
+    // Update product (Partner)
+    updateProduct: async (id: string, data: Partial<CreateProductData>) => {
+        const response = await api.put(`/products/${id}`, data);
+        return response.data;
+    },
+
+    // Delete product (Partner)
+    deleteProduct: async (id: string) => {
+        const response = await api.delete(`/products/${id}`);
+        return response.data;
+    },
+
+    // ============================================
+    // VARIANT OPERATIONS
+    // ============================================
+
+    // Add variant
+    addVariant: async (productId: string, data: Partial<ProductVariant>) => {
+        const response = await api.post(`/products/${productId}/variants`, data);
+        return response.data;
+    },
+
+    // Update variant
+    updateVariant: async (productId: string, variantId: string, data: Partial<ProductVariant>) => {
+        const response = await api.put(`/products/${productId}/variants/${variantId}`, data);
+        return response.data;
+    },
+
+    // Delete variant
+    deleteVariant: async (productId: string, variantId: string) => {
+        const response = await api.delete(`/products/${productId}/variants/${variantId}`);
+        return response.data;
+    },
+
+    // Update inventory
+    updateInventory: async (productId: string, variantId: string, quantity: number) => {
+        const response = await api.put(`/products/${productId}/inventory`, { variantId, quantity });
+        return response.data;
+    },
+
+    // ============================================
+    // IMAGE OPERATIONS
+    // ============================================
+
+    // Upload images
+    uploadImages: async (productId: string, files: File[]) => {
+        const formData = new FormData();
+        files.forEach(file => formData.append('images', file));
+        
+        const response = await api.post(`/products/${productId}/images`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    // Delete image
+    deleteImage: async (productId: string, imageId: string) => {
+        const response = await api.delete(`/products/${productId}/images/${imageId}`);
+        return response.data;
+    },
+
+    // ============================================
+    // REVIEW OPERATIONS
+    // ============================================
+
+    // Get product reviews
+    getReviews: async (productId: string, params?: { page?: number; limit?: number }) => {
+        const response = await api.get(`/products/${productId}/reviews`, { params });
+        return response.data;
+    },
+
+    // Create review (Customer)
+    createReview: async (productId: string, data: { rating: number; content: string; images?: string[] }) => {
+        const response = await api.post(`/products/${productId}/reviews`, data);
+        return response.data;
+    },
+
+    // Reply to review (Partner)
+    replyToReview: async (productId: string, reviewId: string, content: string) => {
+        const response = await api.post(`/products/${productId}/reviews/${reviewId}/reply`, { content });
+        return response.data;
+    },
+
+    // ============================================
+    // ADMIN OPERATIONS
+    // ============================================
+
+    // Approve product
     approveProduct: async (id: string) => {
-        return api.post(`/admin/products/${id}/approve`);
+        const response = await api.post(`/admin/products/${id}/approve`);
+        return response.data;
     },
 
+    // Reject product
     rejectProduct: async (id: string, reason: string) => {
-        return api.post(`/admin/products/${id}/reject`, { reason });
-    }
+        const response = await api.post(`/admin/products/${id}/reject`, { reason });
+        return response.data;
+    },
+
+    // Request revision
+    requestRevision: async (id: string, changes: string) => {
+        const response = await api.post(`/admin/products/${id}/revision`, { changes });
+        return response.data;
+    },
+
+    // ============================================
+    // CATEGORY OPERATIONS
+    // ============================================
+
+    // Get all categories
+    getCategories: async () => {
+        const response = await api.get("/categories");
+        return response.data;
+    },
+
+    // Get category by ID
+    getCategoryById: async (id: string) => {
+        const response = await api.get(`/categories/${id}`);
+        return response.data;
+    },
+
+    // Create category (Admin)
+    createCategory: async (data: { name: string; description?: string; parent_id?: string; image_url?: string }) => {
+        const response = await api.post("/categories", data);
+        return response.data;
+    },
+
+    // Update category (Admin)
+    updateCategory: async (id: string, data: Partial<Category>) => {
+        const response = await api.put(`/categories/${id}`, data);
+        return response.data;
+    },
+
+    // Delete category (Admin)
+    deleteCategory: async (id: string) => {
+        const response = await api.delete(`/categories/${id}`);
+        return response.data;
+    },
+
+    // ============================================
+    // WISHLIST OPERATIONS
+    // ============================================
+
+    // Get wishlist
+    getWishlist: async () => {
+        const response = await api.get("/wishlist");
+        return response.data;
+    },
+
+    // Add to wishlist
+    addToWishlist: async (productId: string) => {
+        const response = await api.post(`/wishlist/${productId}`);
+        return response.data;
+    },
+
+    // Remove from wishlist
+    removeFromWishlist: async (productId: string) => {
+        const response = await api.delete(`/wishlist/${productId}`);
+        return response.data;
+    },
 };

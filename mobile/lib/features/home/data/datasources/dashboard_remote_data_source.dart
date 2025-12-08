@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
 import '../../../../core/network/api_client.dart';
-import 'dashboard_stats_model.dart';
+import '../models/dashboard_stats_model.dart';
 
 abstract class DashboardRemoteDataSource {
   Future<DashboardStatsModel> getStats();
@@ -14,7 +14,7 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
 
   @override
   Future<DashboardStatsModel> getStats() async {
-    final response = await _client.get('/shipper/dashboard/stats');
+    final response = await _client.get('/shippers/dashboard/stats');
     return DashboardStatsModel.fromJson(response);
   }
 }

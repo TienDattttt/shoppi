@@ -169,6 +169,9 @@ module.exports = {
   requireRole,
   requireOwnership,
   
+  // Alias for requireRole (used by some routes)
+  authorize: requireRole,
+  
   // Convenience middleware
   requireAuth,
   requireAdmin,

@@ -8,4 +8,6 @@ abstract class LocationRepository {
   Future<Either<Failure, void>> updateLocationToServer(LocationEntity location);
   Future<Either<Failure, bool>> isLocationServiceEnabled();
   Future<Either<Failure, bool>> checkPermission();
+  Future<Either<Failure, void>> startTracking();
+  Future<Either<Failure, void>> stopTracking();
 }

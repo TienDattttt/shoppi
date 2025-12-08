@@ -66,7 +66,7 @@ class ShipmentDetailCubit extends Cubit<ShipmentDetailState> {
     );
   }
 
-  Future<void> failShipment(String id, String reason) async {
+  Future<void> markFailed(String id, String reason) async {
     emit(ShipmentDetailLoading());
     final result = await _markFailedUseCase(MarkFailedParams(id: id, reason: reason));
     result.fold(

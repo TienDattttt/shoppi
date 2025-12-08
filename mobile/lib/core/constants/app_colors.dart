@@ -1,49 +1,58 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary - Orange (SPX style)
-  static const Color primary = Color(0xFFFF6B00);
-  static const Color primaryLight = Color(0xFFFF8A3D);
-  static const Color primaryDark = Color(0xFFE55A00);
+  // Primary - Deep Purple/Blue (Premium Modern Look)
+  static const Color primary = Color(0xFF4838D1); // Deep Indigo
+  static const Color primaryLight = Color(0xFF7367F0);
+  static const Color primaryDark = Color(0xFF342899);
   
-  // Secondary - Blue
-  static const Color secondary = Color(0xFF2196F3);
-  static const Color secondaryLight = Color(0xFF64B5F6);
+  // Secondary - Accent Yellow/Amber
+  static const Color secondary = Color(0xFFFFC107);
+  static const Color secondaryLight = Color(0xFFFFD54F);
   
   // Status Colors
-  static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFFC107);
-  static const Color error = Color(0xFFF44336);
-  static const Color info = Color(0xFF2196F3);
+  static const Color success = Color(0xFF2ECC71);
+  static const Color warning = Color(0xFFF1C40F);
+  static const Color error = Color(0xFFE74C3C);
+  static const Color info = Color(0xFF3498DB);
   
   // Shipment Status Colors
-  static const Color statusCreated = Color(0xFF9E9E9E);
-  static const Color statusAssigned = Color(0xFF2196F3);
-  static const Color statusPickedUp = Color(0xFFFF9800);
-  static const Color statusDelivering = Color(0xFF9C27B0);
-  static const Color statusDelivered = Color(0xFF4CAF50);
-  static const Color statusFailed = Color(0xFFF44336);
+  static const Color statusNew = Color(0xFF95A5A6); // Grey
+  static const Color statusPending = Color(0xFFF39C12); // Orange
+  static const Color statusInTransit = Color(0xFF3498DB); // Blue
+  static const Color statusDelivered = Color(0xFF27AE60); // Green
+  static const Color statusCancelled = Color(0xFFC0392B); // Red
   
-  // Background
-  static const Color background = Color(0xFFF5F5F5);
+  // Shipment Status Colors (for ShipmentStatus enum)
+  static const Color statusCreated = Color(0xFF95A5A6); // Grey
+  static const Color statusAssigned = Color(0xFF3498DB); // Blue
+  static const Color statusPickedUp = Color(0xFFF39C12); // Orange
+  static const Color statusDelivering = Color(0xFF9B59B6); // Purple
+  static const Color statusFailed = Color(0xFFE74C3C); // Red
+  
+  // Backgrounds
+  static const Color background = Color(0xFFF8F9FA); // Very light grey/white
   static const Color surface = Color(0xFFFFFFFF);
   static const Color cardBackground = Color(0xFFFFFFFF);
   
   // Text
-  static const Color textPrimary = Color(0xFF212121);
-  static const Color textSecondary = Color(0xFF757575);
-  static const Color textHint = Color(0xFFBDBDBD);
+  static const Color textPrimary = Color(0xFF2D3436); // Almost Black
+  static const Color textSecondary = Color(0xFF636E72); // Grey
+  static const Color textHint = Color(0xFFAAB7B8);
   static const Color textWhite = Color(0xFFFFFFFF);
+
+  // Borders
+  static const Color border = Color(0xFFE0E0E0);
   
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFFFF6B00), Color(0xFFFF8A3D)],
+    colors: [Color(0xFF4838D1), Color(0xFF7367F0)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
   
-  static const LinearGradient headerGradient = LinearGradient(
-    colors: [Color(0xFFFF6B00), Color(0xFFFF5722)],
+  static const LinearGradient cardGradient = LinearGradient(
+    colors: [Color(0xFFFFFFFF), Color(0xFFF8F9FA)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );

@@ -1,88 +1,136 @@
 import api from "./api";
 
 export interface Voucher {
-    _id: string;
+    id: string;
+    shop_id: string | null; // null = system voucher
     code: string;
-    discountType: 'fixed' | 'percent';
-    value: number;
-    minOrderValue: number;
-    maxDiscountValue?: number;
-    startDate: string;
-    endDate: string;
-    usageLimit: number;
-    usedCount: number;
-    status: 'active' | 'inactive';
-    shopId?: string; // If null, system voucher
+    name: string;
+    description: string | null;
+    discount_type: 'fixed' | 'percent';
+    discount_value: number;
+    min_order_value: number;
+    max_discount_value: number | null;
+    usage_limit: number | null;
+    usage_count: number;
+    usage_per_user: number;
+    start_date: string;
+    end_date: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreateVoucherData {
+    code: string;
+    name: string;
+    description?: string;
+    discount_type: 'fixed' | 'percent';
+    discount_value: number;
+    min_order_value?: number;
+    max_discount_value?: number;
+    usage_limit?: number;
+    usage_per_user?: number;
+    start_date: string;
+    end_date: string;
+    is_active?: boolean;
+    shop_id?: string; // For shop vouchers
+}
+
+export interface VoucherFilters {
+    shopId?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
 }
 
 export const voucherService = {
-    getAllVouchers: async () => {
-        try {
-            const response = await api.get("/admin/vouchers");
-            return response.data;
-        } catch (error) {
-            console.error("Fetch vouchers error", error);
-            // Mock System Vouchers
-            return {
-                data: [
-                    { _id: "v1", code: "WELCOME50", discountType: "fixed", value: 50000, minOrderValue: 200000, startDate: "2023-01-01", endDate: "2023-12-31", usageLimit: 1000, usedCount: 150, status: "active" },
-                    { _id: "v2", code: "FREESHIP", discountType: "fixed", value: 30000, minOrderValue: 150000, startDate: "2023-06-01", endDate: "2023-06-30", usageLimit: 500, usedCount: 500, status: "inactive" }
-                ],
-                total: 2
-            };
-        }
+    // ============================================
+    // ADMIN OPERATIONS (System Vouchers)
+    // ============================================
+
+    // Get all vouchers (Admin)
+    getAllVouchers: async (params?: VoucherFilters) => {
+        const response = await api.get("/admin/vouchers", { params });
+        return response.data;
     },
 
-    getShopVouchers: async (_shopId?: string) => {
-        try {
-            const response = await api.get("/shop/vouchers");
-            return response.data;
-        } catch (error) {
-            // Mock Shop Vouchers
-            return {
-                data: [
-                    { _id: "sv1", code: "SHOP10", discountType: "percent", value: 10, minOrderValue: 100000, maxDiscountValue: 50000, startDate: "2023-11-01", endDate: "2023-11-30", usageLimit: 100, usedCount: 12, status: "active", shopId: "s1" }
-                ],
-                total: 1
-            };
-        }
+    // Create system voucher (Admin)
+    createSystemVoucher: async (data: CreateVoucherData) => {
+        const response = await api.post("/admin/vouchers", data);
+        return response.data;
     },
 
-    createVoucher: async (data: Partial<Voucher>) => {
-        return api.post("/vouchers", data);
+    // Update voucher (Admin)
+    updateVoucher: async (id: string, data: Partial<CreateVoucherData>) => {
+        const response = await api.put(`/admin/vouchers/${id}`, data);
+        return response.data;
     },
 
-    updateVoucher: async (id: string, data: Partial<Voucher>) => {
-        return api.put(`/vouchers/${id}`, data);
-    },
-
-    toggleVoucherStatus: async (id: string, status: string) => {
-        return api.patch(`/vouchers/${id}/status`, { status });
-    },
-
-    getVoucherById: async (id: string): Promise<Voucher> => {
-        try {
-            const response = await api.get(`/vouchers/${id}`);
-            return response.data;
-        } catch (error) {
-            // Mock data
-            return {
-                _id: id,
-                code: "WELCOME50",
-                discountType: "fixed",
-                value: 50000,
-                minOrderValue: 200000,
-                maxDiscountValue: 100000,
-                startDate: "2024-01-01",
-                endDate: "2024-12-31",
-                usageLimit: 1000,
-                usedCount: 150,
-                status: "active"
-            };
-        }
-    },
-
+    // Delete voucher (Admin)
     deleteVoucher: async (id: string) => {
-        return api.delete(`/vouchers/${id}`);
-    }
+        const response = await api.delete(`/admin/vouchers/${id}`);
+        return response.data;
+    },
+
+    // Toggle voucher status (Admin)
+    toggleVoucherStatus: async (id: string, isActive: boolean) => {
+        const response = await api.patch(`/admin/vouchers/${id}/status`, { isActive });
+        return response.data;
+    },
+
+    // ============================================
+    // PARTNER OPERATIONS (Shop Vouchers)
+    // ============================================
+
+    // Get shop vouchers (Partner)
+    getShopVouchers: async (params?: { page?: number; limit?: number }) => {
+        const response = await api.get("/shop/vouchers", { params });
+        return response.data;
+    },
+
+    // Create shop voucher (Partner)
+    createShopVoucher: async (data: CreateVoucherData) => {
+        const response = await api.post("/shop/vouchers", data);
+        return response.data;
+    },
+
+    // Update shop voucher (Partner)
+    updateShopVoucher: async (id: string, data: Partial<CreateVoucherData>) => {
+        const response = await api.put(`/shop/vouchers/${id}`, data);
+        return response.data;
+    },
+
+    // Delete shop voucher (Partner)
+    deleteShopVoucher: async (id: string) => {
+        const response = await api.delete(`/shop/vouchers/${id}`);
+        return response.data;
+    },
+
+    // ============================================
+    // CUSTOMER OPERATIONS
+    // ============================================
+
+    // Get available vouchers for order
+    getAvailableVouchers: async (orderTotal: number) => {
+        const response = await api.get("/vouchers/available", { params: { orderTotal } });
+        return response.data;
+    },
+
+    // Validate voucher code
+    validateVoucher: async (code: string, orderTotal: number) => {
+        const response = await api.get("/vouchers/validate", { params: { code, orderTotal } });
+        return response.data;
+    },
+
+    // Get voucher by ID
+    getVoucherById: async (id: string) => {
+        const response = await api.get(`/vouchers/${id}`);
+        return response.data;
+    },
+
+    // Get voucher by code
+    getVoucherByCode: async (code: string) => {
+        const response = await api.get(`/vouchers/code/${code}`);
+        return response.data;
+    },
 };

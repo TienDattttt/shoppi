@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'bloc/auth_bloc.dart';
-import 'bloc/auth_event.dart';
-import 'bloc/auth_state.dart';
+import '../bloc/auth_bloc.dart';
+import '../bloc/auth_event.dart';
+import '../bloc/auth_state.dart';
 import '../../../../core/constants/app_colors.dart';
 
 class SplashPage extends StatefulWidget {
@@ -36,13 +36,13 @@ class _SplashPageState extends State<SplashPage> {
           decoration: const BoxDecoration(
             gradient: AppColors.primaryGradient,
           ),
-          child: Center(
+          child: const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.local_shipping, size: 80, color: Colors.white),
-                const SizedBox(height: 20),
-                const Text(
+                Icon(Icons.local_shipping, size: 80, color: Colors.white),
+                SizedBox(height: 20),
+                Text(
                   "SPX SHIPPER",
                   style: TextStyle(
                     fontSize: 24,
@@ -51,8 +51,8 @@ class _SplashPageState extends State<SplashPage> {
                     letterSpacing: 2,
                   ),
                 ),
-                const SizedBox(height: 40),
-                const CircularProgressIndicator(color: Colors.white),
+                SizedBox(height: 40),
+                CircularProgressIndicator(color: Colors.white),
               ],
             ),
           ),

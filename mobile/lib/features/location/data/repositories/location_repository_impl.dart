@@ -67,4 +67,24 @@ class LocationRepositoryImpl implements LocationRepository {
       return Left(LocationFailure(e.toString()));
     }
   }
+
+  @override
+  Future<Either<Failure, void>> startTracking() async {
+    try {
+      await _dataSource.startTracking();
+      return const Right(null);
+    } catch (e) {
+      return Left(LocationFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> stopTracking() async {
+    try {
+      await _dataSource.stopTracking();
+      return const Right(null);
+    } catch (e) {
+       return Left(LocationFailure(e.toString()));
+    }
+  }
 }

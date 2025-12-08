@@ -16,7 +16,10 @@ import 'package:injectable/injectable.dart' as _i526;
 
 import 'core/di/app_module.dart' as _i808;
 import 'core/network/api_client.dart' as _i871;
+import 'core/network/auth_interceptor.dart' as _i8;
 import 'core/network/network_info.dart' as _i75;
+import 'core/offline/offline_sync_service.dart' as _i811;
+import 'core/services/notification_service.dart' as _i1011;
 import 'features/auth/data/datasources/auth_local_data_source.dart' as _i791;
 import 'features/auth/data/datasources/auth_remote_data_source.dart' as _i767;
 import 'features/auth/data/repositories/auth_repository_impl.dart' as _i111;
@@ -27,6 +30,16 @@ import 'features/auth/domain/usecases/login_usecase.dart' as _i206;
 import 'features/auth/domain/usecases/register_usecase.dart' as _i693;
 import 'features/auth/domain/usecases/request_otp_usecase.dart' as _i324;
 import 'features/auth/presentation/bloc/auth_bloc.dart' as _i363;
+import 'features/auth/presentation/cubit/register_cubit.dart' as _i622;
+import 'features/earnings/data/datasources/earnings_remote_data_source.dart'
+    as _i151;
+import 'features/earnings/data/repositories/earnings_repository_impl.dart'
+    as _i116;
+import 'features/earnings/domain/repositories/earnings_repository.dart'
+    as _i756;
+import 'features/earnings/domain/usecases/get_earnings_stats_usecase.dart'
+    as _i807;
+import 'features/earnings/presentation/cubit/earnings_cubit.dart' as _i823;
 import 'features/home/data/datasources/dashboard_remote_data_source.dart'
     as _i203;
 import 'features/home/data/repositories/dashboard_repository_impl.dart'
@@ -41,6 +54,27 @@ import 'features/location/data/repositories/location_repository_impl.dart'
 import 'features/location/domain/repositories/location_repository.dart' as _i55;
 import 'features/location/presentation/cubit/location_cubit.dart' as _i793;
 import 'features/location/presentation/cubit/online_status_cubit.dart' as _i336;
+import 'features/notifications/data/datasources/notification_remote_data_source.dart'
+    as _i316;
+import 'features/notifications/data/repositories/notification_repository_impl.dart'
+    as _i940;
+import 'features/notifications/domain/repositories/notification_repository.dart'
+    as _i620;
+import 'features/notifications/domain/usecases/get_notifications_usecase.dart'
+    as _i65;
+import 'features/notifications/domain/usecases/register_device_token_usecase.dart'
+    as _i645;
+import 'features/notifications/presentation/cubit/notification_cubit.dart'
+    as _i76;
+import 'features/profile/data/datasources/profile_remote_data_source.dart'
+    as _i336;
+import 'features/profile/data/repositories/profile_repository_impl.dart'
+    as _i277;
+import 'features/profile/domain/repositories/profile_repository.dart' as _i626;
+import 'features/profile/domain/usecases/update_profile_usecase.dart' as _i851;
+import 'features/profile/presentation/cubit/locale_cubit.dart' as _i831;
+import 'features/profile/presentation/cubit/settings_cubit.dart' as _i511;
+import 'features/profile/presentation/cubit/theme_cubit.dart' as _i561;
 import 'features/shipment/data/datasources/shipment_remote_data_source.dart'
     as _i828;
 import 'features/shipment/data/repositories/shipment_repository_impl.dart'
@@ -71,15 +105,31 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i361.Dio>(() => appModule.dio);
     gh.lazySingleton<_i895.Connectivity>(() => appModule.connectivity);
     gh.lazySingleton<_i558.FlutterSecureStorage>(() => appModule.secureStorage);
-    gh.lazySingleton<_i268.LocationDataSource>(
-        () => _i268.LocationDataSourceImpl());
-    gh.lazySingleton<_i871.ApiClient>(() => _i871.ApiClient(gh<_i361.Dio>()));
+    gh.lazySingleton<_i831.LocaleCubit>(() => _i831.LocaleCubit());
+    gh.lazySingleton<_i511.SettingsCubit>(() => _i511.SettingsCubit());
+    gh.lazySingleton<_i561.ThemeCubit>(() => _i561.ThemeCubit());
+    gh.lazySingleton<_i1011.NotificationService>(
+        () => _i1011.NotificationServiceImpl());
+    gh.lazySingleton<_i851.UpdateProfileUseCase>(
+        () => _i851.UpdateProfileUseCase(gh<_i626.ProfileRepository>()));
+    gh.factory<_i8.AuthInterceptor>(
+        () => _i8.AuthInterceptor(gh<_i558.FlutterSecureStorage>()));
     gh.lazySingleton<_i791.AuthLocalDataSource>(
         () => _i791.AuthLocalDataSourceImpl(gh<_i558.FlutterSecureStorage>()));
     gh.lazySingleton<_i75.NetworkInfo>(
         () => _i75.NetworkInfoImpl(gh<_i895.Connectivity>()));
+    gh.lazySingleton<_i871.ApiClient>(() => _i871.ApiClient(
+          gh<_i361.Dio>(),
+          gh<_i8.AuthInterceptor>(),
+        ));
+    gh.lazySingleton<_i811.OfflineSyncService>(
+        () => _i811.OfflineSyncService(gh<_i75.NetworkInfo>()));
     gh.lazySingleton<_i203.DashboardRemoteDataSource>(
         () => _i203.DashboardRemoteDataSourceImpl(gh<_i871.ApiClient>()));
+    gh.lazySingleton<_i268.LocationDataSource>(
+        () => _i268.LocationDataSourceImpl(gh<_i871.ApiClient>()));
+    gh.lazySingleton<_i151.EarningsRemoteDataSource>(
+        () => _i151.EarningsRemoteDataSourceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i767.AuthRemoteDataSource>(
         () => _i767.AuthRemoteDataSourceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i55.LocationRepository>(
@@ -87,6 +137,8 @@ extension GetItInjectableX on _i174.GetIt {
               gh<_i268.LocationDataSource>(),
               gh<_i871.ApiClient>(),
             ));
+    gh.lazySingleton<_i316.NotificationRemoteDataSource>(
+        () => _i316.NotificationRemoteDataSourceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i828.ShipmentRemoteDataSource>(
         () => _i828.ShipmentRemoteDataSourceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i337.DashboardRepository>(
@@ -98,9 +150,17 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i509.GetDashboardStatsUseCase(gh<_i337.DashboardRepository>()));
     gh.factory<_i793.LocationCubit>(
         () => _i793.LocationCubit(gh<_i55.LocationRepository>()));
-    gh.lazySingleton<_i652.ShipmentRepository>(
-        () => _i868.ShipmentRepositoryImpl(
-              gh<_i828.ShipmentRemoteDataSource>(),
+    gh.lazySingleton<_i336.ProfileRemoteDataSource>(
+        () => _i336.ProfileRemoteDataSourceImpl(gh<_i871.ApiClient>()));
+    gh.lazySingleton<_i620.NotificationRepository>(
+        () => _i940.NotificationRepositoryImpl(
+              gh<_i316.NotificationRemoteDataSource>(),
+              gh<_i75.NetworkInfo>(),
+              gh<_i1011.NotificationService>(),
+            ));
+    gh.lazySingleton<_i756.EarningsRepository>(
+        () => _i116.EarningsRepositoryImpl(
+              gh<_i151.EarningsRemoteDataSource>(),
               gh<_i75.NetworkInfo>(),
             ));
     gh.lazySingleton<_i1015.AuthRepository>(() => _i111.AuthRepositoryImpl(
@@ -108,6 +168,12 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i791.AuthLocalDataSource>(),
           gh<_i75.NetworkInfo>(),
         ));
+    gh.lazySingleton<_i652.ShipmentRepository>(
+        () => _i868.ShipmentRepositoryImpl(
+              gh<_i828.ShipmentRemoteDataSource>(),
+              gh<_i75.NetworkInfo>(),
+              gh<_i811.OfflineSyncService>(),
+            ));
     gh.factory<_i921.DashboardCubit>(
         () => _i921.DashboardCubit(gh<_i509.GetDashboardStatsUseCase>()));
     gh.lazySingleton<_i930.GetActiveShipmentsUseCase>(
@@ -124,11 +190,22 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i527.MarkFailedUseCase>(),
         ));
     gh.factory<_i336.OnlineStatusCubit>(() => _i336.OnlineStatusCubit(
-          gh<_i55.LocationRepository>(),
+          gh<_i871.ApiClient>(),
           gh<_i793.LocationCubit>(),
         ));
     gh.factory<_i980.ShipmentListCubit>(
         () => _i980.ShipmentListCubit(gh<_i930.GetActiveShipmentsUseCase>()));
+    gh.lazySingleton<_i277.ProfileRepositoryImpl>(
+        () => _i277.ProfileRepositoryImpl(
+              gh<_i336.ProfileRemoteDataSource>(),
+              gh<_i75.NetworkInfo>(),
+            ));
+    gh.lazySingleton<_i65.GetNotificationsUseCase>(
+        () => _i65.GetNotificationsUseCase(gh<_i620.NotificationRepository>()));
+    gh.lazySingleton<_i645.RegisterDeviceTokenUseCase>(() =>
+        _i645.RegisterDeviceTokenUseCase(gh<_i620.NotificationRepository>()));
+    gh.lazySingleton<_i807.GetEarningsStatsUseCase>(
+        () => _i807.GetEarningsStatsUseCase(gh<_i756.EarningsRepository>()));
     gh.lazySingleton<_i250.GetCurrentShipperUseCase>(
         () => _i250.GetCurrentShipperUseCase(gh<_i1015.AuthRepository>()));
     gh.lazySingleton<_i206.LoginUseCase>(
@@ -137,10 +214,18 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i693.RegisterUseCase(gh<_i1015.AuthRepository>()));
     gh.lazySingleton<_i324.RequestOtpUseCase>(
         () => _i324.RequestOtpUseCase(gh<_i1015.AuthRepository>()));
+    gh.factory<_i76.NotificationCubit>(() => _i76.NotificationCubit(
+          gh<_i65.GetNotificationsUseCase>(),
+          gh<_i645.RegisterDeviceTokenUseCase>(),
+        ));
+    gh.factory<_i823.EarningsCubit>(
+        () => _i823.EarningsCubit(gh<_i807.GetEarningsStatsUseCase>()));
     gh.factory<_i363.AuthBloc>(() => _i363.AuthBloc(
           gh<_i206.LoginUseCase>(),
           gh<_i250.GetCurrentShipperUseCase>(),
         ));
+    gh.factory<_i622.RegisterCubit>(
+        () => _i622.RegisterCubit(gh<_i693.RegisterUseCase>()));
     return this;
   }
 }

@@ -1,39 +1,38 @@
+import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:injectable/injectable.dart';
+import '../../../../core/network/api_client.dart';
 import '../../domain/entities/location_entity.dart';
-import '../../../../core/errors/failures.dart';
 
 abstract class LocationDataSource {
   Stream<LocationEntity> getLocationStream();
   Future<LocationEntity> getCurrentLocation();
   Future<bool> checkPermission();
   Future<bool> isServiceEnabled();
+  Future<void> startTracking();
+  Future<void> stopTracking();
 }
 
 @LazySingleton(as: LocationDataSource)
 class LocationDataSourceImpl implements LocationDataSource {
+  final ApiClient _client;
+  final StreamController<LocationEntity> _locationController = StreamController.broadcast();
+  StreamSubscription<Position>? _positionSubscription;
+  bool _isTracking = false;
+
+  LocationDataSourceImpl(this._client);
+
   @override
   Stream<LocationEntity> getLocationStream() {
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10,
-    );
-    return Geolocator.getPositionStream(locationSettings: locationSettings).map((position) {
-      return LocationEntity(
-        lat: position.latitude,
-        lng: position.longitude,
-        accuracy: position.accuracy,
-        speed: position.speed,
-        heading: position.heading,
-        timestamp: position.timestamp,
-      );
-    });
+    return _locationController.stream;
   }
 
   @override
   Future<LocationEntity> getCurrentLocation() async {
     final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
     );
     return LocationEntity(
       lat: position.latitude,
@@ -47,15 +46,12 @@ class LocationDataSourceImpl implements LocationDataSource {
 
   @override
   Future<bool> checkPermission() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      return false; // Or throw exception to prompt enable
+      return false;
     }
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -73,5 +69,48 @@ class LocationDataSourceImpl implements LocationDataSource {
   @override
   Future<bool> isServiceEnabled() async {
     return await Geolocator.isLocationServiceEnabled();
+  }
+
+  @override
+  Future<void> startTracking() async {
+    if (_isTracking) return;
+    _isTracking = true;
+
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 10,
+    );
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen((Position position) async {
+      final entity = LocationEntity(
+        lat: position.latitude,
+        lng: position.longitude,
+        accuracy: position.accuracy,
+        speed: position.speed,
+        heading: position.heading,
+        timestamp: position.timestamp,
+      );
+      _locationController.add(entity);
+
+      try {
+        await _client.post('/shippers/location', data: {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'heading': position.heading,
+          'speed': position.speed,
+        });
+      } catch (e) {
+        // Ignore error - location update failed
+      }
+    });
+  }
+
+  @override
+  Future<void> stopTracking() async {
+    _isTracking = false;
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
   }
 }

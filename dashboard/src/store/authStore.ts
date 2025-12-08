@@ -3,19 +3,23 @@ import { persist } from 'zustand/middleware';
 
 interface User {
     id: string;
-    name: string;
-    email: string;
-    role: 'admin' | 'partner' | 'user';
-    avatar?: string;
+    email: string | null;
+    phone: string | null;
+    fullName: string;
+    role: 'admin' | 'partner' | 'customer' | 'shipper';
+    status: string;
+    avatarUrl?: string;
 }
 
 interface AuthState {
     user: User | null;
     token: string | null;
+    refreshToken: string | null;
     isLoading: boolean;
-    login: (user: User, token: string) => void;
+    login: (user: User, accessToken: string, refreshToken: string) => void;
     logout: () => void;
     updateUser: (user: Partial<User>) => void;
+    setToken: (token: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,13 +27,19 @@ export const useAuthStore = create<AuthState>()(
         (set) => ({
             user: null,
             token: null,
+            refreshToken: null,
             isLoading: false,
-            login: (user, token) => set({ user, token }),
-            logout: () => set({ user: null, token: null }),
+            login: (user, accessToken, refreshToken) => set({ 
+                user, 
+                token: accessToken, 
+                refreshToken 
+            }),
+            logout: () => set({ user: null, token: null, refreshToken: null }),
             updateUser: (updates) =>
                 set((state) => ({
                     user: state.user ? { ...state.user, ...updates } : null,
                 })),
+            setToken: (token) => set({ token }),
         }),
         {
             name: 'auth-storage',

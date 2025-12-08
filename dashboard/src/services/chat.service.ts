@@ -1,101 +1,116 @@
-
-export interface Message {
-    id: string;
-    conversationId: string;
-    senderId: string;
-    text: string;
-    createdAt: string;
-    isSender: boolean; // Helper for UI
-}
-
 import api from "./api";
 
-export interface Message {
-    _id: string; // Backend uses _id
-    id?: string; // Frontend alias
-    conversationId: string; // Map from room_id
-    senderId: string; // Map from sender_id
-    text: string; // Map from content (type=text)
-    type: 'text' | 'image' | 'product' | 'order' | 'system';
-    metadata?: any;
-    createdAt: string;
-    isSender: boolean;
+export interface ChatRoom {
+    id: string;
+    customer_id: string;
+    shop_id: string;
+    last_message: string | null;
+    last_message_at: string | null;
+    customer_unread_count: number;
+    shop_unread_count: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    // Relations
+    customer?: { id: string; full_name: string; avatar_url: string | null };
+    shop?: { id: string; shop_name: string; logo_url: string | null };
 }
 
-export interface Conversation {
-    id: string; // room_id
-    userId: string; // partnerId or customerId depending on view, here it's customer
-    userName: string;
-    userAvatar: string;
-    lastMessage: string;
-    lastMessageTime: string;
-    unreadCount: number;
-    isOnline: boolean;
+export interface ChatMessage {
+    id: string;
+    room_id: string;
+    sender_id: string;
+    sender_type: 'customer' | 'shop';
+    message_type: 'text' | 'image' | 'product' | 'order';
+    content: string;
+    metadata: Record<string, any> | null;
+    is_read: boolean;
+    read_at: string | null;
+    created_at: string;
+}
+
+export interface SendMessageData {
+    roomId: string;
+    messageType: 'text' | 'image' | 'product' | 'order';
+    content: string;
+    metadata?: Record<string, any>;
 }
 
 export const chatService = {
-    getConversations: async () => {
-        const response = await api.get("/chat/rooms");
-        // Transform backend DTO to frontend Conversation interface
-        return response.data.map((room: any) => ({
-            id: room._id,
-            userId: room.customer._id, // As partner, the other user is customer
-            userName: room.customer.name,
-            userAvatar: room.customer.avatar || "https://github.com/shadcn.png",
-            lastMessage: room.last_message?.content || "Started a conversation",
-            lastMessageTime: room.last_message?.created_at || room.updated_at,
-            unreadCount: room.unread_count || 0,
-            isOnline: false // Todo: Realtime online status
-        }));
+    // ============================================
+    // CONVERSATION OPERATIONS
+    // ============================================
+
+    // Get conversations
+    getConversations: async (params?: { page?: number; limit?: number }) => {
+        const response = await api.get("/chat/conversations", { params });
+        return response.data;
     },
 
-    getMessages: async (conversationId: string) => {
-        const response = await api.get(`/chat/rooms/${conversationId}/messages`);
-        return response.data.map((msg: any) => ({
-            id: msg._id,
-            conversationId: msg.room_id,
-            senderId: msg.sender_id,
-            text: msg.type === 'image' ? (msg.metadata?.url || "[Image]") : msg.content,
-            type: msg.type,
-            metadata: msg.metadata,
-            createdAt: msg.created_at,
-            isSender: msg.is_sender // Backend usually calculates this via DTO
-        }));
+    // Create conversation (Customer initiates chat with shop)
+    createConversation: async (shopId: string) => {
+        const response = await api.post("/chat/conversations", { shopId });
+        return response.data;
     },
 
-    sendMessage: async (conversationId: string, text: string) => {
-        const response = await api.post(`/chat/rooms/${conversationId}/messages`, { content: text });
-        const msg = response.data;
-        return {
-            id: msg._id,
-            conversationId: msg.room_id,
-            senderId: msg.sender_id,
-            text: msg.content,
-            type: 'text',
-            createdAt: msg.created_at,
-            isSender: true
-        };
+    // Get conversation by ID
+    getConversationById: async (id: string) => {
+        const response = await api.get(`/chat/conversations/${id}`);
+        return response.data;
     },
 
-    sendImage: async (conversationId: string, file: File) => {
+    // Get or create conversation with shop
+    getOrCreateConversation: async (shopId: string) => {
+        const response = await api.post("/chat/conversations/find-or-create", { shopId });
+        return response.data;
+    },
+
+    // ============================================
+    // MESSAGE OPERATIONS
+    // ============================================
+
+    // Get messages
+    getMessages: async (roomId: string, params?: { page?: number; limit?: number; before?: string }) => {
+        const response = await api.get("/chat/messages", { 
+            params: { conversationId: roomId, ...params } 
+        });
+        return response.data;
+    },
+
+    // Send message
+    sendMessage: async (data: SendMessageData) => {
+        const response = await api.post("/chat/messages", data);
+        return response.data;
+    },
+
+    // Mark messages as read
+    markAsRead: async (roomId: string) => {
+        const response = await api.patch(`/chat/conversations/${roomId}/read`);
+        return response.data;
+    },
+
+    // ============================================
+    // UNREAD COUNT
+    // ============================================
+
+    // Get total unread count
+    getUnreadCount: async () => {
+        const response = await api.get("/chat/unread/count");
+        return response.data;
+    },
+
+    // ============================================
+    // IMAGE UPLOAD
+    // ============================================
+
+    // Upload chat image
+    uploadImage: async (file: File) => {
         const formData = new FormData();
         formData.append('image', file);
-
-        const response = await api.post(`/chat/rooms/${conversationId}/images`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
+        
+        const response = await api.post("/chat/upload", formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
         });
-        const msg = response.data;
-        return {
-            id: msg._id,
-            conversationId: msg.room_id,
-            senderId: msg.sender_id,
-            text: msg.metadata?.url,
-            type: 'image',
-            metadata: msg.metadata,
-            createdAt: msg.created_at,
-            isSender: true
-        };
-    }
+        return response.data;
+    },
 };

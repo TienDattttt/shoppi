@@ -22,6 +22,11 @@ class LocationCubit extends Cubit<LocationState> {
 
   LocationCubit(this._repository) : super(LocationInitial());
 
+  Future<bool> checkPermission() async {
+    final result = await _repository.checkPermission();
+    return result.fold((_) => false, (isGranted) => isGranted);
+  }
+
   Future<void> startTracking() async {
     try {
       final hasPermission = await _repository.checkPermission();
@@ -37,8 +42,11 @@ class LocationCubit extends Cubit<LocationState> {
           final result = await _repository.getCurrentLocation();
           result.fold(
             (failure) => emit(LocationError(failure.message)),
-            (location) {
+            (location) async {
               emit(LocationTracking(location));
+              
+              // Start Background Tracking
+              _repository.startTracking();
               
               // Start stream
               _locationSubscription?.cancel();
@@ -61,6 +69,7 @@ class LocationCubit extends Cubit<LocationState> {
 
   void stopTracking() {
     _locationSubscription?.cancel();
+    _repository.stopTracking();
     emit(LocationInitial());
   }
 

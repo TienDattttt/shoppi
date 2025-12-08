@@ -9,10 +9,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.8
   
   # State Management
   flutter_bloc: ^8.1.6
+  hydrated_bloc: ^9.1.5
+  path_provider: ^2.1.2
   equatable: ^2.0.7
   
   # Dependency Injection
@@ -34,7 +38,6 @@ dependencies:
   # Maps & Location
   google_maps_flutter: ^2.9.0
   geolocator: ^13.0.1
-  # flutter_background_geolocation: ^4.16.2 
   
   # Notifications
   firebase_core: ^3.3.0
@@ -44,13 +47,16 @@ dependencies:
   fl_chart: ^0.68.0
   
   # UI/Utils
-  intl: ^0.19.0
+  signature: ^5.5.0
+  intl: 0.20.2
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.11
   dartz: ^0.10.1 
   cached_network_image: ^3.4.1
   url_launcher: ^6.3.0
+  image_picker: ^1.2.1
 
+  uuid: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -67,3 +73,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
