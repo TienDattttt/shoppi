@@ -32,10 +32,8 @@ const REJECTABLE_STATUSES = ['pending', 'revision_required'];
  * @returns {Promise<{data: object[], count: number}>}
  */
 async function getPendingProducts(options = {}) {
-  const { page = 1, limit = 20 } = options;
-  // This would need a custom repository method
-  // For now, return placeholder
-  return { data: [], count: 0 };
+  const products = await productRepository.findPendingProducts();
+  return { data: products, count: products.length };
 }
 
 /**

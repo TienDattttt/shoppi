@@ -62,6 +62,7 @@ categoryRouter.delete('/:id', authenticate, authorize('admin'), productControlle
 
 const adminRouter = express.Router();
 
+adminRouter.get('/pending', authenticate, authorize('admin'), productController.getPendingProducts);
 adminRouter.post('/:id/approve', authenticate, authorize('admin'), productController.approveProduct);
 adminRouter.post('/:id/reject', authenticate, authorize('admin'), productController.rejectProduct);
 adminRouter.post('/:id/revision', authenticate, authorize('admin'), productController.requestRevision);

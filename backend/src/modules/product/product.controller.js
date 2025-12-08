@@ -12,7 +12,7 @@ const inventoryService = require('./services/inventory.service');
 const approvalService = require('./services/approval.service');
 const viewService = require('./services/view.service');
 const { serializeProduct, serializeProductSummary } = require('./product.dto');
-const { successResponse, errorResponse } = require('../../shared/utils/response.util');
+const { sendSuccess: successResponse } = require('../../shared/utils/response.util');
 
 // ============================================
 // PRODUCT CRUD
@@ -368,6 +368,35 @@ async function deleteCategoryHandler(req, res, next) {
 // ============================================
 
 /**
+ * Get pending products for approval (Admin only)
+ * GET /api/admin/products/pending
+ */
+async function getPendingProducts(req, res, next) {
+  try {
+    const result = await approvalService.getPendingProducts();
+    
+    // Transform for frontend compatibility
+    const products = result.data.map(p => ({
+      ...p,
+      _id: p.id,
+      product_name: p.name,
+      product_thumb: '', // No images in basic query
+      product_price: p.base_price,
+      product_type: p.category?.name || 'Uncategorized',
+      shopName: p.shop?.shop_name || 'Unknown Shop',
+      createdAt: new Date(p.created_at).toLocaleDateString('vi-VN')
+    }));
+
+    return successResponse(res, {
+      data: products,
+      count: result.count,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Approve product (Admin only)
  * POST /api/admin/products/:id/approve
  */
@@ -594,6 +623,7 @@ module.exports = {
   deleteCategory: deleteCategoryHandler,
   
   // Admin
+  getPendingProducts,
   approveProduct,
   rejectProduct,
   requestRevision,

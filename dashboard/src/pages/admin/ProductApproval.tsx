@@ -21,10 +21,13 @@ export default function ProductApproval() {
     const loadPendingProducts = async () => {
         setLoading(true);
         try {
-            const data = await productService.getPendingProducts();
-            setProducts(data.data || []);
+            const response = await productService.getPendingProducts();
+            // API returns { data: [...], count: ... }
+            const products = response?.data || response || [];
+            setProducts(Array.isArray(products) ? products : []);
         } catch (error) {
             console.error(error);
+            toast.error("Failed to load pending products");
         } finally {
             setLoading(false);
         }
@@ -47,8 +50,9 @@ export default function ProductApproval() {
 
     const handleRejectConfirm = async (reason: string) => {
         if (!selectedProduct) return;
+        const productId = selectedProduct.id || selectedProduct._id || '';
         try {
-            await productService.rejectProduct(selectedProduct._id, reason);
+            await productService.rejectProduct(productId, reason);
             toast.success(`Product ${selectedProduct.product_name} rejected`);
             loadPendingProducts();
         } catch (error) {
@@ -65,12 +69,16 @@ export default function ProductApproval() {
             header: "Product",
             cell: (product: Product) => (
                 <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-md border border-border/50 overflow-hidden bg-muted flex-shrink-0">
-                        <img
-                            src={product.product_thumb}
-                            alt={product.product_name}
-                            className="h-full w-full object-cover"
-                        />
+                    <div className="h-12 w-12 rounded-md border border-border/50 overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
+                        {product.product_thumb ? (
+                            <img
+                                src={product.product_thumb}
+                                alt={product.product_name}
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            <span className="text-xs text-muted-foreground">No img</span>
+                        )}
                     </div>
                     <div className="flex flex-col min-w-[200px]">
                         <span className="font-medium text-foreground line-clamp-1" title={product.product_name}>{product.product_name}</span>
@@ -104,7 +112,7 @@ export default function ProductApproval() {
                     <Button variant="outline" size="sm" className="h-8">
                         <Eye className="h-4 w-4" />
                     </Button>
-                    <Button variant="default" size="sm" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(product._id)}>
+                    <Button variant="default" size="sm" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => handleApprove(product.id || product._id || '')}>
                         <Check className="h-4 w-4" />
                     </Button>
                     <Button variant="destructive" size="sm" className="h-8" onClick={() => handleRejectClick(product)}>

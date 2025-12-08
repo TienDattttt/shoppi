@@ -63,6 +63,57 @@ async function findProductById(productId) {
   return data || null;
 }
 
+/**
+ * Find all pending products for admin approval
+ * @returns {Promise<object[]>}
+ */
+async function findPendingProducts() {
+  // Simple query without relations to avoid join issues
+  const { data: products, error } = await supabaseAdmin
+    .from('products')
+    .select('*')
+    .eq('status', 'pending')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to find pending products: ${error.message}`);
+  }
+
+  // Fetch related data separately
+  const result = [];
+  for (const p of (products || [])) {
+    let shopName = 'Unknown Shop';
+    let categoryName = 'Uncategorized';
+
+    if (p.shop_id) {
+      const { data: shop } = await supabaseAdmin
+        .from('shops')
+        .select('shop_name')
+        .eq('id', p.shop_id)
+        .single();
+      if (shop) shopName = shop.shop_name;
+    }
+
+    if (p.category_id) {
+      const { data: cat } = await supabaseAdmin
+        .from('categories')
+        .select('name')
+        .eq('id', p.category_id)
+        .single();
+      if (cat) categoryName = cat.name;
+    }
+
+    result.push({
+      ...p,
+      shop: { shop_name: shopName },
+      category: { name: categoryName }
+    });
+  }
+
+  return result;
+}
+
 
 /**
  * Find product by ID with relations (variants, images)
@@ -674,6 +725,7 @@ module.exports = {
   // Product operations
   createProduct,
   findProductById,
+  findPendingProducts,
   findProductByIdWithRelations,
   findProductBySlug,
   findProductsByShopId,

@@ -2,6 +2,7 @@ import api from "./api";
 
 export interface Product {
     id: string;
+    _id?: string; // Alias for compatibility
     shop_id: string;
     category_id: string | null;
     name: string;
@@ -17,6 +18,13 @@ export interface Product {
     view_count: number;
     created_at: string;
     updated_at: string;
+    // Compatibility fields (transformed by backend)
+    product_name?: string;
+    product_thumb?: string;
+    product_price?: number;
+    product_type?: string;
+    shopName?: string;
+    createdAt?: string;
     // Relations
     variants?: ProductVariant[];
     images?: ProductImage[];
@@ -191,6 +199,12 @@ export const productService = {
     // ============================================
     // ADMIN OPERATIONS
     // ============================================
+
+    // Get pending products for approval
+    getPendingProducts: async () => {
+        const response = await api.get("/admin/products/pending");
+        return response.data;
+    },
 
     // Approve product
     approveProduct: async (id: string) => {
