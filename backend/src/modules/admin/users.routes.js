@@ -1,0 +1,231 @@
+/**
+ * Admin Users Routes
+ * Admin-only endpoints for user management
+ */
+
+const express = require('express');
+const router = express.Router();
+const { authenticate, requireAdmin } = require('../auth/auth.middleware');
+const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
+
+/**
+ * GET /api/admin/users
+ * Get all users with pagination and filters
+ */
+router.get('/', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { page = 1, limit = 20, role, status, search } = req.query;
+        const offset = (page - 1) * limit;
+
+        let query = supabaseAdmin
+            .from('users')
+            .select('id, email, phone, full_name, role, status, avatar_url, created_at, updated_at', { count: 'exact' });
+
+        if (role) query = query.eq('role', role);
+        if (status) query = query.eq('status', status);
+        if (search) {
+            query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+        }
+
+        const { data, error, count } = await query
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            data: {
+                users: data,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: count,
+                    totalPages: Math.ceil(count / limit),
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get users error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'USERS_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * GET /api/admin/users/:id
+ * Get user by ID
+ */
+router.get('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { data, error } = await supabaseAdmin
+            .from('users')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        if (!data) {
+            return res.status(404).json({
+                success: false,
+                error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+            });
+        }
+
+        // Remove sensitive fields
+        delete data.password_hash;
+
+        res.json({ success: true, data: { user: data } });
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'USER_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * PATCH /api/admin/users/:id
+ * Update user (admin can change status, role)
+ */
+router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, role } = req.body;
+
+        const updates = {};
+        if (status) updates.status = status;
+        if (role) updates.role = role;
+        updates.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabaseAdmin
+            .from('users')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            data: { user: data, message: 'User updated successfully' }
+        });
+    } catch (error) {
+        console.error('Update user error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'USER_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * DELETE /api/admin/users/:id
+ * Soft delete user (set status to inactive)
+ */
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { error } = await supabaseAdmin
+            .from('users')
+            .update({ status: 'inactive', updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            data: { message: 'User deactivated successfully' }
+        });
+    } catch (error) {
+        console.error('Delete user error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'USER_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * GET /api/admin/users/:id/sessions
+ * Get user's login sessions (activity log)
+ */
+router.get('/:id/sessions', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { data, error } = await supabaseAdmin
+            .from('sessions')
+            .select('id, device_type, device_name, ip_address, user_agent, created_at, last_activity_at, expires_at')
+            .eq('user_id', id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            data: { sessions: data || [] }
+        });
+    } catch (error) {
+        console.error('Get sessions error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'SESSION_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * GET /api/admin/users/:id/orders
+ * Get user's order history
+ */
+router.get('/:id/orders', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+        const offset = (page - 1) * limit;
+
+        const { data, error, count } = await supabaseAdmin
+            .from('orders')
+            .select('id, order_number, grand_total, status, payment_status, created_at', { count: 'exact' })
+            .eq('user_id', id)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+
+        // Map grand_total to total_amount for frontend compatibility
+        const orders = (data || []).map(order => ({
+            ...order,
+            total_amount: order.grand_total
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                orders,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: count || 0,
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get orders error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'ORDER_ERROR', message: error.message }
+        });
+    }
+});
+
+module.exports = router;

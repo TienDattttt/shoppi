@@ -72,9 +72,11 @@ initShopModule(app);
 const { initializeModule: initShipperModule } = require('./modules/shipper/shipper.module');
 initShipperModule(app);
 
-// Admin Settings Routes
+// Admin Routes
 const adminSettingsRoutes = require('./modules/admin/settings.routes');
+const adminUsersRoutes = require('./modules/admin/users.routes');
 app.use('/api/admin/settings', adminSettingsRoutes);
+app.use('/api/admin/users', adminUsersRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

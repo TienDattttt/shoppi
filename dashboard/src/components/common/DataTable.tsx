@@ -26,7 +26,7 @@ interface DataTableProps<T> {
     isLoading?: boolean;
 }
 
-export function DataTable<T extends { _id: string | number }>({
+export function DataTable<T extends { _id?: string | number; id?: string | number }>({
     data,
     columns,
     searchKey,
@@ -92,8 +92,8 @@ export function DataTable<T extends { _id: string | number }>({
                     </TableHeader>
                     <TableBody>
                         {paginatedData.length > 0 ? (
-                            paginatedData.map((item) => (
-                                <TableRow key={item._id}>
+                            paginatedData.map((item, idx) => (
+                                <TableRow key={item._id || item.id || idx}>
                                     {columns.map((col, index) => (
                                         <TableCell key={index} className={col.className}>
                                             {col.cell ? col.cell(item) : (item[col.accessorKey!] as React.ReactNode)}

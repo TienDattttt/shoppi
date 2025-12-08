@@ -33,12 +33,17 @@ export const userService = {
     },
 
     getUserById: async (id: string) => {
-        const response = await api.get(`/users/${id}`);
+        const response = await api.get(`/admin/users/${id}`);
         return response.data;
     },
 
     updateUserStatus: async (id: string, status: string) => {
         const response = await api.patch(`/admin/users/${id}/status`, { status });
+        return response.data;
+    },
+
+    updateUser: async (id: string, data: { status?: string; role?: string }) => {
+        const response = await api.patch(`/admin/users/${id}`, data);
         return response.data;
     },
 
@@ -87,6 +92,18 @@ export const userService = {
 
     deleteAddress: async (id: string) => {
         const response = await api.delete(`/users/me/addresses/${id}`);
+        return response.data;
+    },
+
+    // Admin: Get user sessions (activity log)
+    getUserSessions: async (id: string) => {
+        const response = await api.get(`/admin/users/${id}/sessions`);
+        return response.data;
+    },
+
+    // Admin: Get user orders
+    getUserOrders: async (id: string, params?: { page?: number; limit?: number }) => {
+        const response = await api.get(`/admin/users/${id}/orders`, { params });
         return response.data;
     },
 };
