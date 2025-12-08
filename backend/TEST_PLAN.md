@@ -17,14 +17,14 @@
 ### 2.1 ADMIN ROLE
 
 #### Auth
-- [ ] Login với email/password (admin@test.com)
-- [ ] Logout
-- [ ] Refresh token
-- [ ] Get current user (/auth/me)
+- [x] Login với email/password (admin@test.com)
+- [x] Logout
+- [x] Refresh token
+- [x] Get current user (/auth/me)
 
 #### User Management
-- [ ] List users (/admin/users)
-- [ ] View user detail (/users/:id)
+- [x] List users (/admin/users)
+- [x] View user detail (/users/:id)
 - [ ] Approve partner/shipper account (/auth/admin/approve/:userId)
 - [ ] Reject account (/auth/admin/reject/:userId)
 

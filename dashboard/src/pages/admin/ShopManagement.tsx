@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { shopService } from "@/services/shop.service";
-import type { Shop } from "@/types";
+import api from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MoreHorizontal, Ban, CheckCircle, Store, Eye, Download } from "lucide-react";
@@ -20,12 +21,13 @@ import { toast } from "sonner";
 import { Edit3 } from "lucide-react";
 
 export default function ShopManagement() {
-    const [shops, setShops] = useState<Shop[]>([]);
+    const navigate = useNavigate();
+    const [shops, setShops] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState("all");
 
     // Dialog states
-    const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
+    const [selectedShop, setSelectedShop] = useState<any | null>(null);
     const [rejectOpen, setRejectOpen] = useState(false);
     const [revisionOpen, setRevisionOpen] = useState(false);
 
@@ -37,7 +39,8 @@ export default function ShopManagement() {
         setLoading(true);
         try {
             const data = await shopService.getAllShops();
-            setShops(data.data);
+            // API returns { shops: [...], pagination: {...} }
+            setShops(data.shops || data.data?.shops || []);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load shops");
@@ -46,10 +49,10 @@ export default function ShopManagement() {
         }
     };
 
-    const handleApprove = async (shop: Shop) => {
+    const handleApprove = async (shop: any) => {
         try {
-            await shopService.approveShop(shop._id);
-            toast.success(`Shop ${shop.name} approved successfully`);
+            await shopService.approveShop(shop.id);
+            toast.success(`Shop ${shop.shop_name} approved successfully`);
             loadShops();
         } catch (error) {
             toast.error("Failed to approve shop");
@@ -59,8 +62,8 @@ export default function ShopManagement() {
     const handleReject = async (reason: string) => {
         if (!selectedShop) return;
         try {
-            await shopService.rejectShop(selectedShop._id, reason);
-            toast.success(`Shop ${selectedShop.name} rejected`);
+            await shopService.rejectShop((selectedShop as any).id, reason);
+            toast.success(`Shop ${(selectedShop as any).shop_name} rejected`);
             loadShops();
         } catch (error) {
             toast.error("Failed to reject shop");
@@ -70,71 +73,100 @@ export default function ShopManagement() {
     const handleRevision = async (changes: string) => {
         if (!selectedShop) return;
         try {
-            await shopService.requestRevision(selectedShop._id, changes);
-            toast.success(`Revision requested for ${selectedShop.name}`);
+            await shopService.requestRevision((selectedShop as any).id, changes);
+            toast.success(`Revision requested for ${(selectedShop as any).shop_name}`);
             loadShops();
         } catch (error) {
             toast.error("Failed to request revision");
         }
     };
 
-    const openRejectDialog = (shop: Shop) => {
+    const handleSuspend = async (shop: any) => {
+        try {
+            await api.patch(`/admin/shops/${shop.id}`, { status: 'suspended' });
+            toast.success(`Shop ${shop.shop_name} suspended`);
+            loadShops();
+        } catch (error) {
+            toast.error("Failed to suspend shop");
+        }
+    };
+
+    const handleActivate = async (shop: any) => {
+        try {
+            await api.patch(`/admin/shops/${shop.id}`, { status: 'active' });
+            toast.success(`Shop ${shop.shop_name} activated`);
+            loadShops();
+        } catch (error) {
+            toast.error("Failed to activate shop");
+        }
+    };
+
+    const openRejectDialog = (shop: any) => {
         setSelectedShop(shop);
         setRejectOpen(true);
     };
 
-    const openRevisionDialog = (shop: Shop) => {
+    const openRevisionDialog = (shop: any) => {
         setSelectedShop(shop);
         setRevisionOpen(true);
     };
 
     const filteredShops = statusFilter === "all"
         ? shops
-        : shops.filter(shop => shop.status.toLowerCase() === statusFilter);
-
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-    };
+        : shops.filter((shop: any) => shop.status?.toLowerCase() === statusFilter);
 
     const columns = [
         {
             header: "Shop Info",
-            cell: (shop: Shop) => (
+            cell: (shop: any) => (
                 <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary">
-                        <Store className="h-4 w-4" />
-                    </div>
+                    {shop.logo_url ? (
+                        <img src={shop.logo_url} alt={shop.shop_name} className="h-8 w-8 rounded object-cover" />
+                    ) : (
+                        <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary">
+                            <Store className="h-4 w-4" />
+                        </div>
+                    )}
                     <div className="flex flex-col">
-                        <span className="font-medium">{shop.name}</span>
-                        <span className="text-xs text-muted-foreground">{shop._id}</span>
+                        <span className="font-medium">{shop.shop_name}</span>
+                        <span className="text-xs text-muted-foreground">{shop.email || shop.phone || '-'}</span>
                     </div>
                 </div>
             )
         },
         {
             header: "Products",
-            accessorKey: "products" as keyof Shop,
+            cell: (shop: any) => shop.product_count || 0,
         },
         {
-            header: "Revenue",
-            cell: (shop: Shop) => formatCurrency(shop.revenue)
+            header: "Followers",
+            cell: (shop: any) => shop.follower_count || 0,
         },
         {
             header: "Rating",
-            cell: (shop: Shop) => <span className="text-yellow-600 font-medium">⭐ {shop.rating}</span>
+            cell: (shop: any) => <span className="text-yellow-600 font-medium">⭐ {shop.avg_rating || 0}</span>
         },
         {
             header: "Status",
-            cell: (shop: Shop) => (
-                <Badge variant={shop.status === 'active' ? 'default' : 'destructive'}>
-                    {shop.status === 'active' ? 'Active' : shop.status}
-                </Badge>
-            )
+            cell: (shop: any) => {
+                const statusColors: Record<string, string> = {
+                    active: 'bg-green-100 text-green-700',
+                    pending: 'bg-yellow-100 text-yellow-700',
+                    rejected: 'bg-red-100 text-red-700',
+                    revision_required: 'bg-orange-100 text-orange-700',
+                    suspended: 'bg-gray-100 text-gray-700',
+                };
+                return (
+                    <Badge variant="outline" className={statusColors[shop.status] || ''}>
+                        {shop.status}
+                    </Badge>
+                );
+            }
         },
         {
             header: "Actions",
             className: "text-right",
-            cell: (shop: Shop) => (
+            cell: (shop: any) => (
                 <div className="flex justify-end">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -145,7 +177,7 @@ export default function ShopManagement() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/shops/${shop.id}`)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
 
                             {shop.status === 'pending' && (
@@ -163,8 +195,14 @@ export default function ShopManagement() {
                             )}
 
                             {shop.status === 'active' && (
-                                <DropdownMenuItem className="text-destructive">
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleSuspend(shop)}>
                                     <Ban className="mr-2 h-4 w-4" /> Suspend Shop
+                                </DropdownMenuItem>
+                            )}
+
+                            {shop.status === 'suspended' && (
+                                <DropdownMenuItem className="text-green-600" onClick={() => handleActivate(shop)}>
+                                    <CheckCircle className="mr-2 h-4 w-4" /> Activate Shop
                                 </DropdownMenuItem>
                             )}
 
@@ -200,7 +238,7 @@ export default function ShopManagement() {
                     <TabsTrigger value="all">All Shops</TabsTrigger>
                     <TabsTrigger value="pending" className="text-amber-600">Pending</TabsTrigger>
                     <TabsTrigger value="active" className="text-green-600">Active</TabsTrigger>
-                    <TabsTrigger value="rejected" className="text-red-600">Rejected</TabsTrigger>
+                    <TabsTrigger value="suspended" className="text-red-600">Suspended</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value={statusFilter} className="mt-0">
@@ -208,7 +246,7 @@ export default function ShopManagement() {
                         <DataTable
                             data={filteredShops}
                             columns={columns}
-                            searchKey="name"
+                            searchKey="shop_name"
                             searchPlaceholder="Search shops..."
                             isLoading={loading}
                         />
@@ -220,14 +258,14 @@ export default function ShopManagement() {
                 open={rejectOpen}
                 onOpenChange={setRejectOpen}
                 onConfirm={handleReject}
-                shopName={selectedShop?.name || ""}
+                shopName={(selectedShop as any)?.shop_name || ""}
             />
 
             <RequestRevisionDialog
                 open={revisionOpen}
                 onOpenChange={setRevisionOpen}
                 onConfirm={handleRevision}
-                shopName={selectedShop?.name || ""}
+                shopName={(selectedShop as any)?.shop_name || ""}
             />
         </div>
     );
