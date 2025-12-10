@@ -3,7 +3,7 @@
  * Database operations for orders, sub_orders, and order_items
  */
 
-const { supabase } = require('../../shared/supabase/supabase.client');
+const { supabaseAdmin: supabase } = require('../../shared/supabase/supabase.client');
 
 /**
  * Generate unique order number

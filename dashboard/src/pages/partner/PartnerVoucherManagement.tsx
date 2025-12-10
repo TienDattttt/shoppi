@@ -50,19 +50,25 @@ export default function PartnerVoucherManagement() {
     };
 
     const handleSubmit = async (data: Record<string, unknown>) => {
+        console.log("[VoucherManagement] handleSubmit called with data:", data);
         try {
             if (editingVoucher) {
-                await voucherService.updateShopVoucher(editingVoucher.id, data);
+                console.log("[VoucherManagement] Updating voucher:", editingVoucher.id);
+                const result = await voucherService.updateShopVoucher(editingVoucher.id, data);
+                console.log("[VoucherManagement] Update result:", result);
                 toast.success("Voucher updated");
             } else {
-                await voucherService.createShopVoucher(data as any);
+                console.log("[VoucherManagement] Creating new voucher");
+                const result = await voucherService.createShopVoucher(data as any);
+                console.log("[VoucherManagement] Create result:", result);
                 toast.success("Voucher created");
             }
             setIsModalOpen(false);
             loadVouchers();
-        } catch (error) {
-            console.error("Save voucher error:", error);
-            toast.error("Failed to save voucher");
+        } catch (error: any) {
+            console.error("[VoucherManagement] Save voucher error:", error);
+            console.error("[VoucherManagement] Error response:", error?.response?.data);
+            toast.error(error?.response?.data?.message || "Failed to save voucher");
         }
     };
 

@@ -3,7 +3,7 @@
  * Database operations for vouchers
  */
 
-const { supabase } = require('../../shared/supabase/supabase.client');
+const { supabaseAdmin: supabase } = require('../../shared/supabase/supabase.client');
 
 /**
  * Find voucher by code

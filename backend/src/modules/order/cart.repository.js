@@ -3,7 +3,7 @@
  * Database operations for carts and cart_items
  */
 
-const { supabase } = require('../../shared/supabase/supabase.client');
+const { supabaseAdmin: supabase } = require('../../shared/supabase/supabase.client');
 
 /**
  * Find cart by user ID

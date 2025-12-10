@@ -8,6 +8,64 @@ const orderDTO = require('./order.dto');
 const trackingService = require('./services/tracking.service');
 const { AppError } = require('../../shared/utils/error.util');
 const rabbitmq = require('../../shared/rabbitmq/rabbitmq.client');
+const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
+
+/**
+ * Helper to get shop_id from partner_id
+ * Auto-creates shop if not exists
+ */
+async function getShopIdFromPartner(partnerId) {
+  try {
+    const { data: shop, error } = await supabaseAdmin
+      .from('shops')
+      .select('id')
+      .eq('partner_id', partnerId)
+      .single();
+    
+    if (!error && shop) {
+      return shop.id;
+    }
+    
+    // Shop not found, try to auto-create
+    console.log(`[OrderService] Shop not found for partner ${partnerId}, auto-creating...`);
+    
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('full_name, email, phone')
+      .eq('id', partnerId)
+      .single();
+    
+    // Generate unique shop name and slug
+    const timestamp = Date.now();
+    const shopName = user?.full_name ? `${user.full_name}'s Shop` : `Shop ${timestamp}`;
+    const slug = shopName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + timestamp;
+    
+    const { data: newShop, error: createError } = await supabaseAdmin
+      .from('shops')
+      .insert({
+        partner_id: partnerId,
+        shop_name: shopName,
+        slug: slug,
+        email: user?.email,
+        phone: user?.phone,
+        status: 'active',
+      })
+      .select('id')
+      .single();
+    
+    if (createError) {
+      console.error('[OrderService] Failed to auto-create shop:', createError.message, createError.details);
+      // Return null instead of throwing - will return empty orders
+      return null;
+    }
+    
+    console.log(`[OrderService] Auto-created shop ${newShop.id} for partner ${partnerId}`);
+    return newShop.id;
+  } catch (err) {
+    console.error('[OrderService] Error in getShopIdFromPartner:', err.message);
+    return null;
+  }
+}
 
 /**
  * Publish order status changed event
@@ -118,7 +176,21 @@ async function getOrders(userId, filters = {}) {
 async function getPartnerOrders(partnerId, filters = {}) {
   const { status, page = 1, limit = 10 } = filters;
   
-  const result = await orderRepository.findSubOrdersByShop(partnerId, {
+  const shopId = await getShopIdFromPartner(partnerId);
+  
+  if (!shopId) {
+    return {
+      orders: [],
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: 0,
+        totalPages: 0,
+      },
+    };
+  }
+  
+  const result = await orderRepository.findSubOrdersByShop(shopId, {
     status,
     page: parseInt(page),
     limit: parseInt(limit),
@@ -224,7 +296,9 @@ async function confirmOrder(subOrderId, partnerId) {
     throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
   }
   
-  if (subOrder.shop_id !== partnerId) {
+  // Verify shop ownership via partner_id
+  const shopId = await getShopIdFromPartner(partnerId);
+  if (!shopId || subOrder.shop_id !== shopId) {
     throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
   }
   
@@ -256,7 +330,9 @@ async function packOrder(subOrderId, partnerId) {
     throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
   }
   
-  if (subOrder.shop_id !== partnerId) {
+  // Verify shop ownership via partner_id
+  const shopId = await getShopIdFromPartner(partnerId);
+  if (!shopId || subOrder.shop_id !== shopId) {
     throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
   }
   
@@ -288,7 +364,9 @@ async function cancelByPartner(subOrderId, partnerId, reason) {
     throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
   }
   
-  if (subOrder.shop_id !== partnerId) {
+  // Verify shop ownership via partner_id
+  const shopId = await getShopIdFromPartner(partnerId);
+  if (!shopId || subOrder.shop_id !== shopId) {
     throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
   }
   

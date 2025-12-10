@@ -7,7 +7,17 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../auth/auth.middleware');
 const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
-const { sendSuccess: successResponse, sendError: errorResponse } = require('../../shared/utils/response.util');
+const { sendSuccess, sendError } = require('../../shared/utils/response.util');
+
+// Helper to send success response
+function successResponse(res, data, statusCode = 200) {
+  return sendSuccess(res, data, statusCode);
+}
+
+// Helper to send error response
+function errorResponse(res, message, statusCode = 400) {
+  return sendError(res, 'ERROR', message, statusCode);
+}
 
 // All routes require authentication and partner role (admin can also access)
 router.use(authenticate);
@@ -15,23 +25,63 @@ router.use(authorize('partner', 'admin'));
 
 /**
  * Helper to get shop_id from partner user
+ * If shop doesn't exist, auto-create one
  */
 async function getShopIdFromUser(req) {
-  // If admin provides shopId in query, use that
-  if (req.user.role === 'admin' && req.query.shopId) {
-    return req.query.shopId;
+  try {
+    // If admin provides shopId in query, use that
+    if (req.user.role === 'admin' && req.query.shopId) {
+      return req.query.shopId;
+    }
+    
+    const { data: shop, error } = await supabaseAdmin
+      .from('shops')
+      .select('id')
+      .eq('partner_id', req.user.userId)
+      .single();
+    
+    if (!error && shop) {
+      return shop.id;
+    }
+    
+    // Auto-create shop for partner if not exists
+    console.log(`[ShopVoucher] Shop not found for partner ${req.user.userId}, auto-creating...`);
+    
+    // Get partner info
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('full_name, email, phone')
+      .eq('id', req.user.userId)
+      .single();
+    
+    const timestamp = Date.now();
+    const shopName = user?.full_name ? `${user.full_name}'s Shop` : `Shop ${timestamp}`;
+    const slug = shopName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + timestamp;
+    
+    const { data: newShop, error: createError } = await supabaseAdmin
+      .from('shops')
+      .insert({
+        partner_id: req.user.userId,
+        shop_name: shopName,
+        slug: slug,
+        email: user?.email,
+        phone: user?.phone,
+        status: 'active',
+      })
+      .select('id')
+      .single();
+    
+    if (createError) {
+      console.error('[ShopVoucher] Failed to auto-create shop:', createError.message, createError.details);
+      throw new Error('Shop not found and failed to create: ' + createError.message);
+    }
+    
+    console.log(`[ShopVoucher] Auto-created shop ${newShop.id} for partner ${req.user.userId}`);
+    return newShop.id;
+  } catch (err) {
+    console.error('[ShopVoucher] Error in getShopIdFromUser:', err.message);
+    throw err;
   }
-  
-  const { data: shop, error } = await supabaseAdmin
-    .from('shops')
-    .select('id')
-    .eq('partner_id', req.user.userId)
-    .single();
-  
-  if (error || !shop) {
-    throw new Error('Shop not found for this partner');
-  }
-  return shop.id;
 }
 
 /**

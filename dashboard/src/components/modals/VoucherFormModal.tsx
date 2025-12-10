@@ -69,6 +69,7 @@ export function VoucherFormModal({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        console.log("[VoucherFormModal] Form submitted with data:", formData);
         onSubmit(formData);
     };
 

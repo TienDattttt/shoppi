@@ -72,6 +72,10 @@ initShopModule(app);
 const shopVoucherRoutes = require('./modules/shop/shop.voucher.routes');
 app.use('/api/shop/vouchers', shopVoucherRoutes);
 
+// Shop Review Routes (Partner)
+const shopReviewRoutes = require('./modules/shop/shop.review.routes');
+app.use('/api/shop/reviews', shopReviewRoutes);
+
 // Shipper Module Routes
 const { initializeModule: initShipperModule } = require('./modules/shipper/shipper.module');
 initShipperModule(app);

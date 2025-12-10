@@ -3,7 +3,7 @@
  * Business logic for order tracking events
  */
 
-const { supabase } = require('../../../shared/supabase/supabase.client');
+const { supabaseAdmin: supabase } = require('../../../shared/supabase/supabase.client');
 const orderDTO = require('../order.dto');
 
 /**

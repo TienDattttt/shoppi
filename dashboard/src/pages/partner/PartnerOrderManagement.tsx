@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { Order } from "@/services/order.service";
 import { orderService } from "@/services/order.service";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -16,13 +15,47 @@ import { toast } from "sonner";
 import { CancelOrderDialog } from "@/components/partner/CancelOrderDialog";
 import { Package, Ban, Download } from "lucide-react";
 
+// Extended SubOrder with parent order info from backend
+interface ShopOrder {
+    id: string;
+    orderId: string;
+    shopId: string;
+    subtotal: number;
+    shippingFee: number;
+    discount: number;
+    total: number;
+    status: string;
+    trackingNumber: string | null;
+    shipperId: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    createdAt: string;
+    items: Array<{
+        id: string;
+        productName: string;
+        variantName: string | null;
+        quantity: number;
+        unitPrice: number;
+        totalPrice: number;
+        imageUrl: string | null;
+    }>;
+    order: {
+        orderNumber: string;
+        shippingName: string;
+        shippingPhone: string;
+        shippingAddress: string;
+        paymentMethod: string;
+        paymentStatus: string;
+    } | null;
+}
+
 export default function PartnerOrderManagement() {
-    const [orders, setOrders] = useState<Order[]>([]);
+    const [orders, setOrders] = useState<ShopOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("all");
 
     // Dialog state
-    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [selectedOrder, setSelectedOrder] = useState<ShopOrder | null>(null);
     const [cancelOpen, setCancelOpen] = useState(false);
 
     useEffect(() => {
@@ -33,9 +66,10 @@ export default function PartnerOrderManagement() {
         setLoading(true);
         try {
             const data = await orderService.getShopOrders({ status: activeTab === 'all' ? undefined : activeTab });
-            setOrders(data.data || []);
+            setOrders(data.orders || []);
         } catch (error) {
             console.error(error);
+            toast.error("Failed to load orders");
         } finally {
             setLoading(false);
         }
@@ -61,30 +95,7 @@ export default function PartnerOrderManagement() {
         }
     };
 
-    const handleShip = async (id: string) => {
-        // Assuming ship still uses the update status or a specific endpoint if exists
-        // For now, let's assume 'shipped' status update is what's needed or there might be a pickup action
-        // Following backend controller 'pickupOrder' is for Shipper, but Partner might just mark it ready?
-        // Let's stick to updateOrderStatus for 'shipped' or if there isn't a specific one.
-        // Actually earlier 'packOrder' was found. Let's check for 'shipOrder'.
-        // Backend has 'pickupOrder' (Shipper). 
-        // Typically Partner packs, then Shipper picks up -> Shipped.
-        // So Partner might just wait after packing? 
-        // Or Partner can hand over.
-        // Existing code had 'Mark as Shipped'. I'll keep it as a status update if no specific endpoint.
-        // Using generic update for now as fallback or if backend automation handles it.
-        // But wait, the previous code called updateOrderStatus(id, 'shipped').
-        // I'll assume partner can manually mark shipped or 'ready_to_ship'.
-        try {
-            await orderService.updateOrderStatus(id, 'shipped');
-            toast.success("Order marked as shipped");
-            loadOrders();
-        } catch (error) {
-            toast.error("Failed to update status");
-        }
-    };
-
-    const handleCancelClick = (order: Order) => {
+    const handleCancelClick = (order: ShopOrder) => {
         setSelectedOrder(order);
         setCancelOpen(true);
     };
@@ -92,7 +103,7 @@ export default function PartnerOrderManagement() {
     const handleCancelConfirm = async (reason: string) => {
         if (!selectedOrder) return;
         try {
-            await orderService.cancelOrder(selectedOrder._id, reason);
+            await orderService.cancelByPartner(selectedOrder.id, reason);
             toast.success("Order cancelled");
             loadOrders();
         } catch (error) {
@@ -106,73 +117,91 @@ export default function PartnerOrderManagement() {
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'pending': return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>;
-            case 'confirmed': return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Confirmed</Badge>;
-            case 'shipped': return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Shipped</Badge>;
-            case 'delivered': return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Delivered</Badge>;
-            case 'cancelled': return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Cancelled</Badge>;
+            case 'pending': return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Chờ xác nhận</Badge>;
+            case 'processing': return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Đang xử lý</Badge>;
+            case 'ready_to_ship': return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Sẵn sàng giao</Badge>;
+            case 'shipping': return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Đang giao</Badge>;
+            case 'delivered': return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Đã giao</Badge>;
+            case 'completed': return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Hoàn thành</Badge>;
+            case 'cancelled': return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Đã hủy</Badge>;
             default: return <Badge variant="outline">{status}</Badge>;
         }
     };
 
     const columns = [
         {
-            header: "Order ID",
-            cell: (order: Order) => <span className="font-mono font-medium text-xs">{order._id}</span>
+            header: "Mã đơn",
+            cell: (order: ShopOrder) => (
+                <div>
+                    <span className="font-mono font-medium text-xs">{order.order?.orderNumber || order.id.slice(0, 8)}</span>
+                </div>
+            )
         },
         {
-            header: "Customer",
-            accessorKey: "userName" as keyof Order,
+            header: "Khách hàng",
+            cell: (order: ShopOrder) => (
+                <div>
+                    <div className="font-medium">{order.order?.shippingName || '-'}</div>
+                    <div className="text-xs text-muted-foreground">{order.order?.shippingPhone || ''}</div>
+                </div>
+            )
         },
         {
-            header: "Payment",
-            accessorKey: "order_payment" as keyof Order,
+            header: "Thanh toán",
+            cell: (order: ShopOrder) => (
+                <div>
+                    <div className="text-sm">{order.order?.paymentMethod?.toUpperCase() || '-'}</div>
+                    <Badge variant={order.order?.paymentStatus === 'paid' ? 'default' : 'secondary'} className="text-xs">
+                        {order.order?.paymentStatus === 'paid' ? 'Đã TT' : 'Chưa TT'}
+                    </Badge>
+                </div>
+            )
         },
         {
-            header: "Total",
-            cell: (order: Order) => <span className="font-medium text-primary">{formatCurrency(order.order_checkout.totalPrice)}</span>
+            header: "Tổng tiền",
+            cell: (order: ShopOrder) => <span className="font-medium text-primary">{formatCurrency(order.total)}</span>
         },
         {
-            header: "Status",
-            cell: (order: Order) => getStatusBadge(order.order_status)
+            header: "Trạng thái",
+            cell: (order: ShopOrder) => getStatusBadge(order.status)
         },
         {
-            header: "Actions",
+            header: "Thao tác",
             className: "text-right",
-            cell: (order: Order) => (
+            cell: (order: ShopOrder) => (
                 <div className="flex justify-end gap-2">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">Actions</Button>
+                            <Button variant="outline" size="sm">Thao tác</Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                            <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> Xem chi tiết</DropdownMenuItem>
 
-                            {order.order_status === 'pending' && (
+                            {order.status === 'pending' && (
                                 <>
-                                    <DropdownMenuItem onClick={() => handleConfirm(order._id)}>
-                                        <Check className="mr-2 h-4 w-4" /> Confirm Order
+                                    <DropdownMenuItem onClick={() => handleConfirm(order.id)}>
+                                        <Check className="mr-2 h-4 w-4" /> Xác nhận đơn
                                     </DropdownMenuItem>
                                     <DropdownMenuItem className="text-destructive" onClick={() => handleCancelClick(order)}>
-                                        <Ban className="mr-2 h-4 w-4" /> Cancel Order
+                                        <Ban className="mr-2 h-4 w-4" /> Hủy đơn
                                     </DropdownMenuItem>
                                 </>
                             )}
 
-                            {order.order_status === 'confirmed' && (
+                            {order.status === 'processing' && (
                                 <>
-                                    <DropdownMenuItem onClick={() => handlePack(order._id)}>
-                                        <Package className="mr-2 h-4 w-4" /> Pack Order
+                                    <DropdownMenuItem onClick={() => handlePack(order.id)}>
+                                        <Package className="mr-2 h-4 w-4" /> Đóng gói
                                     </DropdownMenuItem>
                                     <DropdownMenuItem className="text-destructive" onClick={() => handleCancelClick(order)}>
-                                        <Ban className="mr-2 h-4 w-4" /> Cancel Order
+                                        <Ban className="mr-2 h-4 w-4" /> Hủy đơn
                                     </DropdownMenuItem>
                                 </>
                             )}
 
-                            {order.order_status === 'packed' && (
-                                <DropdownMenuItem onClick={() => handleShip(order._id)}>
-                                    <Truck className="mr-2 h-4 w-4" /> Mark as Shipped
+                            {order.status === 'ready_to_ship' && (
+                                <DropdownMenuItem disabled>
+                                    <Truck className="mr-2 h-4 w-4" /> Chờ shipper lấy hàng
                                 </DropdownMenuItem>
                             )}
                         </DropdownMenuContent>
@@ -198,63 +227,32 @@ export default function PartnerOrderManagement() {
 
             <Tabs defaultValue="all" onValueChange={setActiveTab} className="space-y-4">
                 <TabsList className="bg-muted/50 p-1">
-                    <TabsTrigger value="all">All Orders</TabsTrigger>
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="confirmed">To Ship</TabsTrigger>
-                    <TabsTrigger value="shipped">Shipping</TabsTrigger>
+                    <TabsTrigger value="all">Tất cả</TabsTrigger>
+                    <TabsTrigger value="pending">Chờ xác nhận</TabsTrigger>
+                    <TabsTrigger value="processing">Đang xử lý</TabsTrigger>
+                    <TabsTrigger value="ready_to_ship">Chờ lấy hàng</TabsTrigger>
+                    <TabsTrigger value="shipping">Đang giao</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="all" className="mt-0">
-                    <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
-                        <DataTable
-                            data={orders}
-                            columns={columns}
-                            searchKey="userName"
-                            searchPlaceholder="Search customer..."
-                            isLoading={loading}
-                        />
-                    </div>
-                </TabsContent>
-                <TabsContent value="pending" className="mt-0">
-                    <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
-                        <DataTable
-                            data={orders}
-                            columns={columns}
-                            searchKey="userName"
-                            searchPlaceholder="Search customer..."
-                            isLoading={loading}
-                        />
-                    </div>
-                </TabsContent>
-                <TabsContent value="confirmed" className="mt-0">
-                    <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
-                        <DataTable
-                            data={orders}
-                            columns={columns}
-                            searchKey="userName"
-                            searchPlaceholder="Search customer..."
-                            isLoading={loading}
-                        />
-                    </div>
-                </TabsContent>
-                <TabsContent value="shipped" className="mt-0">
-                    <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
-                        <DataTable
-                            data={orders}
-                            columns={columns}
-                            searchKey="userName"
-                            searchPlaceholder="Search customer..."
-                            isLoading={loading}
-                        />
-                    </div>
-                </TabsContent>
+                {['all', 'pending', 'processing', 'ready_to_ship', 'shipping'].map((tab) => (
+                    <TabsContent key={tab} value={tab} className="mt-0">
+                        <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
+                            <DataTable
+                                data={orders}
+                                columns={columns}
+                                searchPlaceholder="Tìm kiếm..."
+                                isLoading={loading}
+                            />
+                        </div>
+                    </TabsContent>
+                ))}
             </Tabs>
 
             <CancelOrderDialog
                 open={cancelOpen}
                 onOpenChange={setCancelOpen}
                 onConfirm={handleCancelConfirm}
-                orderId={selectedOrder?._id || ""}
+                orderId={selectedOrder?.id || ""}
             />
         </div >
     );
