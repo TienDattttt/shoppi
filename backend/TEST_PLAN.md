@@ -29,38 +29,38 @@
 - [ ] Reject account (/auth/admin/reject/:userId)
 
 #### Shop Management
-- [ ] List all shops (/shops)
-- [ ] View pending shops (/shops/admin/pending)
-- [ ] View shop detail (/shops/:id)
-- [ ] Approve shop (/shops/:id/approve)
-- [ ] Reject shop (/shops/:id/reject)
+- [x] List all shops (/shops)
+- [x] View pending shops (/shops/admin/pending)
+- [x] View shop detail (/shops/:id)
+- [x] Approve shop (/shops/:id/approve)
+- [x] Reject shop (/shops/:id/reject)
 - [ ] Request revision (/shops/:id/revision)
 
 #### Category Management
-- [ ] List categories (/categories)
-- [ ] Create category (/categories)
-- [ ] Update category (/categories/:id)
-- [ ] Delete category (/categories/:id)
+- [x] List categories (/categories)
+- [x] Create category (/categories)
+- [x] Update category (/categories/:id)
+- [x] Delete category (/categories/:id)
 
 #### Product Approval
-- [ ] List pending products
-- [ ] Approve product (/admin/products/:id/approve)
-- [ ] Reject product (/admin/products/:id/reject)
-- [ ] Request revision (/admin/products/:id/revision)
+- [x] List pending products
+- [x] Approve product (/admin/products/:id/approve)
+- [x] Reject product (/admin/products/:id/reject)
+- [x] Request revision (/admin/products/:id/revision)
 
 #### Order Management
-- [ ] List all orders (/orders)
-- [ ] View order detail (/orders/:id)
+- [x] List all orders (/orders)
+- [x] View order detail (/orders/:id)
 
 #### Voucher Management
-- [ ] List vouchers (/vouchers)
-- [ ] Create system voucher (/vouchers)
-- [ ] Update voucher (/vouchers/:id)
-- [ ] Delete voucher (/vouchers/:id)
+- [X] List vouchers (/vouchers)
+- [X] Create system voucher (/vouchers)
+- [X] Update voucher (/vouchers/:id)
+- [X] Delete voucher (/vouchers/:id)
 
 #### Shipper Management
-- [ ] List shippers (/shippers)
-- [ ] View shipper detail (/shippers/:id)
+- [x] List shippers (/shippers)
+- [x] View shipper detail (/shippers/:id)
 
 ---
 

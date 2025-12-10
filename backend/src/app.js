@@ -78,11 +78,15 @@ const adminUsersRoutes = require('./modules/admin/users.routes');
 const adminShopsRoutes = require('./modules/admin/shops.routes');
 const adminCategoriesRoutes = require('./modules/admin/categories.routes');
 const adminOrdersRoutes = require('./modules/admin/orders.routes');
+const adminVouchersRoutes = require('./modules/admin/vouchers.routes');
+const adminShippersRoutes = require('./modules/admin/shippers.routes');
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/admin/shops', adminShopsRoutes);
 app.use('/api/admin/categories', adminCategoriesRoutes);
 app.use('/api/admin/orders', adminOrdersRoutes);
+app.use('/api/admin/vouchers', adminVouchersRoutes);
+app.use('/api/shippers', adminShippersRoutes); // Mounted at /api/shippers as frontend expects
 // Note: /api/admin/products is handled by product.module.js
 
 // 404 handler

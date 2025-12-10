@@ -168,6 +168,15 @@ async function registerPartner(data) {
     // Don't fail registration if shop creation fails
   }
 
+  // Send welcome email
+  try {
+    const emailService = require('../../shared/email/email.service');
+    await emailService.sendPartnerWelcomeEmail(email, fullName, businessName);
+  } catch (emailError) {
+    console.error('Failed to send welcome email:', emailError.message);
+    // Don't fail registration if email fails
+  }
+
   return {
     user: serializeUser(user),
     message: 'Registration submitted. Please wait for admin approval.',
@@ -1073,13 +1082,15 @@ async function approveAccount(userId, adminId) {
     status: 'active',
   });
 
-  // TODO: Send notification to user
-  // if (user.email) {
-  //   await sendEmail(user.email, 'Account Approved', 'Your account has been approved!');
-  // }
-  // if (user.phone) {
-  //   await sendSMS(user.phone, 'Your account has been approved!');
-  // }
+  // Send approval notification email
+  if (user.email) {
+    try {
+      const emailService = require('../../shared/email/email.service');
+      await emailService.sendAccountApprovedEmail(user.email, user.full_name);
+    } catch (emailError) {
+      console.error('Failed to send approval email:', emailError.message);
+    }
+  }
 
   return {
     success: true,
@@ -1117,13 +1128,15 @@ async function rejectAccount(userId, adminId, reason) {
     status: 'inactive',
   });
 
-  // TODO: Send notification to user with rejection reason
-  // if (user.email) {
-  //   await sendEmail(user.email, 'Account Rejected', `Your account was rejected. Reason: ${reason}`);
-  // }
-  // if (user.phone) {
-  //   await sendSMS(user.phone, `Your account was rejected. Reason: ${reason}`);
-  // }
+  // Send rejection notification email
+  if (user.email) {
+    try {
+      const emailService = require('../../shared/email/email.service');
+      await emailService.sendAccountRejectedEmail(user.email, user.full_name, reason);
+    } catch (emailError) {
+      console.error('Failed to send rejection email:', emailError.message);
+    }
+  }
 
   return {
     success: true,

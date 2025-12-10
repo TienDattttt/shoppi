@@ -61,9 +61,7 @@ const registerPartnerSchema = Joi.object({
   businessName: Joi.string().min(1).max(255).required().messages({
     'any.required': 'Business name is required',
   }),
-  taxId: Joi.string().min(1).max(50).required().messages({
-    'any.required': 'Tax ID is required',
-  }),
+  taxId: Joi.string().max(50).allow('', null).optional(), // Optional tax ID
 });
 
 /**

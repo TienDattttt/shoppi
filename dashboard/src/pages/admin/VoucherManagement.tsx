@@ -20,8 +20,9 @@ export default function VoucherManagement() {
     const loadVouchers = async () => {
         setLoading(true);
         try {
-            const data = await voucherService.getAllVouchers();
-            setVouchers(data.data || []);
+            const response = await voucherService.getAllVouchers();
+            const data = response?.data || response || [];
+            setVouchers(Array.isArray(data) ? data : []);
         } catch (error) {
             toast.error("Failed to load vouchers");
         } finally {
@@ -53,12 +54,14 @@ export default function VoucherManagement() {
     const handleSubmit = async (data: Partial<Voucher>) => {
         try {
             if (editingVoucher) {
-                await voucherService.updateVoucher(editingVoucher._id, data);
+                const voucherId = (editingVoucher as any)._id || (editingVoucher as any).id;
+                await voucherService.updateVoucher(voucherId, data);
                 toast.success("Voucher updated");
             } else {
-                await voucherService.createVoucher(data);
+                await voucherService.createSystemVoucher(data as any);
                 toast.success("Voucher created");
             }
+            setIsModalOpen(false);
             loadVouchers();
         } catch (error) {
             toast.error(editingVoucher ? "Failed to update" : "Failed to create");

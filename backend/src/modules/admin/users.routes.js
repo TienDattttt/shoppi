@@ -98,6 +98,13 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         const { id } = req.params;
         const { status, role } = req.body;
 
+        // Get current user data first (for email notification)
+        const { data: currentUser } = await supabaseAdmin
+            .from('users')
+            .select('email, full_name, status')
+            .eq('id', id)
+            .single();
+
         const updates = {};
         if (status) updates.status = status;
         if (role) updates.role = role;
@@ -111,6 +118,26 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             .single();
 
         if (error) throw error;
+
+        // Send email notification if status changed to active (approved)
+        if (status === 'active' && currentUser?.status === 'pending' && currentUser?.email) {
+            try {
+                const emailService = require('../../shared/email/email.service');
+                await emailService.sendAccountApprovedEmail(currentUser.email, currentUser.full_name);
+            } catch (emailError) {
+                console.error('Failed to send approval email:', emailError.message);
+            }
+        }
+
+        // Send email notification if status changed to inactive (rejected)
+        if (status === 'inactive' && currentUser?.status === 'pending' && currentUser?.email) {
+            try {
+                const emailService = require('../../shared/email/email.service');
+                await emailService.sendAccountRejectedEmail(currentUser.email, currentUser.full_name, 'Tài khoản không đáp ứng yêu cầu');
+            } catch (emailError) {
+                console.error('Failed to send rejection email:', emailError.message);
+            }
+        }
 
         res.json({
             success: true,

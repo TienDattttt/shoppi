@@ -42,10 +42,7 @@ async function createShipper(data) {
 async function findShipperById(shipperId) {
   const { data, error } = await supabaseAdmin
     .from('shippers')
-    .select(`
-      *,
-      user:users(id, full_name, phone, email, avatar_url)
-    `)
+    .select('*')
     .eq('id', shipperId)
     .single();
 
@@ -53,7 +50,20 @@ async function findShipperById(shipperId) {
     throw new Error(`Failed to find shipper: ${error.message}`);
   }
 
-  return data || null;
+  if (!data) return null;
+
+  // Get user info separately
+  if (data.user_id) {
+    const { data: userData } = await supabaseAdmin
+      .from('users')
+      .select('id, full_name, phone, email, avatar_url')
+      .eq('id', data.user_id)
+      .single();
+    
+    data.user = userData || null;
+  }
+
+  return data;
 }
 
 /**
@@ -107,10 +117,7 @@ async function findPendingShippers(options = {}) {
 
   const { data, error, count } = await supabaseAdmin
     .from('shippers')
-    .select(`
-      *,
-      user:users(id, full_name, phone, email)
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -119,7 +126,20 @@ async function findPendingShippers(options = {}) {
     throw new Error(`Failed to find pending shippers: ${error.message}`);
   }
 
-  return { data: data || [], count: count || 0 };
+  // Get user info for each shipper
+  const shippersWithUsers = await Promise.all((data || []).map(async (shipper) => {
+    if (shipper.user_id) {
+      const { data: userData } = await supabaseAdmin
+        .from('users')
+        .select('id, full_name, phone, email')
+        .eq('id', shipper.user_id)
+        .single();
+      shipper.user = userData || null;
+    }
+    return shipper;
+  }));
+
+  return { data: shippersWithUsers, count: count || 0 };
 }
 
 /**
@@ -133,10 +153,7 @@ async function findActiveShippers(options = {}) {
 
   let query = supabaseAdmin
     .from('shippers')
-    .select(`
-      *,
-      user:users(id, full_name, phone, avatar_url)
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .eq('status', 'active');
 
   if (onlineOnly) {
@@ -151,7 +168,20 @@ async function findActiveShippers(options = {}) {
     throw new Error(`Failed to find active shippers: ${error.message}`);
   }
 
-  return { data: data || [], count: count || 0 };
+  // Get user info for each shipper
+  const shippersWithUsers = await Promise.all((data || []).map(async (shipper) => {
+    if (shipper.user_id) {
+      const { data: userData } = await supabaseAdmin
+        .from('users')
+        .select('id, full_name, phone, avatar_url')
+        .eq('id', shipper.user_id)
+        .single();
+      shipper.user = userData || null;
+    }
+    return shipper;
+  }));
+
+  return { data: shippersWithUsers, count: count || 0 };
 }
 
 // ============================================
@@ -237,10 +267,7 @@ async function findNearbyShippers(lat, lng, radiusKm = 5, limit = 10) {
 
   const { data, error } = await supabaseAdmin
     .from('shippers')
-    .select(`
-      *,
-      user:users(id, full_name, phone, avatar_url)
-    `)
+    .select('*')
     .eq('status', 'active')
     .eq('is_online', true)
     .eq('is_available', true)
@@ -254,11 +281,21 @@ async function findNearbyShippers(lat, lng, radiusKm = 5, limit = 10) {
     throw new Error(`Failed to find nearby shippers: ${error.message}`);
   }
 
-  // Calculate actual distance and sort
-  const shippersWithDistance = (data || []).map(shipper => {
+  // Get user info and calculate distance
+  const shippersWithDistance = await Promise.all((data || []).map(async (shipper) => {
     const distance = calculateDistance(lat, lng, shipper.current_lat, shipper.current_lng);
+    
+    if (shipper.user_id) {
+      const { data: userData } = await supabaseAdmin
+        .from('users')
+        .select('id, full_name, phone, avatar_url')
+        .eq('id', shipper.user_id)
+        .single();
+      shipper.user = userData || null;
+    }
+    
     return { ...shipper, distance_km: distance };
-  });
+  }));
 
   return shippersWithDistance
     .filter(s => s.distance_km <= radiusKm)

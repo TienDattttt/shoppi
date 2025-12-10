@@ -101,6 +101,47 @@ export const productService = {
         return response.data;
     },
 
+    // Get my shop's products (Partner) - uses searchProducts with shop filter
+    getMyShopProducts: async (filters: ProductFilters = {}) => {
+        // First get the partner's shop
+        const shopResponse = await api.get("/shops/me");
+        const shop = shopResponse.data?.shop || shopResponse.data;
+        if (!shop?.id) {
+            throw new Error("Shop not found");
+        }
+        // Then get products for that shop
+        const response = await api.get("/products", { 
+            params: { ...filters, shopId: shop.id } 
+        });
+        return response.data;
+    },
+
+    // Get published products for partner's shop
+    getAllPublishedForShop: async () => {
+        const shopResponse = await api.get("/shops/me");
+        const shop = shopResponse.data?.shop || shopResponse.data;
+        if (!shop?.id) {
+            throw new Error("Shop not found");
+        }
+        const response = await api.get("/products", { 
+            params: { shopId: shop.id, status: 'active' } 
+        });
+        return response.data;
+    },
+
+    // Get draft products for partner's shop
+    getAllDraftsForShop: async () => {
+        const shopResponse = await api.get("/shops/me");
+        const shop = shopResponse.data?.shop || shopResponse.data;
+        if (!shop?.id) {
+            throw new Error("Shop not found");
+        }
+        const response = await api.get("/products", { 
+            params: { shopId: shop.id, status: 'pending' } 
+        });
+        return response.data;
+    },
+
     // Get product by ID
     getProductById: async (id: string) => {
         const response = await api.get(`/products/${id}`);

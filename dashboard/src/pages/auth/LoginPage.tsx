@@ -55,7 +55,21 @@ export default function LoginPage() {
             }
         } catch (err: any) {
             console.error('Login error:', err);
-            setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+            const errorCode = err.response?.data?.error?.code;
+            const errorMessage = err.response?.data?.error?.message || err.response?.data?.message;
+            
+            // Handle specific error codes with Vietnamese messages
+            if (errorCode === 'AUTH_ACCOUNT_PENDING') {
+                setError('Tài khoản của bạn đang chờ Admin phê duyệt. Vui lòng đợi email thông báo.');
+            } else if (errorCode === 'AUTH_ACCOUNT_INACTIVE') {
+                setError('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.');
+            } else if (errorCode === 'AUTH_ACCOUNT_LOCKED') {
+                setError('Tài khoản đã bị khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.');
+            } else if (errorCode === 'AUTH_INVALID_CREDENTIALS') {
+                setError('Email hoặc mật khẩu không đúng.');
+            } else {
+                setError(errorMessage || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -162,6 +176,13 @@ export default function LoginPage() {
                             <strong>Partner</strong><br />partner@shoppi.com
                         </div>
                     </div>
+
+                    <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                        Muốn bán hàng trên Shoppi?{" "}
+                        <Link to="/register/partner" className="font-medium text-primary hover:text-primary/90">
+                            Đăng ký Partner
+                        </Link>
+                    </p>
                 </form>
             </div>
         </div>

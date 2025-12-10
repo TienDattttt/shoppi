@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.0",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.39.0",
     "amqplib": "^0.10.3",
     "bcryptjs": "^2.4.3",

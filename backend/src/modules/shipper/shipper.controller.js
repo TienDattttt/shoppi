@@ -10,7 +10,15 @@ const shipmentService = require('./shipment.service');
 const locationService = require('./location.service');
 const shipperValidator = require('./shipper.validator');
 const shipperDto = require('./shipper.dto');
-const { successResponse, errorResponse } = require('../../shared/utils/response.util');
+const { sendSuccess: successResponse, sendError } = require('../../shared/utils/response.util');
+
+// Helper to handle errors consistently
+const errorResponse = (res, error) => {
+  const statusCode = error.status || error.statusCode || 500;
+  const code = error.code || 'INTERNAL_ERROR';
+  const message = error.message || 'An error occurred';
+  return sendError(res, code, message, statusCode);
+};
 
 // ============================================
 // SHIPPER ENDPOINTS

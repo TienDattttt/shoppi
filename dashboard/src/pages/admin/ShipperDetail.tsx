@@ -22,8 +22,31 @@ export default function ShipperDetail() {
     const loadShipper = async (shipperId: string) => {
         setLoading(true);
         try {
-            const data = await shipperService.getShipperById(shipperId);
-            setShipper(data);
+            const response = await shipperService.getShipperById(shipperId);
+            // Handle both wrapped and unwrapped response
+            const data = response?.data || response;
+            
+            // Get stats from nested statistics object or direct fields
+            const stats = data.statistics || {};
+            const totalDeliveries = stats.totalDeliveries || data.totalDeliveries || data.total_deliveries || 0;
+            const successfulDeliveries = stats.successfulDeliveries || data.successful_deliveries || 0;
+            
+            // Transform data to expected format - handle both camelCase (from DTO) and snake_case
+            setShipper({
+                ...data,
+                name: data.name || data.user?.fullName || data.user?.full_name || 'Unknown',
+                phone: data.phone || data.user?.phone || 'N/A',
+                email: data.email || data.user?.email || 'N/A',
+                avatar: data.avatar || data.user?.avatarUrl || data.user?.avatar_url,
+                area: data.area || data.workingDistrict 
+                    ? `${data.workingDistrict || data.working_district}, ${data.workingCity || data.working_city}` 
+                    : (data.workingCity || data.working_city || 'N/A'),
+                totalDeliveries: totalDeliveries,
+                successRate: totalDeliveries > 0 
+                    ? Math.round((successfulDeliveries / totalDeliveries) * 100) 
+                    : 0,
+                rating: stats.avgRating || data.rating || data.avg_rating || 0,
+            });
         } catch (error) {
             toast.error("Failed to load shipper");
         } finally {
@@ -46,9 +69,9 @@ export default function ShipperDetail() {
                     <div className="bg-card rounded-xl border p-6 flex flex-col items-center text-center shadow-sm">
                         <Avatar className="h-24 w-24 mb-4">
                             <AvatarImage src={shipper.avatar} />
-                            <AvatarFallback>{shipper.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                            <AvatarFallback>{(shipper.name || 'UN').substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <h2 className="text-xl font-bold">{shipper.name}</h2>
+                        <h2 className="text-xl font-bold">{shipper.name || 'Unknown'}</h2>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
                             <Badge variant={shipper.status === 'active' ? 'default' : 'secondary'} className="capitalize">
                                 {shipper.status}
@@ -58,13 +81,13 @@ export default function ShipperDetail() {
 
                         <div className="w-full mt-6 space-y-3 text-left">
                             <div className="flex items-center gap-3 text-sm">
-                                <Phone className="h-4 w-4 text-muted-foreground" /> {shipper.phone}
+                                <Phone className="h-4 w-4 text-muted-foreground" /> {shipper.phone || 'N/A'}
                             </div>
                             <div className="flex items-center gap-3 text-sm">
-                                <Mail className="h-4 w-4 text-muted-foreground" /> {shipper.email}
+                                <Mail className="h-4 w-4 text-muted-foreground" /> {shipper.email || 'N/A'}
                             </div>
                             <div className="flex items-center gap-3 text-sm">
-                                <Map className="h-4 w-4 text-muted-foreground" /> {shipper.area}
+                                <Map className="h-4 w-4 text-muted-foreground" /> {shipper.area || 'N/A'}
                             </div>
                         </div>
                     </div>
@@ -73,9 +96,9 @@ export default function ShipperDetail() {
                 {/* Stats & Content */}
                 <div className="flex-1 space-y-6">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <StatCard title="Total Deliveries" value={shipper.totalDeliveries} icon={Truck} />
-                        <StatCard title="Success Rate" value={`${shipper.successRate}%`} icon={Award} />
-                        <StatCard title="Performance" value="High" icon={TrendingUp} />
+                        <StatCard title="Total Deliveries" value={shipper.totalDeliveries || 0} icon={Truck} />
+                        <StatCard title="Success Rate" value={`${shipper.successRate || 0}%`} icon={Award} />
+                        <StatCard title="Rating" value={shipper.rating || 0} icon={TrendingUp} />
                     </div>
 
                     <Tabs defaultValue="history" className="w-full">

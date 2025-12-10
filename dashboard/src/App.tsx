@@ -16,6 +16,7 @@ const NotificationPage = lazy(() => import("@/pages/shared/NotificationPage")); 
 
 // Lazy Load Auth Pages
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
+const RegisterPage = lazy(() => import("@/pages/auth/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/auth/ForgotPasswordPage"));
 const ResetPage = lazy(() => import("@/pages/auth/ResetPage"));
 
@@ -48,6 +49,7 @@ const ShopProfile = lazy(() => import("@/pages/partner/ShopProfile"));
 const PartnerOrderManagement = lazy(() => import("@/pages/partner/PartnerOrderManagement"));
 const PartnerVoucherManagement = lazy(() => import("@/pages/partner/PartnerVoucherManagement"));
 const ReviewManagement = lazy(() => import("@/pages/partner/ReviewManagement"));
+const FollowersManagement = lazy(() => import("@/pages/partner/FollowersManagement"));
 const Chat = lazy(() => import("@/pages/partner/Chat"));
 const PartnerSettings = lazy(() => import("@/pages/partner/PartnerSettings"));
 const PartnerReports = lazy(() => import("@/pages/partner/PartnerReports"));
@@ -91,6 +93,7 @@ function App() {
         <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register/partner" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPage />} />
 
@@ -149,6 +152,7 @@ function App() {
             <Route path="/partner/orders/:id" element={<PartnerLayout><OrderDetail /></PartnerLayout>} />
             <Route path="/partner/vouchers" element={<PartnerLayout><PartnerVoucherManagement /></PartnerLayout>} />
             <Route path="/partner/reviews" element={<PartnerLayout><ReviewManagement /></PartnerLayout>} />
+            <Route path="/partner/followers" element={<PartnerLayout><FollowersManagement /></PartnerLayout>} />
             <Route path="/partner/chat" element={<PartnerLayout><Chat /></PartnerLayout>} />
             <Route path="/partner/notifications" element={<PartnerLayout><NotificationPage /></PartnerLayout>} />
             <Route path="/partner/reports" element={<PartnerLayout><PartnerReports /></PartnerLayout>} />
