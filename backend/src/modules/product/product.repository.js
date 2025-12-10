@@ -171,7 +171,7 @@ async function findProductsByShopId(shopId, options = {}) {
 
   let query = supabaseAdmin
     .from('products')
-    .select('*', { count: 'exact' })
+    .select('*, images:product_images(*)', { count: 'exact' })
     .eq('shop_id', shopId)
     .is('deleted_at', null);
 
@@ -322,6 +322,78 @@ async function updateProductRating(productId, avgRating, reviewCount) {
 // ============================================
 // VARIANT OPERATIONS
 // ============================================
+
+/**
+ * Get shop inventory (all variants with stock info)
+ * @param {string} shopId
+ * @param {object} options - Pagination and filter options
+ * @returns {Promise<{data: object[], count: number}>}
+ */
+async function getShopInventory(shopId, options = {}) {
+  const { page = 1, limit = 50, lowStockOnly = false, outOfStockOnly = false, search } = options;
+  const offset = (page - 1) * limit;
+
+  // First get all products for this shop
+  let productQuery = supabaseAdmin
+    .from('products')
+    .select('id, name, status')
+    .eq('shop_id', shopId)
+    .is('deleted_at', null);
+
+  const { data: products, error: productError } = await productQuery;
+  
+  if (productError) {
+    throw new Error(`Failed to get products: ${productError.message}`);
+  }
+
+  if (!products || products.length === 0) {
+    return { data: [], count: 0 };
+  }
+
+  const productIds = products.map(p => p.id);
+  const productMap = new Map(products.map(p => [p.id, p]));
+
+  // Get variants for these products
+  let variantQuery = supabaseAdmin
+    .from('product_variants')
+    .select('*', { count: 'exact' })
+    .in('product_id', productIds)
+    .is('deleted_at', null);
+
+  if (lowStockOnly) {
+    // Filter where quantity <= low_stock_threshold AND quantity > 0
+    variantQuery = variantQuery.lte('quantity', supabaseAdmin.raw('low_stock_threshold')).gt('quantity', 0);
+  }
+
+  if (outOfStockOnly) {
+    variantQuery = variantQuery.eq('quantity', 0);
+  }
+
+  if (search) {
+    variantQuery = variantQuery.or(`sku.ilike.%${search}%,name.ilike.%${search}%`);
+  }
+
+  variantQuery = variantQuery
+    .order('quantity', { ascending: true }) // Show low stock first
+    .range(offset, offset + limit - 1);
+
+  const { data: variants, error: variantError, count } = await variantQuery;
+
+  if (variantError) {
+    throw new Error(`Failed to get variants: ${variantError.message}`);
+  }
+
+  // Enrich variants with product info
+  const enrichedVariants = (variants || []).map(v => ({
+    ...v,
+    product: productMap.get(v.product_id),
+    availableQuantity: v.quantity - v.reserved_quantity,
+    isLowStock: v.quantity <= v.low_stock_threshold && v.quantity > 0,
+    isOutOfStock: v.quantity === 0,
+  }));
+
+  return { data: enrichedVariants, count: count || 0 };
+}
 
 /**
  * Generate unique SKU
@@ -737,6 +809,7 @@ module.exports = {
   updateProductRating,
   
   // Variant operations
+  getShopInventory,
   generateSKU,
   createVariant,
   findVariantById,

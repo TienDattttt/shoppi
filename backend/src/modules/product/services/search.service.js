@@ -64,8 +64,12 @@ function buildSearchQuery(params) {
     });
   }
 
-  // Only active products
-  filter.push({ term: { status: 'active' } });
+  // Status filter (default to active if not specified)
+  if (filters.status) {
+    filter.push({ term: { status: filters.status } });
+  } else {
+    filter.push({ term: { status: 'active' } });
+  }
 
   // Category filter
   if (filters.category_id) {

@@ -156,6 +156,22 @@ async function createProduct(shopId, data) {
     meta_description: meta_description || (description ? description.substring(0, 200) : null),
   });
 
+  // Auto-create default variant for inventory management
+  try {
+    await productRepository.createVariant({
+      product_id: product.id,
+      sku: productRepository.generateSKU(product.id, {}),
+      name: 'Mặc định',
+      attributes: {},
+      price: null, // Use base product price
+      quantity: data.quantity || data.product_quantity || 0,
+      low_stock_threshold: 10,
+      is_active: true,
+    });
+  } catch (variantError) {
+    console.error('Failed to create default variant:', variantError.message);
+  }
+
   // Publish PRODUCT_CREATED event
   await publishProductEvent('created', product);
 

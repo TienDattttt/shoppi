@@ -48,6 +48,7 @@ const ProductAdd = lazy(() => import("@/pages/partner/ProductAdd"));
 const ShopProfile = lazy(() => import("@/pages/partner/ShopProfile"));
 const PartnerOrderManagement = lazy(() => import("@/pages/partner/PartnerOrderManagement"));
 const PartnerVoucherManagement = lazy(() => import("@/pages/partner/PartnerVoucherManagement"));
+const InventoryManagement = lazy(() => import("@/pages/partner/InventoryManagement"));
 const ReviewManagement = lazy(() => import("@/pages/partner/ReviewManagement"));
 const FollowersManagement = lazy(() => import("@/pages/partner/FollowersManagement"));
 const Chat = lazy(() => import("@/pages/partner/Chat"));
@@ -146,7 +147,9 @@ function App() {
             <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
             <Route path="/partner/products" element={<PartnerLayout><ProductManagement /></PartnerLayout>} />
             <Route path="/partner/products/add" element={<PartnerLayout><ProductAdd /></PartnerLayout>} />
+            <Route path="/partner/products/edit/:id" element={<PartnerLayout><ProductAdd /></PartnerLayout>} />
             <Route path="/partner/products/:id" element={<PartnerLayout><ProductAdd /></PartnerLayout>} />
+            <Route path="/partner/inventory" element={<PartnerLayout><InventoryManagement /></PartnerLayout>} />
             <Route path="/partner/profile" element={<PartnerLayout><ShopProfile /></PartnerLayout>} />
             <Route path="/partner/orders" element={<PartnerLayout><PartnerOrderManagement /></PartnerLayout>} />
             <Route path="/partner/orders/:id" element={<PartnerLayout><OrderDetail /></PartnerLayout>} />

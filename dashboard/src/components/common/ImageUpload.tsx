@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Image as ImageIcon } from "lucide-react";
+import { X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { uploadService } from "@/services/upload.service";
 
 interface ImageUploadProps {
     value?: string | string[];
@@ -21,6 +22,7 @@ export function ImageUpload({
 }: ImageUploadProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [uploading, setUploading] = useState(false);
 
     // Normalize value to array
     const fileList = Array.isArray(value) ? value : (value ? [value] : []);
@@ -32,25 +34,43 @@ export function ImageUpload({
         processFiles(Array.from(files));
     };
 
-    const processFiles = (files: File[]) => {
-        if (disabled) return;
+    const processFiles = async (files: File[]) => {
+        if (disabled || uploading) return;
 
         const remainingSlots = maxFiles - fileList.length;
         if (remainingSlots <= 0) {
-            toast.error(`You can only upload up to ${maxFiles} images`);
+            toast.error(`Bạn chỉ có thể tải lên tối đa ${maxFiles} ảnh`);
             return;
         }
 
         const filesToProcess = files.slice(0, remainingSlots);
+        
+        // Validate file sizes
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        const oversizedFiles = filesToProcess.filter(f => f.size > maxSize);
+        if (oversizedFiles.length > 0) {
+            toast.error('Một số file vượt quá 5MB');
+            return;
+        }
 
-        // In a real app, we would upload to a server/cloud here.
-        // For this demo, we'll create object URLs.
-        const newUrls = filesToProcess.map(file => URL.createObjectURL(file));
-
-        if (maxFiles === 1) {
-            onChange(newUrls[0]);
-        } else {
-            onChange([...fileList, ...newUrls]);
+        setUploading(true);
+        try {
+            // Upload to server
+            const uploadedUrls = await uploadService.uploadProductImages(filesToProcess);
+            
+            if (uploadedUrls.length > 0) {
+                if (maxFiles === 1) {
+                    onChange(uploadedUrls[0]);
+                } else {
+                    onChange([...fileList, ...uploadedUrls]);
+                }
+                toast.success(`Đã tải lên ${uploadedUrls.length} ảnh`);
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast.error('Không thể tải ảnh lên. Vui lòng thử lại.');
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -112,16 +132,25 @@ export function ImageUpload({
                         className={cn(
                             "aspect-square border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all",
                             isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary hover:text-primary hover:bg-primary/5",
-                            disabled && "opacity-50 cursor-not-allowed"
+                            (disabled || uploading) && "opacity-50 cursor-not-allowed"
                         )}
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => !uploading && fileInputRef.current?.click()}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                     >
                         <div className="flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
-                            <ImageIcon className="h-8 w-8 mb-2" />
-                            <span className="text-xs font-medium">Click or Drag Image</span>
+                            {uploading ? (
+                                <>
+                                    <Loader2 className="h-8 w-8 mb-2 animate-spin" />
+                                    <span className="text-xs font-medium">Đang tải lên...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <ImageIcon className="h-8 w-8 mb-2" />
+                                    <span className="text-xs font-medium">Click hoặc kéo ảnh vào đây</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

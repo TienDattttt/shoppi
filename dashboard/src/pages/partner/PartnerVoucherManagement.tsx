@@ -39,28 +39,29 @@ export default function PartnerVoucherManagement() {
         setIsModalOpen(true);
     };
 
-    const handleToggleStatus = async (id: string, currentStatus: string) => {
-        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    const handleToggleStatus = async (id: string, isActive: boolean) => {
         try {
-            await voucherService.toggleVoucherStatus(id, newStatus);
-            toast.success(`Voucher ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+            await voucherService.updateShopVoucher(id, { is_active: !isActive });
+            toast.success(`Voucher ${!isActive ? 'activated' : 'deactivated'}`);
             loadVouchers();
         } catch (error) {
             toast.error("Failed to update status");
         }
     };
 
-    const handleSubmit = async (data: Partial<Voucher>) => {
+    const handleSubmit = async (data: Record<string, unknown>) => {
         try {
             if (editingVoucher) {
-                await voucherService.updateVoucher(editingVoucher._id, data);
+                await voucherService.updateShopVoucher(editingVoucher.id, data);
                 toast.success("Voucher updated");
             } else {
-                await voucherService.createVoucher(data);
+                await voucherService.createShopVoucher(data as any);
                 toast.success("Voucher created");
             }
+            setIsModalOpen(false);
             loadVouchers();
         } catch (error) {
+            console.error("Save voucher error:", error);
             toast.error("Failed to save voucher");
         }
     };
@@ -90,10 +91,10 @@ export default function PartnerVoucherManagement() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {vouchers.map((voucher) => (
-                    <Card key={voucher._id} className="relative shadow-premium border-border/50 border-l-4 border-l-primary/50">
+                    <Card key={voucher.id} className="relative shadow-premium border-border/50 border-l-4 border-l-primary/50">
                         <div className="absolute top-0 right-0 p-2 z-10">
-                            <Badge variant={voucher.status === 'active' ? 'outline' : 'secondary'}>
-                                {voucher.status === 'active' ? 'Active' : 'Inactive'}
+                            <Badge variant={voucher.is_active ? 'outline' : 'secondary'}>
+                                {voucher.is_active ? 'Active' : 'Inactive'}
                             </Badge>
                         </div>
                         <CardContent className="p-6">
@@ -101,7 +102,7 @@ export default function PartnerVoucherManagement() {
                                 <div className="space-y-1">
                                     <h3 className="font-bold text-xl">{voucher.code}</h3>
                                     <p className="text-sm font-medium">
-                                        {voucher.discountType === 'fixed' ? formatCurrency(voucher.value) : `${voucher.value}%`} Off
+                                        {voucher.discount_type === 'fixed' ? formatCurrency(voucher.discount_value) : `${voucher.discount_value}%`} Off
                                     </p>
                                 </div>
                                 <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
@@ -110,8 +111,8 @@ export default function PartnerVoucherManagement() {
                             </div>
                             <div className="my-4 h-px bg-border/50 border-dashed border-b" />
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-muted-foreground">Used: {voucher.usedCount}/{voucher.usageLimit}</span>
-                                <span className="text-muted-foreground">{voucher.endDate || 'Forever'}</span>
+                                <span className="text-muted-foreground">Used: {voucher.usage_count || 0}/{voucher.usage_limit || '∞'}</span>
+                                <span className="text-muted-foreground">{voucher.end_date ? new Date(voucher.end_date).toLocaleDateString('vi-VN') : 'Forever'}</span>
                             </div>
                             <div className="pt-4 flex gap-2">
                                 <Button variant="secondary" className="flex-1" onClick={() => handleEdit(voucher)}>
@@ -120,10 +121,10 @@ export default function PartnerVoucherManagement() {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className={voucher.status === 'active' ? 'text-destructive' : 'text-green-600'}
-                                    onClick={() => handleToggleStatus(voucher._id, voucher.status)}
+                                    className={voucher.is_active ? 'text-destructive' : 'text-green-600'}
+                                    onClick={() => handleToggleStatus(voucher.id, voucher.is_active)}
                                 >
-                                    {voucher.status === 'active' ? <Ban className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                                    {voucher.is_active ? <Ban className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
                                 </Button>
                             </div>
                         </CardContent>

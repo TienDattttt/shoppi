@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Product } from "@/services/product.service";
 import { productService } from "@/services/product.service";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -13,11 +14,25 @@ import {
     DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/common/DataTable";
+import { toast } from "sonner";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ProductManagement() {
+    const navigate = useNavigate();
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("published");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
     useEffect(() => {
         loadProducts();
@@ -26,15 +41,27 @@ export default function ProductManagement() {
     const loadProducts = async () => {
         setLoading(true);
         try {
-            let data;
-            if (activeTab === 'published') {
-                data = await productService.getAllPublishedForShop();
-            } else {
-                data = await productService.getAllDraftsForShop();
-            }
-            setProducts(data.data || []);
+            const response = activeTab === 'published' 
+                ? await productService.getAllPublishedForShop()
+                : await productService.getAllDraftsForShop();
+            
+            // Response format: { data: [...], pagination: {...} }
+            const productList = response?.data || [];
+            // Map backend fields to frontend expected fields
+            const mappedProducts = productList.map((p: Record<string, unknown>) => ({
+                ...p,
+                _id: p.id || p._id,
+                product_name: p.name || p.product_name,
+                product_thumb: p.imageUrl || p.image_url || p.product_thumb || '/placeholder.png',
+                product_price: p.basePrice || p.base_price || p.product_price,
+                product_quantity: p.totalSold || p.total_sold || 0,
+                product_type: p.category_name || p.product_type || 'Chưa phân loại',
+                isDraft: p.status === 'pending',
+                isPublished: p.status === 'active',
+            }));
+            setProducts(mappedProducts);
         } catch (error) {
-            console.error(error);
+            console.error('Error loading products:', error);
         } finally {
             setLoading(false);
         }
@@ -42,6 +69,38 @@ export default function ProductManagement() {
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+    };
+
+    const handleView = (product: Product) => {
+        const productId = product.id || product._id;
+        navigate(`/partner/products/${productId}`);
+    };
+
+    const handleEdit = (product: Product) => {
+        const productId = product.id || product._id;
+        navigate(`/partner/products/edit/${productId}`);
+    };
+
+    const handleDeleteClick = (product: Product) => {
+        setProductToDelete(product);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!productToDelete) return;
+        
+        try {
+            const productId = productToDelete.id || productToDelete._id;
+            await productService.deleteProduct(productId!);
+            toast.success("Xóa sản phẩm thành công");
+            loadProducts();
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast.error("Không thể xóa sản phẩm");
+        } finally {
+            setDeleteDialogOpen(false);
+            setProductToDelete(null);
+        }
     };
 
     const columns = [
@@ -57,12 +116,12 @@ export default function ProductManagement() {
                         />
                     </div>
                     <div className="flex flex-col">
-                        <span className="font-medium text-foreground line-clamp-1">{product.product_name}</span>
+                        <span className="font-medium text-foreground line-clamp-1">{product.product_name || product.name}</span>
                         <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-[10px] px-1 h-4 font-normal">
-                                {product.product_type}
+                                {product.product_type || 'Chưa phân loại'}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">ID: {product._id.substring(0, 6)}...</span>
+                            <span className="text-xs text-muted-foreground">ID: {(product._id || product.id || '').substring(0, 6)}...</span>
                         </div>
                     </div>
                 </div>
@@ -70,14 +129,14 @@ export default function ProductManagement() {
         },
         {
             header: "Price",
-            cell: (product: Product) => <span className="font-medium text-primary">{formatCurrency(product.product_price)}</span>
+            cell: (product: Product) => <span className="font-medium text-primary">{formatCurrency(product.product_price || product.base_price || 0)}</span>
         },
         {
             header: "Stock",
             cell: (product: Product) => (
                 <div className="flex items-center gap-1.5">
-                    <span className={`h-2 w-2 rounded-full ${product.product_quantity > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
-                    <span className="text-sm">{product.product_quantity}</span>
+                    <span className={`h-2 w-2 rounded-full ${(product.product_quantity || 0) > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className="text-sm">{product.product_quantity || 0}</span>
                 </div>
             )
         },
@@ -85,8 +144,8 @@ export default function ProductManagement() {
             header: "Status",
             cell: (product: Product) => (
                 <div>
-                    {product.isDraft && <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Draft</Badge>}
-                    {product.isPublished && <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Active</Badge>}
+                    {(product.isDraft || product.status === 'pending') && <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Draft</Badge>}
+                    {(product.isPublished || product.status === 'active') && <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Active</Badge>}
                 </div>
             )
         },
@@ -103,10 +162,16 @@ export default function ProductManagement() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
-                            <DropdownMenuItem><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleView(product)}>
+                                <Eye className="mr-2 h-4 w-4" /> Xem chi tiết
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEdit(product)}>
+                                <Edit className="mr-2 h-4 w-4" /> Chỉnh sửa
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteClick(product)}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -161,6 +226,25 @@ export default function ProductManagement() {
                     </div>
                 </TabsContent>
             </Tabs>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Xác nhận xóa sản phẩm</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Bạn có chắc chắn muốn xóa sản phẩm "{productToDelete?.product_name || productToDelete?.name}"? 
+                            Hành động này không thể hoàn tác.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Xóa
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

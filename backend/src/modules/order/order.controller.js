@@ -9,7 +9,7 @@ const checkoutService = require('./services/checkout.service');
 const paymentService = require('./services/payment.service');
 const returnService = require('./services/return.service');
 const voucherService = require('./services/voucher.service');
-const { successResponse, errorResponse } = require('../../shared/utils/response.util');
+const { sendSuccess: successResponse, sendError: errorResponse } = require('../../shared/utils/response.util');
 
 // ==================== CART OPERATIONS ====================
 
@@ -161,7 +161,7 @@ async function requestReturn(req, res) {
  */
 async function getPartnerOrders(req, res) {
   try {
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     const filters = req.query;
     const orders = await orderService.getPartnerOrders(partnerId, filters);
     return successResponse(res, orders, 'Orders retrieved successfully');

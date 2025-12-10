@@ -1,14 +1,178 @@
 /**
  * Inventory Service
  * Business logic for inventory/stock management
+ * 
+ * Uses Supabase database functions for atomic operations
+ * to prevent race conditions (Shopee-like real-time inventory)
  */
 
 const productRepository = require('../product.repository');
+const { supabaseAdmin } = require('../../../shared/supabase/supabase.client');
 const { AppError, NotFoundError, ValidationError } = require('../../../shared/utils/error.util');
 
 // Event emitter for notifications (can be replaced with actual notification service)
 const EventEmitter = require('events');
 const inventoryEvents = new EventEmitter();
+
+// ============================================
+// ATOMIC OPERATIONS (Using Supabase Functions)
+// ============================================
+
+/**
+ * Reserve stock atomically using database function
+ * Prevents race conditions when multiple customers order same product
+ * @param {string} variantId
+ * @param {number} quantity
+ * @returns {Promise<object>}
+ */
+async function reserveStockAtomic(variantId, quantity) {
+  const { data, error } = await supabaseAdmin.rpc('reserve_stock', {
+    p_variant_id: variantId,
+    p_quantity: quantity,
+  });
+
+  if (error) {
+    throw new AppError('RESERVE_STOCK_ERROR', error.message, 500);
+  }
+
+  const result = data[0];
+  if (!result.success) {
+    throw new AppError('INSUFFICIENT_STOCK', result.message, 400);
+  }
+
+  return {
+    variantId,
+    availableQuantity: result.available_quantity,
+    reservedQuantity: result.reserved_quantity,
+    message: result.message,
+  };
+}
+
+/**
+ * Release stock atomically using database function
+ * Used when order is cancelled - immediately available for other customers
+ * @param {string} variantId
+ * @param {number} quantity
+ * @returns {Promise<object>}
+ */
+async function releaseStockAtomic(variantId, quantity) {
+  const { data, error } = await supabaseAdmin.rpc('release_stock', {
+    p_variant_id: variantId,
+    p_quantity: quantity,
+  });
+
+  if (error) {
+    throw new AppError('RELEASE_STOCK_ERROR', error.message, 500);
+  }
+
+  const result = data[0];
+  
+  // Emit event for real-time updates
+  inventoryEvents.emit('stockReleased', {
+    variantId,
+    releasedQuantity: quantity,
+    availableQuantity: result.available_quantity,
+    timestamp: new Date().toISOString(),
+  });
+
+  return {
+    variantId,
+    availableQuantity: result.available_quantity,
+    reservedQuantity: result.reserved_quantity,
+    message: result.message,
+  };
+}
+
+/**
+ * Confirm stock deduction atomically
+ * Used when order is completed/delivered
+ * @param {string} variantId
+ * @param {number} quantity
+ * @returns {Promise<object>}
+ */
+async function confirmStockDeductionAtomic(variantId, quantity) {
+  const { data, error } = await supabaseAdmin.rpc('confirm_stock_deduction', {
+    p_variant_id: variantId,
+    p_quantity: quantity,
+  });
+
+  if (error) {
+    throw new AppError('DEDUCT_STOCK_ERROR', error.message, 500);
+  }
+
+  const result = data[0];
+  if (!result.success) {
+    throw new AppError('DEDUCT_STOCK_FAILED', result.message, 400);
+  }
+
+  // Emit events
+  if (result.is_out_of_stock) {
+    inventoryEvents.emit('outOfStock', { variantId, timestamp: new Date().toISOString() });
+  }
+
+  return {
+    variantId,
+    newQuantity: result.new_quantity,
+    newReserved: result.new_reserved,
+    isOutOfStock: result.is_out_of_stock,
+    message: result.message,
+  };
+}
+
+/**
+ * Check stock availability using database function
+ * @param {string} variantId
+ * @param {number} requiredQuantity
+ * @returns {Promise<object>}
+ */
+async function checkStockAvailability(variantId, requiredQuantity = 1) {
+  const { data, error } = await supabaseAdmin.rpc('check_stock_availability', {
+    p_variant_id: variantId,
+    p_required_quantity: requiredQuantity,
+  });
+
+  if (error) {
+    throw new AppError('CHECK_STOCK_ERROR', error.message, 500);
+  }
+
+  const result = data[0];
+  return {
+    isAvailable: result.is_available,
+    availableQuantity: result.available_quantity,
+    totalQuantity: result.total_quantity,
+    reservedQuantity: result.reserved_quantity,
+    isLowStock: result.is_low_stock,
+    lowStockThreshold: result.low_stock_threshold,
+  };
+}
+
+/**
+ * Bulk check stock for cart items
+ * @param {Array<{variantId: string, quantity: number}>} items
+ * @returns {Promise<object[]>}
+ */
+async function checkCartStock(items) {
+  const jsonItems = items.map(item => ({
+    variant_id: item.variantId,
+    quantity: item.quantity,
+  }));
+
+  const { data, error } = await supabaseAdmin.rpc('check_cart_stock', {
+    p_items: jsonItems,
+  });
+
+  if (error) {
+    throw new AppError('CHECK_CART_STOCK_ERROR', error.message, 500);
+  }
+
+  return data.map(row => ({
+    variantId: row.variant_id,
+    requestedQuantity: row.requested_quantity,
+    availableQuantity: row.available_quantity,
+    isAvailable: row.is_available,
+    productName: row.product_name,
+  }));
+}
 
 /**
  * Get variant with stock info
@@ -397,6 +561,7 @@ function getStockStatus(variant) {
 }
 
 module.exports = {
+  // Legacy functions (non-atomic, for backward compatibility)
   getVariantStock,
   updateStock,
   adjustStock,
@@ -409,6 +574,14 @@ module.exports = {
   onInventoryEvent,
   isInStock,
   getStockStatus,
+  
+  // Atomic functions (Shopee-like, recommended for production)
+  reserveStockAtomic,
+  releaseStockAtomic,
+  confirmStockDeductionAtomic,
+  checkStockAvailability,
+  checkCartStock,
+  
   // For testing
   inventoryEvents,
 };

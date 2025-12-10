@@ -68,6 +68,10 @@ app.use('/api/chat', chatRoutes);
 const { initializeModule: initShopModule } = require('./modules/shop/shop.module');
 initShopModule(app);
 
+// Shop Voucher Routes (Partner)
+const shopVoucherRoutes = require('./modules/shop/shop.voucher.routes');
+app.use('/api/shop/vouchers', shopVoucherRoutes);
+
 // Shipper Module Routes
 const { initializeModule: initShipperModule } = require('./modules/shipper/shipper.module');
 initShipperModule(app);

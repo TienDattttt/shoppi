@@ -4,9 +4,23 @@
  */
 
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const productController = require('./product.controller');
 const { authenticate, authorize, optionalAuth } = require('../auth/auth.middleware');
+
+// Configure multer for image uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
 
 // ============================================
 // PRODUCT ROUTES - /api/products
@@ -16,6 +30,18 @@ const productRouter = express.Router();
 
 // Public routes
 productRouter.get('/', optionalAuth, productController.searchProducts);
+
+// General image upload (for product creation form) - MUST be before /:id routes
+productRouter.post('/upload/images', authenticate, authorize('partner'), upload.array('images', 10), productController.uploadTempImages);
+
+// Stock check endpoint (for real-time availability) - MUST be before /:id routes
+productRouter.get('/stock/check', productController.checkStock);
+productRouter.post('/stock/check-cart', productController.checkCartStock);
+
+// Partner inventory management - MUST be before /:id routes
+productRouter.get('/inventory', authenticate, authorize('partner'), productController.getShopInventory);
+productRouter.patch('/inventory/:variantId', authenticate, authorize('partner'), productController.updateVariantStock);
+
 productRouter.get('/:id', optionalAuth, productController.getProduct);
 productRouter.get('/:id/reviews', productController.getReviews);
 
@@ -33,7 +59,7 @@ productRouter.delete('/:id/variants/:variantId', authenticate, authorize('partne
 productRouter.put('/:id/inventory', authenticate, authorize('partner'), productController.updateInventory);
 
 // Image routes
-productRouter.post('/:id/images', authenticate, authorize('partner'), productController.uploadImages);
+productRouter.post('/:id/images', authenticate, authorize('partner'), upload.array('images', 10), productController.uploadImages);
 productRouter.delete('/:id/images/:imageId', authenticate, authorize('partner'), productController.deleteImage);
 
 // Review routes (Customer)

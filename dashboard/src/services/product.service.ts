@@ -18,13 +18,16 @@ export interface Product {
     view_count: number;
     created_at: string;
     updated_at: string;
-    // Compatibility fields (transformed by backend)
+    // Compatibility fields (transformed by backend or frontend)
     product_name?: string;
     product_thumb?: string;
     product_price?: number;
     product_type?: string;
+    product_quantity?: number;
     shopName?: string;
     createdAt?: string;
+    isDraft?: boolean;
+    isPublished?: boolean;
     // Relations
     variants?: ProductVariant[];
     images?: ProductImage[];
@@ -66,15 +69,25 @@ export interface Category {
 }
 
 export interface CreateProductData {
-    name: string;
+    // Backend field names
+    name?: string;
     description?: string;
     short_description?: string;
-    category_id?: string;
-    base_price: number;
-    compare_at_price?: number;
+    category_id?: string | null;
+    base_price?: number;
+    compare_at_price?: number | null;
     currency?: string;
     meta_title?: string;
     meta_description?: string;
+    quantity?: number; // For default variant
+    // Frontend field names (backend accepts both)
+    product_name?: string;
+    product_description?: string;
+    product_price?: number;
+    product_quantity?: number;
+    product_type?: string;
+    product_attributes?: Record<string, unknown>;
+    product_images?: string | string[];
 }
 
 export interface ProductFilters {

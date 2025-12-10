@@ -14,6 +14,20 @@ const viewService = require('./services/view.service');
 const { serializeProduct, serializeProductSummary } = require('./product.dto');
 const { sendSuccess: successResponse } = require('../../shared/utils/response.util');
 
+/**
+ * Helper to get shop_id from user token or database
+ * @param {object} req - Express request
+ * @returns {Promise<string>} Shop ID
+ */
+async function getShopIdFromUser(req) {
+  if (req.user.shop_id) {
+    return req.user.shop_id;
+  }
+  const shopService = require('../shop/shop.service');
+  const shop = await shopService.getShopByPartnerId(req.user.userId);
+  return shop.id;
+}
+
 // ============================================
 // PRODUCT CRUD
 // ============================================
@@ -24,13 +38,45 @@ const { sendSuccess: successResponse } = require('../../shared/utils/response.ut
  */
 async function createProduct(req, res, next) {
   try {
-    const shopId = req.user.shop_id || req.body.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
-    const product = await productService.createProduct(shopId, req.body);
+    // Map frontend field names to backend field names
+    const productData = {
+      name: req.body.name || req.body.product_name,
+      description: req.body.description || req.body.product_description,
+      base_price: req.body.base_price || req.body.product_price,
+      category_id: req.body.category_id,
+      short_description: req.body.short_description,
+      compare_at_price: req.body.compare_at_price,
+      currency: req.body.currency,
+      meta_title: req.body.meta_title,
+      meta_description: req.body.meta_description,
+      // For default variant inventory
+      quantity: req.body.quantity || req.body.product_quantity || 0,
+    };
+    
+    const product = await productService.createProduct(shopId, productData);
+    
+    // Handle product images if provided
+    const imageUrls = req.body.product_images || req.body.images || [];
+    const normalizedUrls = Array.isArray(imageUrls) ? imageUrls : (imageUrls ? [imageUrls] : []);
+    
+    if (normalizedUrls.length > 0) {
+      for (let i = 0; i < normalizedUrls.length; i++) {
+        await productService.addImage(product.id, shopId, {
+          url: normalizedUrls[i],
+          sort_order: i,
+          is_primary: i === 0,
+        });
+      }
+    }
+    
+    // Fetch product with images
+    const productWithImages = await productService.getProductById(product.id, true);
     
     return successResponse(res, {
       message: 'Product created successfully',
-      data: serializeProduct(product),
+      data: serializeProduct(productWithImages),
     }, 201);
   } catch (error) {
     next(error);
@@ -44,12 +90,12 @@ async function createProduct(req, res, next) {
 async function getProduct(req, res, next) {
   try {
     const { id } = req.params;
-    const userId = req.user?.id;
+    const viewerId = req.user?.userId || req.ip;
     
-    const product = await productService.getProductById(id);
+    const product = await productService.getProductById(id, true);
     
     // Track view (async, don't wait)
-    viewService.trackView(id, userId, req.ip).catch(console.error);
+    viewService.trackProductView(id, viewerId).catch(console.error);
     
     return successResponse(res, {
       data: serializeProduct(product),
@@ -67,9 +113,27 @@ async function getProduct(req, res, next) {
 async function updateProduct(req, res, next) {
   try {
     const { id } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
-    const product = await productService.updateProduct(id, shopId, req.body);
+    // Map frontend field names to backend field names
+    const updateData = {
+      name: req.body.name || req.body.product_name,
+      description: req.body.description || req.body.product_description,
+      base_price: req.body.base_price || req.body.product_price,
+      category_id: req.body.category_id,
+      short_description: req.body.short_description,
+      compare_at_price: req.body.compare_at_price,
+      currency: req.body.currency,
+      meta_title: req.body.meta_title,
+      meta_description: req.body.meta_description,
+    };
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) delete updateData[key];
+    });
+    
+    const product = await productService.updateProduct(id, shopId, updateData);
     
     return successResponse(res, {
       message: 'Product updated successfully',
@@ -87,7 +151,7 @@ async function updateProduct(req, res, next) {
 async function deleteProduct(req, res, next) {
   try {
     const { id } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
     await productService.deleteProduct(id, shopId);
     
@@ -105,19 +169,46 @@ async function deleteProduct(req, res, next) {
  */
 async function searchProducts(req, res, next) {
   try {
-    const { q, category_id, min_price, max_price, min_rating, sort, page, limit } = req.query;
+    const { q, category_id, shop_id, shopId, status, min_price, max_price, min_rating, sort, page, limit } = req.query;
     
+    // Support both shop_id and shopId query params
+    const shopIdFilter = shop_id || shopId;
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    
+    // If filtering by shop_id, use direct database query (more reliable for partner dashboard)
+    if (shopIdFilter) {
+      const result = await productService.getProductsByShop(shopIdFilter, {
+        page: pageNum,
+        limit: limitNum,
+        status: status || undefined, // Don't default to 'active' for shop queries
+      });
+      
+      return successResponse(res, {
+        data: result.data.map(serializeProductSummary),
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.count,
+          totalPages: result.totalPages,
+        },
+      });
+    }
+    
+    // For general search, use Elasticsearch
     const result = await searchService.search({
       query: q,
       filters: {
         category_id,
+        shop_id: shopIdFilter,
+        status: status || 'active', // Default to active for public search
         min_price: min_price ? parseFloat(min_price) : undefined,
         max_price: max_price ? parseFloat(max_price) : undefined,
         min_rating: min_rating ? parseFloat(min_rating) : undefined,
       },
       sort,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
+      page: pageNum,
+      limit: limitNum,
     });
     
     return successResponse(res, {
@@ -140,7 +231,7 @@ async function searchProducts(req, res, next) {
 async function addVariant(req, res, next) {
   try {
     const { id } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
     const variant = await productService.addVariant(id, shopId, req.body);
     
@@ -160,7 +251,7 @@ async function addVariant(req, res, next) {
 async function updateVariant(req, res, next) {
   try {
     const { variantId } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
     const variant = await productService.updateVariant(variantId, shopId, req.body);
     
@@ -180,7 +271,7 @@ async function updateVariant(req, res, next) {
 async function deleteVariant(req, res, next) {
   try {
     const { variantId } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
     await productService.deleteVariant(variantId, shopId);
     
@@ -215,6 +306,154 @@ async function updateInventory(req, res, next) {
   }
 }
 
+/**
+ * Check stock availability (real-time)
+ * GET /api/products/stock/check?variantId=xxx&quantity=1
+ */
+async function checkStock(req, res, next) {
+  try {
+    const { variantId, quantity = 1 } = req.query;
+    
+    if (!variantId) {
+      return successResponse(res, { 
+        error: 'variantId is required',
+        isAvailable: false,
+      }, 400);
+    }
+    
+    const result = await inventoryService.checkStockAvailability(variantId, parseInt(quantity));
+    
+    return successResponse(res, {
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Check stock for multiple cart items (real-time)
+ * POST /api/products/stock/check-cart
+ * Body: { items: [{ variantId, quantity }] }
+ */
+async function checkCartStock(req, res, next) {
+  try {
+    const { items } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return successResponse(res, { 
+        error: 'items array is required',
+        data: [],
+      }, 400);
+    }
+    
+    const results = await inventoryService.checkCartStock(items);
+    
+    // Check if all items are available
+    const allAvailable = results.every(item => item.isAvailable);
+    const unavailableItems = results.filter(item => !item.isAvailable);
+    
+    return successResponse(res, {
+      data: results,
+      allAvailable,
+      unavailableItems,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get shop inventory (Partner)
+ * GET /api/products/inventory
+ */
+async function getShopInventory(req, res, next) {
+  try {
+    const shopId = await getShopIdFromUser(req);
+    const { page = 1, limit = 50, lowStockOnly, outOfStockOnly, search } = req.query;
+    
+    const productRepository = require('./product.repository');
+    const result = await productRepository.getShopInventory(shopId, {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      lowStockOnly: lowStockOnly === 'true',
+      outOfStockOnly: outOfStockOnly === 'true',
+      search,
+    });
+    
+    // Calculate summary stats
+    const allVariants = result.data;
+    const summary = {
+      totalVariants: result.count,
+      lowStockCount: allVariants.filter(v => v.isLowStock).length,
+      outOfStockCount: allVariants.filter(v => v.isOutOfStock).length,
+      inStockCount: allVariants.filter(v => !v.isLowStock && !v.isOutOfStock).length,
+    };
+    
+    return successResponse(res, {
+      data: result.data,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: result.count,
+        totalPages: Math.ceil(result.count / parseInt(limit)),
+      },
+      summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Update variant stock (Partner)
+ * PATCH /api/products/inventory/:variantId
+ */
+async function updateVariantStock(req, res, next) {
+  try {
+    const { variantId } = req.params;
+    const { quantity, lowStockThreshold } = req.body;
+    const shopId = await getShopIdFromUser(req);
+    
+    // Verify ownership
+    const productRepository = require('./product.repository');
+    const variant = await productRepository.findVariantById(variantId);
+    
+    if (!variant) {
+      return successResponse(res, { error: 'Variant not found' }, 404);
+    }
+    
+    // Check product belongs to shop
+    const product = await productService.getProductById(variant.product_id);
+    if (product.shop_id !== shopId) {
+      return successResponse(res, { error: 'Unauthorized' }, 403);
+    }
+    
+    const updateData = {};
+    if (quantity !== undefined) {
+      updateData.quantity = parseInt(quantity);
+      updateData.is_active = parseInt(quantity) > 0;
+    }
+    if (lowStockThreshold !== undefined) {
+      updateData.low_stock_threshold = parseInt(lowStockThreshold);
+    }
+    
+    const updatedVariant = await productRepository.updateVariant(variantId, updateData);
+    
+    return successResponse(res, {
+      message: 'Stock updated successfully',
+      data: {
+        ...updatedVariant,
+        availableQuantity: updatedVariant.quantity - updatedVariant.reserved_quantity,
+        isLowStock: updatedVariant.quantity <= updatedVariant.low_stock_threshold && updatedVariant.quantity > 0,
+        isOutOfStock: updatedVariant.quantity === 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // ============================================
 // IMAGES
 // ============================================
@@ -226,7 +465,7 @@ async function updateInventory(req, res, next) {
 async function uploadImages(req, res, next) {
   try {
     const { id } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
     // Handle file uploads - in production, upload to Supabase Storage first
     const images = [];
@@ -258,12 +497,52 @@ async function uploadImages(req, res, next) {
 async function deleteImage(req, res, next) {
   try {
     const { imageId } = req.params;
-    const shopId = req.user.shop_id;
+    const shopId = await getShopIdFromUser(req);
     
     await productService.removeImage(imageId, shopId);
     
     return successResponse(res, {
       message: 'Image deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Upload temporary images (before product creation)
+ * POST /api/products/upload/images
+ */
+async function uploadTempImages(req, res, next) {
+  try {
+    const storageClient = require('../../shared/supabase/storage.client');
+    const { v4: uuidv4 } = require('uuid');
+    
+    if (!req.files || req.files.length === 0) {
+      return successResponse(res, { data: [] });
+    }
+    
+    const uploadedUrls = [];
+    const tempId = uuidv4(); // Temporary folder ID
+    
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      const ext = file.originalname.split('.').pop() || 'jpg';
+      const path = `temp/${tempId}/${i}_${Date.now()}.${ext}`;
+      
+      const result = await storageClient.uploadFile(
+        storageClient.BUCKETS.PRODUCTS,
+        path,
+        file.buffer,
+        { contentType: file.mimetype, upsert: true }
+      );
+      
+      uploadedUrls.push(result.url);
+    }
+    
+    return successResponse(res, {
+      message: 'Images uploaded successfully',
+      data: uploadedUrls,
     });
   } catch (error) {
     next(error);
@@ -610,9 +889,14 @@ module.exports = {
   
   // Inventory
   updateInventory,
+  checkStock,
+  checkCartStock,
+  getShopInventory,
+  updateVariantStock,
   
   // Images
   uploadImages,
+  uploadTempImages,
   deleteImage,
   
   // Categories

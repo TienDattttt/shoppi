@@ -10,7 +10,8 @@ import {
     Star,
     Ticket,
     Settings,
-    Users
+    Users,
+    Warehouse
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const sidebarItems = [
     { title: "Kênh Người Bán", icon: LayoutDashboard, href: "/partner" },
     { title: "Quản Lý Đơn Hàng", icon: ShoppingCart, href: "/partner/orders" },
     { title: "Quản Lý Sản Phẩm", icon: Package2, href: "/partner/products" },
+    { title: "Quản Lý Tồn Kho", icon: Warehouse, href: "/partner/inventory" },
     { title: "Mã Giảm Giá", icon: Ticket, href: "/partner/vouchers" },
     { title: "Đánh Giá", icon: Star, href: "/partner/reviews" },
     { title: "Người Theo Dõi", icon: Users, href: "/partner/followers" },

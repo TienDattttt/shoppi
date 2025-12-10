@@ -105,9 +105,11 @@ function serializeProductSummary(product) {
     avgRating: parseFloat(product.avg_rating) || 0,
     reviewCount: product.review_count || 0,
     totalSold: product.total_sold || 0,
+    // Include all images for frontend
+    images: product.images ? product.images.map(serializeImage) : [],
   };
 
-  // Include primary image only
+  // Include primary image URL for convenience
   if (product.images && product.images.length > 0) {
     const primaryImage = product.images.find(img => img.is_primary) || product.images[0];
     serialized.imageUrl = primaryImage.url;

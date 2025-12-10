@@ -9,7 +9,7 @@ import type { Voucher } from "@/services/voucher.service";
 interface VoucherFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (data: Partial<Voucher>) => void;
+    onSubmit: (data: Record<string, unknown>) => void;
     initialData?: Voucher | null;
 }
 
@@ -19,40 +19,49 @@ export function VoucherFormModal({
     onSubmit,
     initialData
 }: VoucherFormModalProps) {
-    const [formData, setFormData] = useState<Partial<Voucher>>({
+    const [formData, setFormData] = useState({
         code: "",
-        discountType: "fixed",
-        value: 0,
-        minOrderValue: 0,
-        usageLimit: 100,
-        startDate: "",
-        endDate: "",
-        status: "active"
+        discount_type: "fixed" as "fixed" | "percent",
+        discount_value: 0,
+        min_order_value: 0,
+        max_discount_value: 0,
+        usage_limit: 100,
+        usage_per_user: 1,
+        start_date: "",
+        end_date: "",
+        is_active: true
     });
 
     useEffect(() => {
         if (isOpen) {
             if (initialData) {
+                // Map 'percentage' from DB to 'percent' for frontend
+                const dbType = initialData.discount_type as string;
+                const discountType = dbType === 'percentage' ? 'percent' : (dbType || 'fixed');
                 setFormData({
-                    code: initialData.code,
-                    discountType: initialData.discountType,
-                    value: initialData.value,
-                    minOrderValue: initialData.minOrderValue,
-                    usageLimit: initialData.usageLimit,
-                    startDate: initialData.startDate,
-                    endDate: initialData.endDate,
-                    status: initialData.status
+                    code: initialData.code || "",
+                    discount_type: discountType as "fixed" | "percent",
+                    discount_value: initialData.discount_value || 0,
+                    min_order_value: initialData.min_order_value || 0,
+                    max_discount_value: (initialData as any).max_discount || initialData.max_discount_value || 0,
+                    usage_limit: initialData.usage_limit || 100,
+                    usage_per_user: (initialData as any).per_user_limit || initialData.usage_per_user || 1,
+                    start_date: initialData.start_date ? initialData.start_date.split('T')[0] : "",
+                    end_date: initialData.end_date ? initialData.end_date.split('T')[0] : "",
+                    is_active: initialData.is_active !== false
                 });
             } else {
                 setFormData({
                     code: "",
-                    discountType: "fixed",
-                    value: 0,
-                    minOrderValue: 0,
-                    usageLimit: 100,
-                    startDate: new Date().toISOString().split('T')[0],
-                    endDate: "",
-                    status: "active"
+                    discount_type: "fixed",
+                    discount_value: 0,
+                    min_order_value: 0,
+                    max_discount_value: 0,
+                    usage_limit: 100,
+                    usage_per_user: 1,
+                    start_date: new Date().toISOString().split('T')[0],
+                    end_date: "",
+                    is_active: true
                 });
             }
         }
@@ -61,103 +70,125 @@ export function VoucherFormModal({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSubmit(formData);
-        onClose();
     };
 
     return (
         <FormModal
             isOpen={isOpen}
             onClose={onClose}
-            title={initialData ? "Edit Voucher" : "Create Voucher"}
-            description={initialData ? "Update voucher details" : "Create a new discount code"}
+            title={initialData ? "Chỉnh Sửa Voucher" : "Tạo Voucher Mới"}
+            description={initialData ? "Cập nhật thông tin voucher" : "Tạo mã giảm giá mới cho shop"}
         >
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="code">Voucher Code</Label>
+                    <Label htmlFor="code">Mã Voucher *</Label>
                     <Input
                         id="code"
                         value={formData.code}
                         onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                        placeholder="e.g., SUMMER50"
+                        placeholder="VD: SUMMER50"
                         required
+                        disabled={!!initialData} // Can't change code when editing
                     />
                 </div>
 
-                <div className="flex gap-4">
-                    <div className="space-y-2 flex-1">
-                        <Label htmlFor="type">Discount Type</Label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="type">Loại Giảm Giá *</Label>
                         <Select
-                            value={formData.discountType}
-                            onValueChange={(value: any) => setFormData({ ...formData, discountType: value })}
+                            value={formData.discount_type}
+                            onValueChange={(value: "fixed" | "percent") => setFormData({ ...formData, discount_type: value })}
                         >
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="fixed">Fixed Amount (VND)</SelectItem>
-                                <SelectItem value="percent">Percentage (%)</SelectItem>
+                                <SelectItem value="fixed">Số tiền cố định (VND)</SelectItem>
+                                <SelectItem value="percent">Phần trăm (%)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-2 flex-1">
-                        <Label htmlFor="value">Discount Value</Label>
+                    <div className="space-y-2">
+                        <Label htmlFor="value">Giá Trị Giảm *</Label>
                         <Input
                             id="value"
                             type="number"
-                            value={formData.value}
-                            onChange={(e) => setFormData({ ...formData, value: parseInt(e.target.value) })}
+                            value={formData.discount_value}
+                            onChange={(e) => setFormData({ ...formData, discount_value: parseInt(e.target.value) || 0 })}
                             required
                         />
                     </div>
                 </div>
 
-                <div className="flex gap-4">
-                    <div className="space-y-2 flex-1">
-                        <Label htmlFor="minOrder">Min Order Value</Label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="minOrder">Đơn Tối Thiểu (VND)</Label>
                         <Input
                             id="minOrder"
                             type="number"
-                            value={formData.minOrderValue}
-                            onChange={(e) => setFormData({ ...formData, minOrderValue: parseInt(e.target.value) })}
+                            value={formData.min_order_value}
+                            onChange={(e) => setFormData({ ...formData, min_order_value: parseInt(e.target.value) || 0 })}
                         />
                     </div>
-                    <div className="space-y-2 flex-1">
-                        <Label htmlFor="usageLimit">Usage Limit</Label>
+                    <div className="space-y-2">
+                        <Label htmlFor="maxDiscount">Giảm Tối Đa (VND)</Label>
                         <Input
-                            id="usageLimit"
+                            id="maxDiscount"
                             type="number"
-                            value={formData.usageLimit}
-                            onChange={(e) => setFormData({ ...formData, usageLimit: parseInt(e.target.value) })}
+                            value={formData.max_discount_value}
+                            onChange={(e) => setFormData({ ...formData, max_discount_value: parseInt(e.target.value) || 0 })}
+                            placeholder="Chỉ áp dụng cho %"
                         />
                     </div>
                 </div>
 
-                <div className="flex gap-4">
-                    <div className="space-y-2 flex-1">
-                        <Label htmlFor="startDate">Start Date</Label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="usageLimit">Giới Hạn Sử Dụng</Label>
+                        <Input
+                            id="usageLimit"
+                            type="number"
+                            value={formData.usage_limit}
+                            onChange={(e) => setFormData({ ...formData, usage_limit: parseInt(e.target.value) || 0 })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="perUser">Mỗi Người Dùng</Label>
+                        <Input
+                            id="perUser"
+                            type="number"
+                            value={formData.usage_per_user}
+                            onChange={(e) => setFormData({ ...formData, usage_per_user: parseInt(e.target.value) || 1 })}
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="startDate">Ngày Bắt Đầu *</Label>
                         <Input
                             id="startDate"
                             type="date"
-                            value={formData.startDate}
-                            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                            value={formData.start_date}
+                            onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                             required
                         />
                     </div>
-                    <div className="space-y-2 flex-1">
-                        <Label htmlFor="endDate">End Date</Label>
+                    <div className="space-y-2">
+                        <Label htmlFor="endDate">Ngày Kết Thúc *</Label>
                         <Input
                             id="endDate"
                             type="date"
-                            value={formData.endDate}
-                            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                            value={formData.end_date}
+                            onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                             required
                         />
                     </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button type="submit">{initialData ? "Update" : "Create"}</Button>
+                    <Button type="button" variant="outline" onClick={onClose}>Hủy</Button>
+                    <Button type="submit">{initialData ? "Cập Nhật" : "Tạo Voucher"}</Button>
                 </div>
             </form>
         </FormModal>

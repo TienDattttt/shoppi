@@ -193,8 +193,14 @@ export const orderService = {
     // PARTNER ORDER OPERATIONS
     // ============================================
 
-    // Get partner orders
+    // Get partner orders (alias: getShopOrders)
     getPartnerOrders: async (params?: { status?: string; page?: number; limit?: number }) => {
+        const response = await api.get("/partner/orders", { params });
+        return response.data;
+    },
+
+    // Alias for getPartnerOrders
+    getShopOrders: async (params?: { status?: string; page?: number; limit?: number }) => {
         const response = await api.get("/partner/orders", { params });
         return response.data;
     },
