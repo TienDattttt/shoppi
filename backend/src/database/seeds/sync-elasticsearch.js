@@ -47,6 +47,7 @@ const PRODUCT_MAPPING = {
         review_count: { type: 'integer' },
         category_name: { type: 'keyword' },
         shop_name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
+        primary_image_url: { type: 'keyword' },
         created_at: { type: 'date' },
         updated_at: { type: 'date' },
     },
@@ -123,7 +124,7 @@ async function syncProducts() {
         return;
     }
 
-    // Lấy thêm thông tin shop và category
+    // Lấy thêm thông tin shop, category và images
     for (const p of products) {
         if (p.shop_id) {
             const { data: shop } = await supabase.from('shops').select('shop_name, city').eq('id', p.shop_id).single();
@@ -133,6 +134,15 @@ async function syncProducts() {
             const { data: cat } = await supabase.from('categories').select('name, slug').eq('id', p.category_id).single();
             p.category = cat;
         }
+        // Get primary image
+        const { data: images } = await supabase
+            .from('product_images')
+            .select('url')
+            .eq('product_id', p.id)
+            .order('is_primary', { ascending: false })
+            .order('sort_order', { ascending: true })
+            .limit(1);
+        p.primary_image_url = images?.[0]?.url || null;
     }
 
     console.log('📤 Đồng bộ vào Elasticsearch...');
@@ -158,6 +168,7 @@ async function syncProducts() {
             review_count: p.review_count || 0,
             category_name: p.category?.name || null,
             shop_name: p.shop?.shop_name || null,
+            primary_image_url: p.primary_image_url || null,
             created_at: p.created_at,
             updated_at: p.updated_at,
         },

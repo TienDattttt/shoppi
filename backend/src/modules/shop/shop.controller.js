@@ -46,7 +46,7 @@ async function createShop(req, res, next) {
 async function getShop(req, res, next) {
   try {
     const { id } = req.params;
-    const userId = req.user?.id;
+    const userId = req.user?.userId || req.user?.id;
     const userRole = req.user?.role;
     
     const shop = await shopService.getShopById(id);
@@ -90,7 +90,7 @@ async function getShop(req, res, next) {
 async function getShopBySlug(req, res, next) {
   try {
     const { slug } = req.params;
-    const userId = req.user?.id;
+    const userId = req.user?.userId || req.user?.id;
     
     const shop = await shopService.getShopBySlug(slug);
     

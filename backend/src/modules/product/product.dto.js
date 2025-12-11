@@ -74,10 +74,18 @@ function serializeProduct(product) {
   if (product.shop) {
     serialized.shop = {
       id: product.shop.id,
-      name: product.shop.name,
+      shop_name: product.shop.shop_name,
+      name: product.shop.shop_name, // alias for compatibility
       slug: product.shop.slug,
-      avatarUrl: product.shop.avatar_url,
-      rating: product.shop.rating,
+      logo_url: product.shop.logo_url,
+      banner_url: product.shop.banner_url,
+      rating: product.shop.avg_rating || product.shop.rating || 0,
+      avg_rating: product.shop.avg_rating || product.shop.rating || 0,
+      follower_count: product.shop.follower_count || 0,
+      product_count: product.shop.product_count || 0,
+      city: product.shop.city,
+      address: product.shop.address,
+      created_at: product.shop.created_at,
     };
   }
 

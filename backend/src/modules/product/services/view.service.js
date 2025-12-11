@@ -70,8 +70,8 @@ async function markAsViewed(productId, userId) {
  * @returns {Promise<{product: object, viewCounted: boolean, newViewCount: number}>}
  */
 async function trackProductView(productId, viewerId) {
-  // Get product
-  const product = await productRepository.findProductByIdWithRelations(productId);
+  // Get product (basic info only for view tracking)
+  const product = await productRepository.findProductById(productId);
   
   if (!product) {
     throw new NotFoundError('Product not found');
@@ -106,11 +106,8 @@ async function trackProductView(productId, viewerId) {
   // Mark as viewed for rate limiting
   await markAsViewed(productId, viewerId);
 
-  // Return updated product
-  const updatedProduct = await productRepository.findProductByIdWithRelations(productId);
-
   return {
-    product: updatedProduct,
+    product,
     viewCounted: true,
     previousViewCount: previousCount,
     newViewCount: previousCount + 1,
@@ -126,8 +123,7 @@ async function trackProductView(productId, viewerId) {
  */
 async function getProductDetail(productId, viewerId = null, trackView = true) {
   if (trackView && viewerId) {
-    const result = await trackProductView(productId, viewerId);
-    return result.product;
+    await trackProductView(productId, viewerId).catch(console.error);
   }
 
   const product = await productRepository.findProductByIdWithRelations(productId);

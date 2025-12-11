@@ -121,7 +121,8 @@ async function findPendingProducts() {
  * @returns {Promise<object|null>}
  */
 async function findProductByIdWithRelations(productId) {
-  const { data, error } = await supabaseAdmin
+  // First, get product with variants and images
+  const { data: product, error } = await supabaseAdmin
     .from('products')
     .select(`
       *,
@@ -136,7 +137,31 @@ async function findProductByIdWithRelations(productId) {
     throw new Error(`Failed to find product: ${error.message}`);
   }
 
-  return data || null;
+  if (!product) return null;
+
+  // Fetch shop data separately
+  if (product.shop_id) {
+    const { data: shop } = await supabaseAdmin
+      .from('shops')
+      .select('id, shop_name, slug, logo_url, banner_url, avg_rating, follower_count, product_count, city, address, created_at')
+      .eq('id', product.shop_id)
+      .single();
+    
+    product.shop = shop || null;
+  }
+
+  // Fetch category data separately
+  if (product.category_id) {
+    const { data: category } = await supabaseAdmin
+      .from('categories')
+      .select('id, name, slug')
+      .eq('id', product.category_id)
+      .single();
+    
+    product.category = category || null;
+  }
+
+  return product;
 }
 
 /**

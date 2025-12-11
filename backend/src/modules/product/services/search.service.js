@@ -159,7 +159,7 @@ async function search(params = {}) {
         _source: [
           'id', 'name', 'slug', 'short_description', 'base_price',
           'compare_at_price', 'currency', 'avg_rating', 'review_count',
-          'total_sold', 'category_name', 'shop_name',
+          'total_sold', 'category_name', 'shop_name', 'primary_image_url',
         ],
       },
     });

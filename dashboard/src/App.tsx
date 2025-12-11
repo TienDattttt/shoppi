@@ -71,6 +71,7 @@ const PurchaseHistoryPage = lazy(() => import("@/pages/customer/account/Purchase
 const OrderDetailPageCustomer = lazy(() => import("@/pages/customer/account/OrderDetailPage"));
 const NotificationsPageCustomer = lazy(() => import("@/pages/customer/account/NotificationsPage"));
 const VoucherWalletPage = lazy(() => import("@/pages/customer/account/VoucherWalletPage"));
+const FollowedShopsPage = lazy(() => import("@/pages/customer/account/FollowedShopsPage"));
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: ('admin' | 'partner')[] }) => {
   const user = useAuthStore((state) => state.user);
@@ -118,6 +119,7 @@ function App() {
               <Route path="purchase/order/:id" element={<OrderDetailPageCustomer />} />
               <Route path="notifications" element={<NotificationsPageCustomer />} />
               <Route path="voucher-wallet" element={<VoucherWalletPage />} />
+              <Route path="following" element={<FollowedShopsPage />} />
             </Route>
           </Route>
 

@@ -205,42 +205,28 @@ async function deleteProduct(req, res, next) {
  */
 async function searchProducts(req, res, next) {
   try {
-    const { q, category_id, categoryId, shop_id, shopId, status, min_price, max_price, min_rating, sort, sortBy, sortOrder, page, limit } = req.query;
+    const { q, category_id, categoryId, shop_id, shopId, status, min_price, max_price, min_rating, minPrice, maxPrice, minRating, sort, sortBy, sortOrder, page, limit } = req.query;
     
     // Support both snake_case and camelCase query params
     const shopIdFilter = shop_id || shopId;
     const categoryIdFilter = category_id || categoryId;
+    const minPriceFilter = min_price || minPrice;
+    const maxPriceFilter = max_price || maxPrice;
+    const minRatingFilter = min_rating || minRating;
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     
-    // If filtering by shop_id, use direct database query (more reliable for partner dashboard)
-    if (shopIdFilter) {
-      const result = await productService.getProductsByShop(shopIdFilter, {
-        page: pageNum,
-        limit: limitNum,
-        status: status || undefined, // Don't default to 'active' for shop queries
-      });
-      
-      return successResponse(res, {
-        data: result.data.map(serializeProductSummary),
-        pagination: {
-          page: result.page,
-          limit: result.limit,
-          total: result.count,
-          totalPages: result.totalPages,
-        },
-      });
-    }
-    
-    // Use search service (with Elasticsearch or database fallback)
+    // Use search service (with Elasticsearch or database fallback) for all searches
+    // This enables full-text search, filtering, and sorting via Elasticsearch
     const result = await searchService.search({
       query: q,
       filters: {
+        shop_id: shopIdFilter,
         category_id: categoryIdFilter,
         status: status || 'active',
-        min_price: min_price ? parseFloat(min_price) : undefined,
-        max_price: max_price ? parseFloat(max_price) : undefined,
-        min_rating: min_rating ? parseFloat(min_rating) : undefined,
+        min_price: minPriceFilter ? parseFloat(minPriceFilter) : undefined,
+        max_price: maxPriceFilter ? parseFloat(maxPriceFilter) : undefined,
+        min_rating: minRatingFilter ? parseFloat(minRatingFilter) : undefined,
       },
       sort: sortBy || sort,
       page: pageNum,
