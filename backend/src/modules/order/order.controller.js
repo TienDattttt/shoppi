@@ -33,10 +33,17 @@ function errorResponse(res, error) {
  */
 async function getCart(req, res) {
   try {
+    console.log('[OrderController] getCart called, user:', req.user);
     const userId = req.user.userId;
+    if (!userId) {
+      console.error('[OrderController] No userId in request');
+      return errorResponse(res, { code: 'AUTH_ERROR', message: 'User ID not found', statusCode: 401 });
+    }
     const cart = await cartService.getCart(userId);
+    console.log('[OrderController] Cart retrieved successfully');
     return successResponse(res, cart, 'Cart retrieved successfully');
   } catch (error) {
+    console.error('[OrderController] getCart error:', error);
     return errorResponse(res, error);
   }
 }

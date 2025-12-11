@@ -16,7 +16,7 @@ const { initializeServices } = require('./src/shared/init');
 // Import module routes
 const authRoutes = require('./src/modules/auth/auth.routes');
 const { productRouter, categoryRouter, adminRouter: productAdminRouter, wishlistRouter } = require('./src/modules/product/product.routes');
-const orderRoutes = require('./src/modules/order/order.routes');
+const { cartRouter, orderRouter, partnerOrderRouter, shipperOrderRouter, voucherRouter } = require('./src/modules/order/order.routes');
 const paymentRoutes = require('./src/modules/order/payment.routes');
 const shippingWebhookRoutes = require('./src/modules/order/shipping-webhook.routes');
 const shopRoutes = require('./src/modules/shop/shop.routes');
@@ -71,8 +71,14 @@ API_PREFIXES.forEach(prefix => {
     app.use(`${prefix}/admin/products`, productAdminRouter);
     app.use(`${prefix}/wishlist`, wishlistRouter);
 
+    // Cart Module
+    app.use(`${prefix}/cart`, cartRouter);
+
     // Order Module
-    app.use(`${prefix}/orders`, orderRoutes);
+    app.use(`${prefix}/orders`, orderRouter);
+    app.use(`${prefix}/partner/orders`, partnerOrderRouter);
+    app.use(`${prefix}/shipper/orders`, shipperOrderRouter);
+    app.use(`${prefix}/vouchers`, voucherRouter);
 
     // Payment Module
     app.use(`${prefix}/payments`, paymentRoutes);

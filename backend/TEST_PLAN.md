@@ -114,29 +114,29 @@
 ### 2.3 CUSTOMER ROLE
 
 #### Auth
-- [ ] Register customer (/auth/register/customer)
-- [ ] Login with email/password
-- [ ] Login with OTP (/auth/login/otp/request, /auth/login/otp/verify)
+- [x] Register customer (/auth/register/customer)
+- [x] Login with email/password
+- [x] Login with OTP (/auth/login/otp/request, /auth/login/otp/verify)
 - [ ] Forgot password (/auth/password/reset/request)
 - [ ] Reset password (/auth/password/reset/verify)
 
 #### Product Browsing
-- [ ] Search products (/products?q=...)
-- [ ] View product detail (/products/:id)
-- [ ] View product reviews (/products/:id/reviews)
-- [ ] Filter by category (/products?categoryId=...)
+- [x] Search products (/products?q=...)
+- [x] View product detail (/products/:id)
+- [x] View product reviews (/products/:id/reviews)
+- [x] Filter by category (/products?categoryId=...)
 
 #### Shop
-- [ ] View shop profile (/shops/:id)
-- [ ] Follow shop (/shops/:id/follow)
-- [ ] Unfollow shop (/shops/:id/follow - DELETE)
-- [ ] Get followed shops (/users/me/following)
+- [x] View shop profile (/shops/:id)
+- [x] Follow shop (/shops/:id/follow)
+- [x] Unfollow shop (/shops/:id/follow - DELETE)
+- [x] Get followed shops (/users/me/following)
 
 #### Cart
-- [ ] Get cart (/cart)
-- [ ] Add to cart (/cart/items)
-- [ ] Update cart item (/cart/items/:id)
-- [ ] Remove from cart (/cart/items/:id)
+- [x] Get cart (/cart)
+- [x] Add to cart (/cart/items)
+- [x] Update cart item (/cart/items/:id)
+- [x] Remove from cart (/cart/items/:id)
 
 #### Checkout & Order
 - [ ] Checkout (/orders/checkout)
@@ -156,10 +156,6 @@
 #### Review
 - [ ] Create review (/products/:id/reviews)
 
-#### Wishlist
-- [ ] Get wishlist (/wishlist)
-- [ ] Add to wishlist (/wishlist/:productId)
-- [ ] Remove from wishlist (/wishlist/:productId)
 
 #### Notification
 - [ ] List notifications (/notifications)

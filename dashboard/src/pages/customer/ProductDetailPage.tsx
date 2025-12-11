@@ -8,6 +8,17 @@ import { ProductCard, type Product as CardProduct } from "../../components/custo
 import { productService } from "@/services/product.service";
 import { Skeleton } from "@/components/ui/skeleton";
 
+interface ProductVariant {
+    id: string;
+    name: string | null;
+    sku: string | null;
+    price: number;
+    compareAtPrice?: number;
+    quantity: number;
+    imageUrl: string | null;
+    attributes: Record<string, string>;
+}
+
 interface ProductDetail {
     id: string;
     name: string;
@@ -18,11 +29,12 @@ interface ProductDetail {
     soldCount: number;
     stock: number;
     images: string[];
-    variants: { id: string; name: string; options: string[] }[];
+    variantGroups: { id: string; name: string; options: string[] }[];
+    rawVariants: ProductVariant[];
     description?: string;
     shop?: {
         id: string;
-        shop_name: string;
+        name: string;
         city?: string;
     };
     category?: {
@@ -55,25 +67,43 @@ export default function ProductDetailPage() {
                 // Transform to ProductDetail format - handle both camelCase and snake_case
                 const images = p.images?.map((img: any) => img.url) || [];
                 
-                // Group variants by attribute type
-                const variantGroups: Record<string, Set<string>> = {};
-                p.variants?.forEach((v: any) => {
+                // Group variants by attribute type for UI display
+                const variantGroupsMap: Record<string, Set<string>> = {};
+                const rawVariants: ProductVariant[] = (p.variants || []).map((v: any) => ({
+                    id: v.id,
+                    name: v.name,
+                    sku: v.sku,
+                    price: v.price || p.basePrice || p.base_price,
+                    compareAtPrice: v.compareAtPrice || v.compare_at_price,
+                    quantity: v.quantity || v.availableQuantity || 0,
+                    imageUrl: v.imageUrl || v.image_url,
+                    attributes: v.attributes || {},
+                }));
+                
+                rawVariants.forEach((v) => {
                     if (v.attributes) {
                         Object.entries(v.attributes).forEach(([key, value]) => {
-                            if (!variantGroups[key]) variantGroups[key] = new Set();
-                            variantGroups[key].add(value as string);
+                            if (!variantGroupsMap[key]) variantGroupsMap[key] = new Set();
+                            variantGroupsMap[key].add(value as string);
                         });
                     }
                 });
                 
-                const variants = Object.entries(variantGroups).map(([name, options], idx) => ({
+                const variantGroups = Object.entries(variantGroupsMap).map(([name, options], idx) => ({
                     id: `v${idx}`,
                     name: name.charAt(0).toUpperCase() + name.slice(1),
                     options: Array.from(options),
                 }));
 
                 // Calculate total stock from variants
-                const totalStock = p.variants?.reduce((sum: number, v: any) => sum + (v.quantity || v.availableQuantity || 0), 0) || 0;
+                const totalStock = rawVariants.reduce((sum, v) => sum + v.quantity, 0);
+
+                // Shop info - handle both camelCase and snake_case
+                const shopInfo = p.shop ? {
+                    id: p.shop.id,
+                    name: p.shop.name || p.shop.shop_name,
+                    city: p.shop.city,
+                } : undefined;
 
                 setProduct({
                     id: p.id,
@@ -85,9 +115,10 @@ export default function ProductDetailPage() {
                     soldCount: p.totalSold || p.total_sold || 0,
                     stock: totalStock,
                     images: images.length > 0 ? images : ['https://placehold.co/500x500?text=No+Image'],
-                    variants,
+                    variantGroups,
+                    rawVariants,
                     description: p.description,
-                    shop: p.shop,
+                    shop: shopInfo,
                     category: p.category,
                 });
 

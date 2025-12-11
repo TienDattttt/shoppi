@@ -264,6 +264,7 @@ function serializeCartItem(item) {
       name: item.products.name,
       slug: item.products.slug,
       shopId: item.products.shop_id,
+      thumbnailUrl: item.products.thumbnail_url || null,
     } : null,
     
     // Variant info (if joined)
@@ -272,9 +273,10 @@ function serializeCartItem(item) {
       name: item.product_variants.name,
       sku: item.product_variants.sku,
       price: parseFloat(item.product_variants.price) || 0,
-      salePrice: item.product_variants.sale_price ? parseFloat(item.product_variants.sale_price) : null,
-      stockQuantity: item.product_variants.stock_quantity,
+      compareAtPrice: item.product_variants.compare_at_price ? parseFloat(item.product_variants.compare_at_price) : null,
+      stockQuantity: item.product_variants.quantity || 0,
       imageUrl: item.product_variants.image_url,
+      attributes: item.product_variants.attributes,
     } : null,
   };
 }

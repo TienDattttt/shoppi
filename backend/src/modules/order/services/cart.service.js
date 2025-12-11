@@ -6,44 +6,63 @@
 const cartRepository = require('../cart.repository');
 const orderDTO = require('../order.dto');
 const { AppError } = require('../../../shared/utils/error.util');
+const { supabaseAdmin: supabase } = require('../../../shared/supabase/supabase.client');
 
 /**
  * Get user's cart with items grouped by shop
  */
 async function getCart(userId) {
-  let cart = await cartRepository.findCartByUserId(userId);
-  
-  // Create cart if not exists
-  if (!cart) {
-    cart = await cartRepository.createCart(userId);
+  try {
+    console.log('[CartService] getCart called for userId:', userId);
+    
+    let cart = await cartRepository.findCartByUserId(userId);
+    console.log('[CartService] Found cart:', cart ? cart.id : 'none');
+    
+    // Create cart if not exists
+    if (!cart) {
+      console.log('[CartService] Creating new cart for user');
+      cart = await cartRepository.createCart(userId);
+      console.log('[CartService] Created cart:', cart?.id);
+    }
+    
+    // Get cart items with product info
+    const items = await cartRepository.findCartItemsWithProducts(cart.id);
+    console.log('[CartService] Found items:', items?.length || 0);
+    
+    // Group items by shop (async to fetch shop names)
+    const groupedByShop = await groupItemsByShop(items);
+    console.log('[CartService] Grouped by shop:', groupedByShop?.length || 0);
+    
+    const serializedCart = orderDTO.serializeCart(cart);
+    console.log('[CartService] Serialized cart:', serializedCart?.id);
+    
+    return {
+      ...serializedCart,
+      itemsByShop: groupedByShop,
+      totalItems: items.length,
+      totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+    };
+  } catch (error) {
+    console.error('[CartService] getCart error:', error);
+    throw error;
   }
-  
-  // Get cart items with product info
-  const items = await cartRepository.findCartItemsWithProducts(cart.id);
-  
-  // Group items by shop
-  const groupedByShop = groupItemsByShop(items);
-  
-  return {
-    ...orderDTO.serializeCart(cart),
-    itemsByShop: groupedByShop,
-    totalItems: items.length,
-    totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
-  };
 }
 
 /**
  * Group cart items by shop
  */
-function groupItemsByShop(items) {
+async function groupItemsByShop(items) {
   const grouped = {};
+  const shopIds = new Set();
   
   for (const item of items) {
     const shopId = item.products?.shop_id || 'unknown';
+    shopIds.add(shopId);
     
     if (!grouped[shopId]) {
       grouped[shopId] = {
         shopId,
+        shopName: null,
         items: [],
         subtotal: 0,
       };
@@ -52,9 +71,29 @@ function groupItemsByShop(items) {
     const serializedItem = orderDTO.serializeCartItem(item);
     grouped[shopId].items.push(serializedItem);
     
-    // Calculate subtotal
-    const price = item.product_variants?.sale_price || item.product_variants?.price || 0;
+    // Calculate subtotal - use price (no sale_price column exists)
+    const price = item.product_variants?.price || 0;
     grouped[shopId].subtotal += parseFloat(price) * item.quantity;
+  }
+  
+  // Fetch shop names - filter out 'unknown' and invalid UUIDs
+  const validShopIds = Array.from(shopIds).filter(id => 
+    id && id !== 'unknown' && id.length === 36
+  );
+  
+  if (validShopIds.length > 0) {
+    const { data: shops } = await supabase
+      .from('shops')
+      .select('id, shop_name')
+      .in('id', validShopIds);
+    
+    if (shops) {
+      for (const shop of shops) {
+        if (grouped[shop.id]) {
+          grouped[shop.id].shopName = shop.shop_name;
+        }
+      }
+    }
   }
   
   return Object.values(grouped);

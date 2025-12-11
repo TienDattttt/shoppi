@@ -12,10 +12,10 @@ export function VoucherInput() {
         if (!code) return;
         const success = await applyVoucher(code);
         if (success) {
-            toast.success("Voucher applied successfully!");
+            toast.success("Áp dụng voucher thành công!");
             setCode("");
         } else {
-            toast.error("Invalid voucher code");
+            toast.error("Mã voucher không hợp lệ");
         }
     };
 
@@ -23,22 +23,22 @@ export function VoucherInput() {
         <div className="bg-white p-4 rounded-sm shadow-sm flex items-center justify-between border-b border-dashed">
             <div className="flex items-center gap-2 text-shopee-orange font-medium text-sm">
                 <Ticket className="h-5 w-5" />
-                <span>Platform Voucher</span>
+                <span>Voucher của Shop</span>
             </div>
 
             {voucherCode ? (
                 <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                        {voucherCode} applied
+                        Đã áp dụng: {voucherCode}
                     </span>
                     <button onClick={removeVoucher} className="text-xs text-blue-500 hover:underline">
-                        Remove
+                        Xóa
                     </button>
                 </div>
             ) : (
                 <div className="flex gap-2">
                     <input
-                        placeholder="Enter Code"
+                        placeholder="Nhập mã voucher"
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
                         className="text-sm border-b focus:outline-none focus:border-shopee-orange px-2 py-1 w-32"
@@ -49,7 +49,7 @@ export function VoucherInput() {
                         className="text-shopee-orange hover:text-shopee-orange hover:bg-orange-50 h-8 font-medium"
                         onClick={handleApply}
                     >
-                        Apply
+                        Áp dụng
                     </Button>
                 </div>
             )}

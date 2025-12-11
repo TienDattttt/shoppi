@@ -41,7 +41,7 @@ export function CartItem({ item }: CartItemProps) {
 
                     {item.variant && (
                         <div className="text-xs text-muted-foreground bg-gray-50 w-fit px-2 py-0.5 rounded-sm mt-1">
-                            Variation: {item.variant}
+                            Phân loại: {item.variant}
                         </div>
                     )}
 

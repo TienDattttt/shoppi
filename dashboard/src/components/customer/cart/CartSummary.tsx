@@ -16,25 +16,25 @@ export function CartSummary() {
                         checked={allSelected}
                         onCheckedChange={(checked) => toggleAllSelection(checked as boolean)}
                     />
-                    <span className="text-sm">Select All ({items.length})</span>
+                    <span className="text-sm">Chọn tất cả ({items.length})</span>
                 </div>
-                <button className="text-sm text-gray-500 hover:text-red-500">Delete</button>
+                <button className="text-sm text-gray-500 hover:text-red-500">Xóa</button>
             </div>
 
             <div className="flex items-center gap-6 w-full md:w-auto justify-end">
                 <div className="flex flex-col items-end text-sm">
                     <div className="flex items-center gap-2">
-                        <span>Total ({selectedItemsCount()} item):</span>
+                        <span>Tổng thanh toán ({selectedItemsCount()} sản phẩm):</span>
                         <span className="text-xl font-medium text-shopee-orange">{formatCurrency(total())}</span>
                     </div>
                     {discountAmount > 0 && (
                         <div className="text-xs text-muted-foreground">
-                            Saved {formatCurrency(discountAmount)}
+                            Tiết kiệm {formatCurrency(discountAmount)}
                         </div>
                     )}
                 </div>
                 <Button className="bg-shopee-orange hover:bg-shopee-orange-hover text-white px-10 h-10 w-full md:w-auto">
-                    Check Out
+                    Mua hàng
                 </Button>
             </div>
         </div>
