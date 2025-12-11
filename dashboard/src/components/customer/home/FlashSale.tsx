@@ -33,7 +33,7 @@ export function FlashSale() {
                         slug: p.slug,
                         price: p.basePrice || p.base_price,
                         originalPrice: p.compareAtPrice || p.compare_at_price,
-                        image: p.images?.[0]?.url || p.imageUrl || 'https://via.placeholder.com/200',
+                        image: p.images?.[0]?.url || p.imageUrl || 'https://placehold.co/200x200?text=No+Image',
                         rating: p.avgRating || p.avg_rating || 0,
                         soldCount: p.totalSold || p.total_sold || 0,
                         shopLocation: p.shop?.city || 'Việt Nam',

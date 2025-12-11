@@ -185,6 +185,7 @@ async function healthCheck() {
 
 module.exports = {
   initializeAll,
+  initializeServices: initializeAll, // Alias for app.js compatibility
   shutdownAll,
   healthCheck,
 };

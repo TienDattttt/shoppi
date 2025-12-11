@@ -18,6 +18,7 @@ const {
 } = require('../../shared/utils/error.util');
 const smsService = require('../../shared/sms/sms.service');
 const emailService = require('../../shared/email/email.service');
+const sessionCache = require('../../shared/redis/session.cache');
 
 const SALT_ROUNDS = 10;
 
@@ -405,8 +406,7 @@ async function createSessionWithTokens(user, deviceInfo = {}) {
   // Calculate refresh token expiry (7 days)
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  // Store session
-  await authRepository.createSession({
+  const sessionData = {
     id: sessionId,
     user_id: user.id,
     refresh_token_hash: hashToken(tokens.refreshToken),
@@ -415,7 +415,13 @@ async function createSessionWithTokens(user, deviceInfo = {}) {
     ip_address: deviceInfo.ipAddress || null,
     user_agent: deviceInfo.userAgent || null,
     expires_at: expiresAt.toISOString(),
-  });
+  };
+
+  // Store session in database
+  await authRepository.createSession(sessionData);
+  
+  // Cache session in Redis for faster lookups
+  await sessionCache.cacheSession(sessionId, sessionData);
 
   // Update last login
   await authRepository.updateLastLogin(user.id);
@@ -885,6 +891,9 @@ async function terminateSession(userId, sessionId) {
  */
 async function logout(userId, sessionId) {
   await authRepository.deleteSession(sessionId);
+  
+  // Invalidate session cache
+  await sessionCache.invalidateSession(sessionId);
 
   return {
     success: true,
@@ -899,6 +908,9 @@ async function logout(userId, sessionId) {
  */
 async function logoutAllDevices(userId) {
   await authRepository.deleteAllUserSessions(userId);
+  
+  // Invalidate all user sessions in cache
+  await sessionCache.invalidateUserSessions(userId);
 
   return {
     success: true,

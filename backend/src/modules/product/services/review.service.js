@@ -183,54 +183,80 @@ async function getProductReviews(productId, filters = {}, pagination = {}) {
   const { rating } = filters;
   const offset = (page - 1) * limit;
 
-  let query = supabaseAdmin
-    .from('reviews')
-    .select('*, users(full_name, avatar_url)', { count: 'exact' })
-    .eq('product_id', productId)
-    .eq('status', 'active');
+  try {
+    let query = supabaseAdmin
+      .from('reviews')
+      .select('*, users(full_name, avatar_url)', { count: 'exact' })
+      .eq('product_id', productId)
+      .eq('status', 'active');
 
-  // Filter by rating (Requirements 9.3)
-  if (rating !== undefined && rating !== null) {
-    const ratingValue = parseInt(rating, 10);
-    if (ratingValue >= 1 && ratingValue <= 5) {
-      query = query.eq('rating', ratingValue);
+    // Filter by rating (Requirements 9.3)
+    if (rating !== undefined && rating !== null) {
+      const ratingValue = parseInt(rating, 10);
+      if (ratingValue >= 1 && ratingValue <= 5) {
+        query = query.eq('rating', ratingValue);
+      }
     }
+
+    // Sort options (Requirements 9.5)
+    switch (sort) {
+      case 'highest':
+        query = query.order('rating', { ascending: false }).order('created_at', { ascending: false });
+        break;
+      case 'lowest':
+        query = query.order('rating', { ascending: true }).order('created_at', { ascending: false });
+        break;
+      case 'helpful':
+        query = query.order('helpful_count', { ascending: false }).order('created_at', { ascending: false });
+        break;
+      case 'newest':
+      default:
+        query = query.order('created_at', { ascending: false });
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      // If table doesn't exist or other DB error, return empty result
+      console.error('Reviews query error:', error.message);
+      return {
+        data: [],
+        count: 0,
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    }
+
+    return {
+      data: data || [],
+      count: count || 0,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    };
+  } catch (err) {
+    // Catch any unexpected errors and return empty result
+    console.error('getProductReviews error:', err.message);
+    return {
+      data: [],
+      count: 0,
+      pagination: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+      },
+    };
   }
-
-  // Sort options (Requirements 9.5)
-  switch (sort) {
-    case 'highest':
-      query = query.order('rating', { ascending: false }).order('created_at', { ascending: false });
-      break;
-    case 'lowest':
-      query = query.order('rating', { ascending: true }).order('created_at', { ascending: false });
-      break;
-    case 'helpful':
-      query = query.order('helpful_count', { ascending: false }).order('created_at', { ascending: false });
-      break;
-    case 'newest':
-    default:
-      query = query.order('created_at', { ascending: false });
-  }
-
-  query = query.range(offset, offset + limit - 1);
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    throw new Error(`Failed to get reviews: ${error.message}`);
-  }
-
-  return {
-    data: data || [],
-    count: count || 0,
-    pagination: {
-      page,
-      limit,
-      total: count || 0,
-      totalPages: Math.ceil((count || 0) / limit),
-    },
-  };
 }
 
 /**

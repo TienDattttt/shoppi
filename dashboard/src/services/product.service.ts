@@ -97,6 +97,7 @@ export interface ProductFilters {
     status?: string;
     minPrice?: number;
     maxPrice?: number;
+    minRating?: number;
     page?: number;
     limit?: number;
     sortBy?: string;
@@ -111,6 +112,12 @@ export const productService = {
     // Search/list products (public)
     searchProducts: async (filters: ProductFilters = {}) => {
         const response = await api.get("/products", { params: filters });
+        return response.data;
+    },
+
+    // Get search suggestions (autocomplete)
+    getSuggestions: async (query: string, limit: number = 8) => {
+        const response = await api.get("/products/suggest", { params: { q: query, limit } });
         return response.data;
     },
 
@@ -233,8 +240,14 @@ export const productService = {
     // ============================================
 
     // Get product reviews
-    getReviews: async (productId: string, params?: { page?: number; limit?: number }) => {
+    getReviews: async (productId: string, params?: { page?: number; limit?: number; rating?: number }) => {
         const response = await api.get(`/products/${productId}/reviews`, { params });
+        return response.data;
+    },
+
+    // Get review statistics
+    getReviewStats: async (productId: string) => {
+        const response = await api.get(`/products/${productId}/reviews/stats`);
         return response.data;
     },
 

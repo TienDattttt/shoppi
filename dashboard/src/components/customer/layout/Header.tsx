@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, ShoppingCart, Bell, Menu, User, LogOut, Settings, Package } from "lucide-react";
+import { ShoppingCart, Menu, User, LogOut, Settings, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/authStore";
 import { LoginModal } from "../auth/LoginModal";
 import { RegisterModal } from "../auth/RegisterModal";
 import { ForgotPasswordModal } from "../auth/ForgotPasswordModal";
 import { NotificationDropdown } from "../notification/NotificationDropdown";
+import { SearchBar } from "./SearchBar";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -22,7 +22,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function Header() {
     const navigate = useNavigate();
-    const [searchQuery, setSearchQuery] = useState("");
 
     // Auth State
     const { user, logout } = useAuthStore();
@@ -35,13 +34,6 @@ export function Header() {
 
     // Mock store values for now
     const cartItemCount = 2;
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (searchQuery.trim()) {
-            navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-        }
-    };
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
@@ -79,15 +71,7 @@ export function Header() {
 
                 <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
                     <div className="w-full flex-1 md:w-auto md:flex-none">
-                        <form onSubmit={handleSearch} className="relative">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search products..."
-                                className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </form>
+                        <SearchBar className="sm:w-[300px] md:w-[200px] lg:w-[300px]" />
                     </div>
 
                     <div className="flex items-center gap-2">

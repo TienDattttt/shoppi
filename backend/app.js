@@ -15,7 +15,7 @@ const { initializeServices } = require('./src/shared/init');
 
 // Import module routes
 const authRoutes = require('./src/modules/auth/auth.routes');
-const productRoutes = require('./src/modules/product/product.routes');
+const { productRouter, categoryRouter, adminRouter: productAdminRouter, wishlistRouter } = require('./src/modules/product/product.routes');
 const orderRoutes = require('./src/modules/order/order.routes');
 const paymentRoutes = require('./src/modules/order/payment.routes');
 const shippingWebhookRoutes = require('./src/modules/order/shipping-webhook.routes');
@@ -55,34 +55,39 @@ app.get('/health', (req, res) => {
 });
 
 
-// API Routes - v1
-const API_PREFIX = '/api/v1';
+// API Routes - support both /api and /api/v1 prefixes
+const API_PREFIXES = ['/api', '/api/v1'];
 
-// Auth & User Module
-app.use(`${API_PREFIX}/auth`, authRoutes);
+API_PREFIXES.forEach(prefix => {
+    // Auth & User Module
+    app.use(`${prefix}/auth`, authRoutes);
 
-// Shop & Social Module
-app.use(`${API_PREFIX}/shops`, shopRoutes);
+    // Shop & Social Module
+    app.use(`${prefix}/shops`, shopRoutes);
 
-// Catalog & Search Module
-app.use(`${API_PREFIX}/products`, productRoutes);
+    // Catalog & Search Module
+    app.use(`${prefix}/products`, productRouter);
+    app.use(`${prefix}/categories`, categoryRouter);
+    app.use(`${prefix}/admin/products`, productAdminRouter);
+    app.use(`${prefix}/wishlist`, wishlistRouter);
 
-// Order Module
-app.use(`${API_PREFIX}/orders`, orderRoutes);
+    // Order Module
+    app.use(`${prefix}/orders`, orderRoutes);
 
-// Payment Module
-app.use(`${API_PREFIX}/payments`, paymentRoutes);
+    // Payment Module
+    app.use(`${prefix}/payments`, paymentRoutes);
 
-// Shipping Webhooks (external providers)
-app.use(`${API_PREFIX}/webhooks/shipping`, shippingWebhookRoutes);
+    // Shipping Webhooks (external providers)
+    app.use(`${prefix}/webhooks/shipping`, shippingWebhookRoutes);
 
-// Communication Module
-app.use(`${API_PREFIX}/chat`, chatRoutes);
-app.use(`${API_PREFIX}/notifications`, notificationRoutes);
+    // Communication Module
+    app.use(`${prefix}/chat`, chatRoutes);
+    app.use(`${prefix}/notifications`, notificationRoutes);
 
-// Shipper Module
-app.use(`${API_PREFIX}/shippers`, shipperRoutes);
-app.use(`${API_PREFIX}/shipments`, shipmentRoutes);
+    // Shipper Module
+    app.use(`${prefix}/shippers`, shipperRoutes);
+    app.use(`${prefix}/shipments`, shipmentRoutes);
+});
 
 // Error handling
 app.use(notFoundHandler);

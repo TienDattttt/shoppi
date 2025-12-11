@@ -13,6 +13,7 @@ const approvalService = require('./services/approval.service');
 const viewService = require('./services/view.service');
 const { serializeProduct, serializeProductSummary } = require('./product.dto');
 const { sendSuccess: successResponse } = require('../../shared/utils/response.util');
+const cacheService = require('../../shared/redis/cache.service');
 
 /**
  * Helper to get shop_id from user token or database
@@ -84,7 +85,17 @@ async function createProduct(req, res, next) {
 }
 
 /**
- * Get product by ID
+ * Check if string is a valid UUID
+ * @param {string} str
+ * @returns {boolean}
+ */
+function isUUID(str) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+/**
+ * Get product by ID or slug (with Redis caching)
  * GET /api/products/:id
  */
 async function getProduct(req, res, next) {
@@ -92,10 +103,29 @@ async function getProduct(req, res, next) {
     const { id } = req.params;
     const viewerId = req.user?.userId || req.ip;
     
-    const product = await productService.getProductById(id, true);
+    let product;
+    
+    // Check if id is UUID or slug
+    if (isUUID(id)) {
+      // Try cache first for UUID
+      product = await cacheService.getProduct(id);
+      if (!product) {
+        product = await productService.getProductById(id, true);
+        // Cache for 1 hour
+        await cacheService.setProduct(id, product);
+      }
+    } else {
+      // It's a slug - get by slug first, then try cache with actual ID
+      const basicProduct = await productService.getProductBySlug(id);
+      product = await cacheService.getProduct(basicProduct.id);
+      if (!product) {
+        product = await productService.getProductById(basicProduct.id, true);
+        await cacheService.setProduct(basicProduct.id, product);
+      }
+    }
     
     // Track view (async, don't wait)
-    viewService.trackProductView(id, viewerId).catch(console.error);
+    viewService.trackProductView(product.id, viewerId).catch(console.error);
     
     return successResponse(res, {
       data: serializeProduct(product),
@@ -135,6 +165,9 @@ async function updateProduct(req, res, next) {
     
     const product = await productService.updateProduct(id, shopId, updateData);
     
+    // Invalidate cache
+    await cacheService.invalidateProduct(id);
+    
     return successResponse(res, {
       message: 'Product updated successfully',
       data: serializeProduct(product),
@@ -154,6 +187,9 @@ async function deleteProduct(req, res, next) {
     const shopId = await getShopIdFromUser(req);
     
     await productService.deleteProduct(id, shopId);
+    
+    // Invalidate cache
+    await cacheService.invalidateProduct(id);
     
     return successResponse(res, {
       message: 'Product deleted successfully',
@@ -563,7 +599,7 @@ async function uploadTempImages(req, res, next) {
 // ============================================
 
 /**
- * Get categories
+ * Get categories (with Redis caching)
  * GET /api/categories
  */
 async function getCategories(req, res, next) {
@@ -572,9 +608,19 @@ async function getCategories(req, res, next) {
     
     let categories;
     if (tree === 'true') {
-      categories = await categoryService.getCategoryTree();
+      // Try cache first for category tree
+      categories = await cacheService.getCategoryTree();
+      if (!categories) {
+        categories = await categoryService.getCategoryTree();
+        await cacheService.setCategoryTree(categories);
+      }
     } else {
-      categories = await categoryService.getAllCategories({ is_active: true });
+      // Try cache first for category list
+      categories = await cacheService.getCategoryList();
+      if (!categories) {
+        categories = await categoryService.getAllCategories({ is_active: true });
+        await cacheService.setCategoryList(categories);
+      }
     }
     
     return successResponse(res, { data: categories });
@@ -606,6 +652,9 @@ async function createCategory(req, res, next) {
   try {
     const category = await categoryService.createCategory(req.body);
     
+    // Invalidate category cache
+    await cacheService.invalidateCategories();
+    
     return successResponse(res, {
       message: 'Category created successfully',
       data: category,
@@ -624,6 +673,9 @@ async function updateCategory(req, res, next) {
     const { id } = req.params;
     const category = await categoryService.updateCategory(id, req.body);
     
+    // Invalidate category cache
+    await cacheService.invalidateCategories();
+    
     return successResponse(res, {
       message: 'Category updated successfully',
       data: category,
@@ -641,6 +693,9 @@ async function deleteCategoryHandler(req, res, next) {
   try {
     const { id } = req.params;
     await categoryService.deleteCategory(id);
+    
+    // Invalidate category cache
+    await cacheService.invalidateCategories();
     
     return successResponse(res, {
       message: 'Category deleted successfully',
@@ -759,17 +814,39 @@ async function requestRevision(req, res, next) {
 async function getReviews(req, res, next) {
   try {
     const { id } = req.params;
-    const { page, limit, sort } = req.query;
+    const { page, limit, sort, rating } = req.query;
     
-    const result = await reviewService.getProductReviews(id, {
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
-      sort,
-    });
+    const result = await reviewService.getProductReviews(
+      id,
+      { rating: rating ? parseInt(rating, 10) : undefined }, // filters
+      { // pagination
+        page: page ? parseInt(page, 10) : 1,
+        limit: limit ? parseInt(limit, 10) : 20,
+        sort: sort || 'newest',
+      }
+    );
     
     return successResponse(res, {
       data: result.data,
       pagination: result.pagination,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get review statistics
+ * GET /api/products/:id/reviews/stats
+ */
+async function getReviewStats(req, res, next) {
+  try {
+    const { id } = req.params;
+    
+    const stats = await reviewService.getReviewStatistics(id);
+    
+    return successResponse(res, {
+      data: stats,
     });
   } catch (error) {
     next(error);
@@ -882,6 +959,26 @@ async function removeFromWishlist(req, res, next) {
   }
 }
 
+/**
+ * Get search suggestions (autocomplete)
+ * GET /api/products/suggest?q=xxx
+ */
+async function getSuggestions(req, res, next) {
+  try {
+    const { q, limit = 5 } = req.query;
+    
+    if (!q || q.trim().length < 2) {
+      return successResponse(res, { data: [] });
+    }
+    
+    const suggestions = await searchService.suggest(q.trim(), parseInt(limit));
+    
+    return successResponse(res, { data: suggestions });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   // Products
   createProduct,
@@ -889,6 +986,7 @@ module.exports = {
   updateProduct,
   deleteProduct,
   searchProducts,
+  getSuggestions,
   
   // Variants
   addVariant,
@@ -922,6 +1020,7 @@ module.exports = {
   
   // Reviews
   getReviews,
+  getReviewStats,
   createReview,
   replyToReview,
   

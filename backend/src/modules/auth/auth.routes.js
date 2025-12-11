@@ -21,60 +21,73 @@ const {
   passwordResetSchema,
   refreshTokenSchema,
 } = require('./auth.validator');
+const {
+  loginLimiter,
+  registerLimiter,
+  otpLimiter,
+  passwordResetLimiter,
+} = require('../../shared/middleware/rate-limit.middleware');
 
 /**
  * Public Routes (No authentication required)
  */
 
-// Registration
+// Registration (rate limited: 3/minute)
 router.post(
   '/register/customer',
+  registerLimiter,
   validate(registerCustomerSchema),
   authController.registerCustomer
 );
 
 router.post(
   '/register/partner',
+  registerLimiter,
   validate(registerPartnerSchema),
   authController.registerPartner
 );
 
 router.post(
   '/register/shipper',
+  registerLimiter,
   validate(registerShipperSchema),
   authController.registerShipper
 );
 
-// OTP Verification
+// OTP Verification (rate limited: 3/minute)
 router.post(
   '/verify-otp',
+  otpLimiter,
   validate(otpVerifySchema),
   authController.verifyOTP
 );
 
-// Login
+// Login (rate limited: 5/minute)
 router.post(
   '/login',
+  loginLimiter,
   validate(loginSchema),
   authController.login
 );
 
-// OTP Login
+// OTP Login (rate limited: 3/minute)
 router.post(
   '/login/otp/request',
+  otpLimiter,
   validate(otpRequestSchema),
   authController.requestLoginOTP
 );
 
 router.post(
   '/login/otp/verify',
+  otpLimiter,
   validate(otpLoginSchema),
   authController.loginWithOTP
 );
 
-// OAuth
-router.post('/oauth/google', authController.loginWithGoogle);
-router.post('/oauth/facebook', authController.loginWithFacebook);
+// OAuth (rate limited: 5/minute)
+router.post('/oauth/google', loginLimiter, authController.loginWithGoogle);
+router.post('/oauth/facebook', loginLimiter, authController.loginWithFacebook);
 
 // Token Refresh
 router.post(
@@ -83,15 +96,17 @@ router.post(
   authController.refreshToken
 );
 
-// Password Reset
+// Password Reset (rate limited: 3/5 minutes)
 router.post(
   '/password/reset/request',
+  passwordResetLimiter,
   validate(passwordResetRequestSchema),
   authController.requestPasswordReset
 );
 
 router.post(
   '/password/reset/verify',
+  passwordResetLimiter,
   validate(passwordResetSchema),
   authController.resetPassword
 );

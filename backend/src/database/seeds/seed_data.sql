@@ -186,3 +186,46 @@ INSERT INTO product_variants (product_id, sku, name, attributes, price, quantity
 -- You can add flash_sale table and data here if needed
 
 SELECT 'Seed data inserted successfully!' as status;
+
+
+-- ========================================
+-- 7. DEMO CUSTOMER USER (for reviews)
+-- ========================================
+INSERT INTO users (id, email, phone, role, status, full_name, avatar_url)
+VALUES 
+('u0000001-0000-0000-0000-000000000001', 'customer1@shoppi.com', '+84901111111', 'customer', 'active', 'Nguyễn Văn An', 'https://i.pravatar.cc/150?u=1'),
+('u0000001-0000-0000-0000-000000000002', 'customer2@shoppi.com', '+84902222222', 'customer', 'active', 'Trần Thị Bình', 'https://i.pravatar.cc/150?u=2'),
+('u0000001-0000-0000-0000-000000000003', 'customer3@shoppi.com', '+84903333333', 'customer', 'active', 'Lê Hoàng Cường', 'https://i.pravatar.cc/150?u=3'),
+('u0000001-0000-0000-0000-000000000004', 'customer4@shoppi.com', '+84904444444', 'customer', 'active', 'Phạm Minh Dũng', 'https://i.pravatar.cc/150?u=4'),
+('u0000001-0000-0000-0000-000000000005', 'customer5@shoppi.com', '+84905555555', 'customer', 'active', 'Hoàng Thị Em', 'https://i.pravatar.cc/150?u=5')
+ON CONFLICT (email) DO NOTHING;
+
+-- ========================================
+-- 8. PRODUCT REVIEWS (Vietnamese)
+-- ========================================
+INSERT INTO reviews (id, product_id, user_id, rating, title, content, is_verified_purchase, status, helpful_count, created_at) VALUES
+-- Reviews for MacBook Air M1
+('r0000001-0000-0000-0000-000000000001', 'p0000001-0000-0000-0000-000000000018', 'u0000001-0000-0000-0000-000000000001', 5, 'Sản phẩm tuyệt vời!', 'MacBook Air M1 chạy rất mượt, pin trâu, thiết kế đẹp. Rất hài lòng với sản phẩm này. Giao hàng nhanh, đóng gói cẩn thận.', true, 'active', 45, NOW() - INTERVAL '10 days'),
+('r0000001-0000-0000-0000-000000000002', 'p0000001-0000-0000-0000-000000000018', 'u0000001-0000-0000-0000-000000000002', 5, 'Đáng đồng tiền bát gạo', 'Mua để làm việc văn phòng và code, chạy cực kỳ mượt. Pin dùng được cả ngày không cần sạc. Recommend cho mọi người!', true, 'active', 32, NOW() - INTERVAL '8 days'),
+('r0000001-0000-0000-0000-000000000003', 'p0000001-0000-0000-0000-000000000018', 'u0000001-0000-0000-0000-000000000003', 4, 'Tốt nhưng hơi nóng', 'Máy chạy tốt, nhưng khi render video thì hơi nóng. Nhìn chung vẫn rất ổn với mức giá này.', true, 'active', 18, NOW() - INTERVAL '5 days'),
+
+-- Reviews for Wireless Earbuds Pro
+('r0000001-0000-0000-0000-000000000004', 'p0000001-0000-0000-0000-000000000001', 'u0000001-0000-0000-0000-000000000001', 5, 'Âm thanh cực đỉnh', 'Tai nghe chống ồn tốt, âm bass sâu, treble trong. Đeo cả ngày không đau tai. Rất đáng mua!', true, 'active', 28, NOW() - INTERVAL '15 days'),
+('r0000001-0000-0000-0000-000000000005', 'p0000001-0000-0000-0000-000000000001', 'u0000001-0000-0000-0000-000000000004', 4, 'Tốt trong tầm giá', 'Chất lượng âm thanh ổn, pin khá lâu. Chỉ tiếc là case hơi to.', true, 'active', 12, NOW() - INTERVAL '12 days'),
+
+-- Reviews for Smart Watch Series 7
+('r0000001-0000-0000-0000-000000000006', 'p0000001-0000-0000-0000-000000000002', 'u0000001-0000-0000-0000-000000000002', 5, 'Đồng hồ thông minh đẹp', 'Màn hình sắc nét, đo nhịp tim chính xác. Kết nối điện thoại nhanh. Rất hài lòng!', true, 'active', 35, NOW() - INTERVAL '20 days'),
+('r0000001-0000-0000-0000-000000000007', 'p0000001-0000-0000-0000-000000000002', 'u0000001-0000-0000-0000-000000000005', 5, 'Xứng đáng 5 sao', 'Thiết kế sang trọng, nhiều tính năng hay. Pin dùng được 2 ngày. Shop giao hàng nhanh.', true, 'active', 22, NOW() - INTERVAL '18 days'),
+
+-- Reviews for Denim Jacket
+('r0000001-0000-0000-0000-000000000008', 'p0000001-0000-0000-0000-000000000008', 'u0000001-0000-0000-0000-000000000003', 5, 'Áo đẹp, chất lượng tốt', 'Vải denim dày dặn, form áo đẹp. Mặc rất thoải mái. Sẽ ủng hộ shop tiếp!', true, 'active', 15, NOW() - INTERVAL '7 days'),
+('r0000001-0000-0000-0000-000000000009', 'p0000001-0000-0000-0000-000000000008', 'u0000001-0000-0000-0000-000000000004', 4, 'Đúng như mô tả', 'Áo giống hình, màu đẹp. Giao hàng hơi lâu nhưng chất lượng OK.', true, 'active', 8, NOW() - INTERVAL '3 days'),
+
+-- Reviews for Running Shoes
+('r0000001-0000-0000-0000-000000000010', 'p0000001-0000-0000-0000-000000000009', 'u0000001-0000-0000-0000-000000000001', 5, 'Giày chạy bộ tuyệt vời', 'Đế êm, nhẹ, chạy rất thoải mái. Đã chạy 50km vẫn như mới. Highly recommend!', true, 'active', 42, NOW() - INTERVAL '25 days'),
+('r0000001-0000-0000-0000-000000000011', 'p0000001-0000-0000-0000-000000000009', 'u0000001-0000-0000-0000-000000000005', 4, 'Tốt cho người mới', 'Giày nhẹ, đệm tốt. Phù hợp cho người mới tập chạy như mình.', true, 'active', 19, NOW() - INTERVAL '22 days'),
+
+-- Reviews for Wireless Headphones
+('r0000001-0000-0000-0000-000000000012', 'p0000001-0000-0000-0000-000000000014', 'u0000001-0000-0000-0000-000000000002', 5, 'Chống ồn xuất sắc', 'ANC hoạt động rất tốt, nghe nhạc cực phê. Pin dùng được 30 tiếng. Worth every penny!', true, 'active', 55, NOW() - INTERVAL '30 days'),
+('r0000001-0000-0000-0000-000000000013', 'p0000001-0000-0000-0000-000000000014', 'u0000001-0000-0000-0000-000000000003', 5, 'Đáng mua nhất năm', 'Âm thanh chi tiết, bass mạnh mẽ. Đệm tai mềm, đeo lâu không mỏi. 10/10!', true, 'active', 38, NOW() - INTERVAL '28 days')
+ON CONFLICT (id) DO NOTHING;
