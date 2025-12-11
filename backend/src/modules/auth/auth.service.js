@@ -16,6 +16,8 @@ const {
   ValidationError,
   RateLimitError,
 } = require('../../shared/utils/error.util');
+const smsService = require('../../shared/sms/sms.service');
+const emailService = require('../../shared/email/email.service');
 
 const SALT_ROUNDS = 10;
 
@@ -103,8 +105,12 @@ async function registerCustomer(data) {
     expiresInMinutes: config.otp.expiresInMinutes,
   });
 
-  // TODO: Send OTP via SMS or Email
-  // await sendOTP(identifier, otpCode);
+  // Send OTP via SMS or Email
+  if (phone) {
+    await smsService.sendOTP(phone, otpCode, 'registration');
+  } else if (email) {
+    await emailService.sendOTPEmail(email, otpCode, 'registration');
+  }
 
   return {
     user: serializeUser(user),
@@ -254,8 +260,13 @@ async function requestOTP(identifier, purpose = 'login') {
     max_attempts: config.otp.maxAttempts,
   });
 
-  // TODO: Send OTP via SMS or Email
-  // await sendOTP(identifier, otpCode);
+  // Send OTP via SMS or Email
+  const isPhone = !identifier.includes('@');
+  if (isPhone) {
+    await smsService.sendOTP(identifier, otpCode, purpose);
+  } else {
+    await emailService.sendOTPEmail(identifier, otpCode, purpose);
+  }
 
   return {
     message: 'OTP sent successfully',
@@ -944,12 +955,13 @@ async function requestPasswordReset(identifier) {
     max_attempts: config.otp.maxAttempts,
   });
 
-  // TODO: Send reset code via email or SMS
-  // if (identifier.includes('@')) {
-  //   await sendEmail(identifier, 'Password Reset', `Your reset code: ${otpCode}`);
-  // } else {
-  //   await sendSMS(identifier, `Your reset code: ${otpCode}`);
-  // }
+  // Send reset code via email or SMS
+  const isPhone = !identifier.includes('@');
+  if (isPhone) {
+    await smsService.sendOTP(identifier, otpCode, 'password_reset');
+  } else {
+    await emailService.sendOTPEmail(identifier, otpCode, 'password_reset');
+  }
 
   return {
     success: true,

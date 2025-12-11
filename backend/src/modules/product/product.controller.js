@@ -169,10 +169,11 @@ async function deleteProduct(req, res, next) {
  */
 async function searchProducts(req, res, next) {
   try {
-    const { q, category_id, shop_id, shopId, status, min_price, max_price, min_rating, sort, page, limit } = req.query;
+    const { q, category_id, categoryId, shop_id, shopId, status, min_price, max_price, min_rating, sort, sortBy, sortOrder, page, limit } = req.query;
     
-    // Support both shop_id and shopId query params
+    // Support both snake_case and camelCase query params
     const shopIdFilter = shop_id || shopId;
+    const categoryIdFilter = category_id || categoryId;
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     
@@ -195,25 +196,32 @@ async function searchProducts(req, res, next) {
       });
     }
     
-    // For general search, use Elasticsearch
+    // Use search service (with Elasticsearch or database fallback)
     const result = await searchService.search({
       query: q,
       filters: {
-        category_id,
-        shop_id: shopIdFilter,
-        status: status || 'active', // Default to active for public search
+        category_id: categoryIdFilter,
+        status: status || 'active',
         min_price: min_price ? parseFloat(min_price) : undefined,
         max_price: max_price ? parseFloat(max_price) : undefined,
         min_rating: min_rating ? parseFloat(min_rating) : undefined,
       },
-      sort,
+      sort: sortBy || sort,
       page: pageNum,
       limit: limitNum,
     });
     
+    // Handle both ES response format and database fallback format
+    const pagination = result.pagination || {
+      page: result.page || pageNum,
+      limit: result.limit || limitNum,
+      total: result.count || 0,
+      totalPages: result.totalPages || 0,
+    };
+    
     return successResponse(res, {
       data: result.data.map(serializeProductSummary),
-      pagination: result.pagination,
+      pagination,
     });
   } catch (error) {
     next(error);

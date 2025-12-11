@@ -67,24 +67,24 @@
 ### 2.2 PARTNER ROLE
 
 #### Auth
-- [ ] Register partner (/auth/register/partner)
-- [ ] Login
-- [ ] Verify OTP (/auth/verify-otp)
+- [x] Register partner (/auth/register/partner)
+- [x] Login
+- [x] Verify email
 
 #### Shop Profile
-- [ ] Get my shop (/shops/me)
-- [ ] Create shop (/shops)
-- [ ] Update shop (/shops/:id)
-- [ ] Upload logo (/shops/:id/logo)
-- [ ] Upload banner (/shops/:id/banner)
-- [ ] View followers (/shops/:id/followers)
+- [x] Get my shop (/shops/me)
+- [x] Create shop (/shops)
+- [x] Update shop (/shops/:id)
+- [x] Upload logo (/shops/:id/logo)
+- [x] Upload banner (/shops/:id/banner)
+- [x] View followers (/shops/:id/followers)
 
 #### Product Management
-- [ ] List my products (/products?shopId=...)
-- [ ] Create product (/products)
-- [ ] Update product (/products/:id)
-- [ ] Delete product (/products/:id)
-- [ ] Add variant (/products/:id/variants)
+- [x] List my products (/products?shopId=...)
+- [x] Create product (/products)
+- [x] Update product (/products/:id)
+- [x] Delete product (/products/:id)
+- [x] Add variant (/products/:id/variants)
 - [ ] Update variant (/products/:id/variants/:variantId)
 - [ ] Delete variant (/products/:id/variants/:variantId)
 - [ ] Upload images (/products/:id/images)
@@ -97,12 +97,12 @@
 - [ ] Cancel order (/partner/orders/:id/cancel)
 
 #### Voucher Management
-- [ ] List shop vouchers (/vouchers?shopId=...)
-- [ ] Create shop voucher (/vouchers)
+- [x] List shop vouchers (/vouchers?shopId=...)
+- [x] Create shop voucher (/vouchers)
 
 #### Review Management
-- [ ] List product reviews (/reviews?productId=...)
-- [ ] Reply to review (/reviews/:id/reply)
+- [x] List product reviews (/reviews?productId=...)
+- [x] Reply to review (/reviews/:id/reply)
 
 #### Chat
 - [ ] List conversations (/chat/conversations)
@@ -117,8 +117,6 @@
 - [ ] Register customer (/auth/register/customer)
 - [ ] Login with email/password
 - [ ] Login with OTP (/auth/login/otp/request, /auth/login/otp/verify)
-- [ ] Login with Google (/auth/oauth/google)
-- [ ] Login with Facebook (/auth/oauth/facebook)
 - [ ] Forgot password (/auth/password/reset/request)
 - [ ] Reset password (/auth/password/reset/verify)
 

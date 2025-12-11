@@ -131,18 +131,21 @@ async function search(params = {}) {
 
   // Check if ES is available
   if (!esClient || !(await isAvailable())) {
-    // Fallback: return empty results
-    return {
-      data: [],
-      pagination: {
-        page,
-        limit,
-        total: 0,
-        totalPages: 0,
-      },
-      query: params.query || '',
-      filters: params.filters || {},
-    };
+    // Fallback: use database query
+    console.warn('[Search] Elasticsearch not available, using database fallback');
+    const productRepository = require('../product.repository');
+    return productRepository.searchProducts({
+      query: params.query,
+      categoryId: params.filters?.category_id,
+      status: params.filters?.status || 'active',
+      minPrice: params.filters?.min_price,
+      maxPrice: params.filters?.max_price,
+      minRating: params.filters?.min_rating,
+      sortBy: params.sort,
+      sortOrder: 'desc',
+      page,
+      limit,
+    });
   }
 
   try {
@@ -182,13 +185,21 @@ async function search(params = {}) {
     };
   } catch (error) {
     console.error('Search error:', error.message);
-    return {
-      data: [],
-      pagination: { page, limit, total: 0, totalPages: 0 },
-      query: params.query || '',
-      filters: params.filters || {},
-      error: error.message,
-    };
+    // Fallback to database query on error
+    console.warn('[Search] Elasticsearch error, using database fallback');
+    const productRepository = require('../product.repository');
+    return productRepository.searchProducts({
+      query: params.query,
+      categoryId: params.filters?.category_id,
+      status: params.filters?.status || 'active',
+      minPrice: params.filters?.min_price,
+      maxPrice: params.filters?.max_price,
+      minRating: params.filters?.min_rating,
+      sortBy: params.sort,
+      sortOrder: 'desc',
+      page,
+      limit,
+    });
   }
 }
 

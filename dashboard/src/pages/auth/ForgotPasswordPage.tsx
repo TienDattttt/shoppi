@@ -4,22 +4,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Mail, ArrowLeft, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
+import { authService } from "@/services/auth.service";
 
 export default function ForgotPasswordPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [email, setEmail] = useState("");
     const [isSent, setIsSent] = useState(false);
+    const [error, setError] = useState("");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError("");
 
-        // Simulate API call
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            await authService.requestPasswordReset(email);
             setIsSent(true);
-            toast.success("Reset link sent to your email");
-        }, 1500);
+            toast.success("Mã OTP đã được gửi đến email của bạn");
+        } catch (err: any) {
+            const message = err.response?.data?.error?.message || "Không thể gửi yêu cầu. Vui lòng thử lại.";
+            setError(message);
+            toast.error(message);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -30,20 +38,25 @@ export default function ForgotPasswordPage() {
                         <ShoppingBag className="h-6 w-6 text-primary" />
                     </div>
                     <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
-                        Forgot Password?
+                        Quên mật khẩu?
                     </h2>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                         {isSent
-                            ? "Check your email for the reset link"
-                            : "Enter your email address to reset your password"}
+                            ? "Kiểm tra email để lấy mã OTP"
+                            : "Nhập email hoặc số điện thoại để đặt lại mật khẩu"}
                     </p>
                 </div>
 
                 {!isSent ? (
                     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                        {error && (
+                            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-lg">
+                                {error}
+                            </div>
+                        )}
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Email address
+                                Email hoặc Số điện thoại
                             </label>
                             <div className="mt-1 relative rounded-md shadow-sm">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -51,10 +64,10 @@ export default function ForgotPasswordPage() {
                                 </div>
                                 <Input
                                     id="email"
-                                    type="email"
+                                    type="text"
                                     required
                                     className="pl-10"
-                                    placeholder="admin@example.com"
+                                    placeholder="email@example.com hoặc 0901234567"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                 />
@@ -65,31 +78,36 @@ export default function ForgotPasswordPage() {
                             {isLoading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Sending Link...
+                                    Đang gửi...
                                 </>
                             ) : (
-                                "Send Reset Link"
+                                "Gửi mã OTP"
                             )}
                         </Button>
                     </form>
                 ) : (
                     <div className="mt-8 space-y-6">
                         <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg text-sm text-green-700 dark:text-green-300 text-center">
-                            We have sent a password reset link to <strong>{email}</strong>. Please check your inbox and spam folder.
+                            Mã OTP đã được gửi đến <strong>{email}</strong>. Vui lòng kiểm tra hộp thư đến và thư rác.
                         </div>
+                        <Link to={`/reset-password?identifier=${encodeURIComponent(email)}`}>
+                            <Button className="w-full">
+                                Nhập mã OTP
+                            </Button>
+                        </Link>
                         <Button
                             variant="outline"
                             className="w-full"
                             onClick={() => setIsSent(false)}
                         >
-                            Try another email
+                            Thử email khác
                         </Button>
                     </div>
                 )}
 
                 <div className="mt-6 text-center">
                     <Link to="/login" className="font-medium text-primary hover:text-primary/90 flex items-center justify-center gap-2">
-                        <ArrowLeft className="h-4 w-4" /> Back to Login
+                        <ArrowLeft className="h-4 w-4" /> Quay lại Đăng nhập
                     </Link>
                 </div>
             </div>

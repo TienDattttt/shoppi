@@ -790,12 +790,98 @@ async function reorderImages(productId, imageIds) {
 }
 
 // ============================================
+// SEARCH OPERATIONS
+// ============================================
+
+/**
+ * Search products with filters (database fallback for Elasticsearch)
+ * @param {object} options - Search options
+ * @returns {Promise<{data: object[], count: number, page: number, limit: number, totalPages: number}>}
+ */
+async function searchProducts(options = {}) {
+  const {
+    query,
+    categoryId,
+    status = 'active',
+    minPrice,
+    maxPrice,
+    minRating,
+    sortBy = 'created_at',
+    sortOrder = 'desc',
+    page = 1,
+    limit = 20,
+  } = options;
+
+  let queryBuilder = supabaseAdmin
+    .from('products')
+    .select(`
+      *,
+      images:product_images(id, url, alt_text, sort_order, is_primary)
+    `, { count: 'exact' })
+    .is('deleted_at', null);
+
+  // Status filter
+  if (status) {
+    queryBuilder = queryBuilder.eq('status', status);
+  }
+
+  // Category filter
+  if (categoryId) {
+    queryBuilder = queryBuilder.eq('category_id', categoryId);
+  }
+
+  // Text search
+  if (query && query.trim()) {
+    queryBuilder = queryBuilder.or(`name.ilike.%${query}%,short_description.ilike.%${query}%`);
+  }
+
+  // Price range
+  if (minPrice !== undefined) {
+    queryBuilder = queryBuilder.gte('base_price', minPrice);
+  }
+  if (maxPrice !== undefined) {
+    queryBuilder = queryBuilder.lte('base_price', maxPrice);
+  }
+
+  // Rating filter
+  if (minRating !== undefined) {
+    queryBuilder = queryBuilder.gte('avg_rating', minRating);
+  }
+
+  // Sorting
+  const sortColumn = sortBy === 'total_sold' ? 'total_sold' 
+    : sortBy === 'price' ? 'base_price'
+    : sortBy === 'rating' ? 'avg_rating'
+    : 'created_at';
+  queryBuilder = queryBuilder.order(sortColumn, { ascending: sortOrder === 'asc' });
+
+  // Pagination
+  const from = (page - 1) * limit;
+  queryBuilder = queryBuilder.range(from, from + limit - 1);
+
+  const { data, error, count } = await queryBuilder;
+
+  if (error) {
+    throw new Error(`Failed to search products: ${error.message}`);
+  }
+
+  return {
+    data: data || [],
+    count: count || 0,
+    page,
+    limit,
+    totalPages: Math.ceil((count || 0) / limit),
+  };
+}
+
+// ============================================
 // EXPORTS
 // ============================================
 
 module.exports = {
   // Product operations
   createProduct,
+  searchProducts,
   findProductById,
   findPendingProducts,
   findProductByIdWithRelations,
