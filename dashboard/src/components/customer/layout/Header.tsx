@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShoppingCart, Menu, User, LogOut, Settings, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/authStore";
+import { useCartStore } from "@/store/cartStore";
 import { LoginModal } from "../auth/LoginModal";
 import { RegisterModal } from "../auth/RegisterModal";
 import { ForgotPasswordModal } from "../auth/ForgotPasswordModal";
@@ -24,16 +25,24 @@ export function Header() {
     const navigate = useNavigate();
 
     // Auth State
-    const { user, logout } = useAuthStore();
+    const { user, token, logout } = useAuthStore();
     const isAuthenticated = !!user;
+
+    // Cart State
+    const { items, fetchCart } = useCartStore();
+    const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+    // Fetch cart when user logs in
+    useEffect(() => {
+        if (token) {
+            fetchCart();
+        }
+    }, [token, fetchCart]);
 
     // Modal State
     const [showLogin, setShowLogin] = useState(false);
     const [showRegister, setShowRegister] = useState(false);
     const [showForgot, setShowForgot] = useState(false);
-
-    // Mock store values for now
-    const cartItemCount = 2;
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">

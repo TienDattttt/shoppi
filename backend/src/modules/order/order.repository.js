@@ -22,6 +22,12 @@ function generateOrderNumber() {
 async function createOrder(orderData) {
   const orderNumber = generateOrderNumber();
   
+  // Check if shippingAddressId is a valid UUID, otherwise set to null
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const shippingAddressId = orderData.shippingAddressId && isValidUUID.test(orderData.shippingAddressId) 
+    ? orderData.shippingAddressId 
+    : null;
+  
   const { data, error } = await supabase
     .from('orders')
     .insert({
@@ -34,7 +40,7 @@ async function createOrder(orderData) {
       status: 'pending_payment',
       payment_method: orderData.paymentMethod,
       payment_status: 'pending',
-      shipping_address_id: orderData.shippingAddressId,
+      shipping_address_id: shippingAddressId,
       shipping_name: orderData.shippingName,
       shipping_phone: orderData.shippingPhone,
       shipping_address: orderData.shippingAddress,
@@ -412,6 +418,56 @@ async function findOrderItemsBySubOrderId(subOrderId) {
   return data || [];
 }
 
+/**
+ * Find order items by order ID (across all sub-orders)
+ */
+async function findOrderItemsByOrderId(orderId) {
+  // First get all sub-orders for this order
+  const { data: subOrders, error: subOrderError } = await supabase
+    .from('sub_orders')
+    .select('id')
+    .eq('order_id', orderId);
+  
+  if (subOrderError) throw subOrderError;
+  if (!subOrders || subOrders.length === 0) return [];
+  
+  const subOrderIds = subOrders.map(so => so.id);
+  
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('*')
+    .in('sub_order_id', subOrderIds);
+  
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Update order
+ */
+async function updateOrder(orderId, updateData) {
+  // Convert camelCase to snake_case for database
+  const dbData = {};
+  if (updateData.paymentMethod !== undefined) dbData.payment_method = updateData.paymentMethod;
+  if (updateData.payment_method !== undefined) dbData.payment_method = updateData.payment_method;
+  if (updateData.paymentProviderOrderId !== undefined) dbData.payment_provider_order_id = updateData.paymentProviderOrderId;
+  if (updateData.payment_provider_order_id !== undefined) dbData.payment_provider_order_id = updateData.payment_provider_order_id;
+  if (updateData.paymentProviderTransactionId !== undefined) dbData.payment_provider_transaction_id = updateData.paymentProviderTransactionId;
+  if (updateData.payment_provider_transaction_id !== undefined) dbData.payment_provider_transaction_id = updateData.payment_provider_transaction_id;
+  
+  dbData.updated_at = new Date().toISOString();
+  
+  const { data, error } = await supabase
+    .from('orders')
+    .update(dbData)
+    .eq('id', orderId)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
 module.exports = {
   // Order
   generateOrderNumber,
@@ -435,4 +491,8 @@ module.exports = {
   // OrderItem
   createOrderItems,
   findOrderItemsBySubOrderId,
+  findOrderItemsByOrderId,
+  
+  // Update
+  updateOrder,
 };

@@ -230,19 +230,69 @@ async function cancelOrder(orderId, userId, reason) {
     throw new AppError('ORDER_CANNOT_CANCEL', 'Cannot cancel order that is already shipping', 400);
   }
   
+  // Check if order was paid - need to process refund
+  const needsRefund = order.payment_status === 'paid' && order.payment_method !== 'cod';
+  
   // Cancel order and release stock
   const updatedOrder = await orderRepository.cancelOrder(orderId, reason);
+  
+  // Process refund if order was paid
+  if (needsRefund) {
+    try {
+      await processRefundForCancelledOrder(order);
+      console.log(`[OrderService] Refund initiated for cancelled order ${orderId}`);
+    } catch (refundError) {
+      console.error(`[OrderService] Refund failed for order ${orderId}:`, refundError.message);
+      // Don't throw - order is already cancelled, refund can be processed manually
+    }
+  }
   
   // Add tracking event
   for (const subOrder of subOrders) {
     await trackingService.addTrackingEvent(subOrder.id, {
       eventType: 'cancelled',
-      description: `Order cancelled by customer: ${reason}`,
+      description: `Order cancelled by customer: ${reason}${needsRefund ? ' - Refund initiated' : ''}`,
       createdBy: userId,
     });
   }
   
-  return orderDTO.serializeOrder(updatedOrder);
+  // Publish ORDER_CANCELLED event
+  try {
+    await rabbitmq.publishOrderEvent('cancelled', {
+      orderId,
+      userId,
+      reason,
+      needsRefund,
+      grandTotal: order.grand_total,
+      paymentMethod: order.payment_method,
+      cancelledAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Failed to publish ORDER_CANCELLED event:', error.message);
+  }
+  
+  return orderDTO.serializeOrder(await orderRepository.findOrderById(orderId));
+}
+
+/**
+ * Process refund for cancelled order
+ */
+async function processRefundForCancelledOrder(order) {
+  const paymentService = require('./services/payment.service');
+  
+  // For MoMo, VNPay, ZaloPay - initiate refund via provider
+  if (['momo', 'vnpay', 'zalopay'].includes(order.payment_method)) {
+    const result = await paymentService.processRefund(order.id, order.grand_total);
+    
+    if (result.status === 'completed' || result.status === 'processing') {
+      await orderRepository.updatePaymentStatus(order.id, 'refunded');
+      await orderRepository.updateOrderStatus(order.id, ORDER_STATUS.REFUNDED);
+    }
+    
+    return result;
+  }
+  
+  return { status: 'not_applicable', message: 'No refund needed for this payment method' };
 }
 
 /**

@@ -326,6 +326,75 @@ async function validateVoucher(req, res) {
   }
 }
 
+/**
+ * Get available vouchers for checkout
+ */
+async function getAvailableVouchers(req, res) {
+  try {
+    const userId = req.user.userId;
+    const { orderTotal, shopId } = req.query;
+    const vouchers = await voucherService.getAvailableVouchers(userId, parseFloat(orderTotal) || 0, shopId);
+    return successResponse(res, vouchers, 'Available vouchers retrieved');
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get platform vouchers (for săn voucher page)
+ */
+async function getPlatformVouchers(req, res) {
+  try {
+    const userId = req.user?.userId;
+    const vouchers = await voucherService.getPlatformVouchers(userId);
+    return successResponse(res, vouchers, 'Platform vouchers retrieved');
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get shop vouchers
+ */
+async function getShopVouchers(req, res) {
+  try {
+    const userId = req.user?.userId;
+    const { shopId } = req.params;
+    const vouchers = await voucherService.getShopVouchers(shopId, userId);
+    return successResponse(res, vouchers, 'Shop vouchers retrieved');
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Collect voucher to wallet
+ */
+async function collectVoucher(req, res) {
+  try {
+    const userId = req.user.userId;
+    const { code } = req.body;
+    const result = await voucherService.collectVoucher(userId, code);
+    return successResponse(res, result, 'Voucher collected');
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get user's collected vouchers (voucher wallet)
+ */
+async function getMyVouchers(req, res) {
+  try {
+    const userId = req.user.userId;
+    const { status } = req.query;
+    const vouchers = await voucherService.getMyVouchers(userId, status || 'all');
+    return successResponse(res, vouchers, 'My vouchers retrieved');
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 module.exports = {
   // Cart
   getCart,
@@ -358,4 +427,9 @@ module.exports = {
   
   // Voucher
   validateVoucher,
+  getAvailableVouchers,
+  getPlatformVouchers,
+  getShopVouchers,
+  collectVoucher,
+  getMyVouchers,
 };

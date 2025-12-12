@@ -148,7 +148,7 @@ async function vnpayReturn(req, res) {
     const result = await handleVNPayReturn(req.query);
     
     // Redirect to frontend with result
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const redirectUrl = result.success
       ? `${frontendUrl}/payment/success?orderId=${result.orderId}`
       : `${frontendUrl}/payment/failed?orderId=${result.orderId}&error=${encodeURIComponent(result.errorMessage || 'Payment failed')}`;
@@ -156,7 +156,7 @@ async function vnpayReturn(req, res) {
     return res.redirect(redirectUrl);
   } catch (error) {
     console.error('[Payment] VNPay return error:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     return res.redirect(`${frontendUrl}/payment/failed?error=${encodeURIComponent(error.message)}`);
   }
 }
@@ -200,7 +200,7 @@ async function zalopayReturn(req, res) {
     const { status, apptransid } = req.query;
     const orderId = apptransid ? apptransid.split('_')[1] : null;
     
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const redirectUrl = status === '1'
       ? `${frontendUrl}/payment/success?orderId=${orderId}`
       : `${frontendUrl}/payment/failed?orderId=${orderId}`;
@@ -208,7 +208,61 @@ async function zalopayReturn(req, res) {
     return res.redirect(redirectUrl);
   } catch (error) {
     console.error('[Payment] ZaloPay return error:', error);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return res.redirect(`${frontendUrl}/payment/failed?error=${encodeURIComponent(error.message)}`);
+  }
+}
+
+/**
+ * MoMo return URL handler (user redirected back from MoMo)
+ * GET /payments/callback/momo
+ */
+async function momoReturn(req, res) {
+  try {
+    const { orderId, resultCode, message, transId } = req.query;
+    
+    console.log('[Payment] MoMo return:', { orderId, resultCode, message, transId });
+    
+    // Extract original order ID (remove timestamp suffix)
+    const originalOrderId = orderId ? orderId.split('_')[0] : null;
+    
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    
+    // resultCode 0 = success
+    if (resultCode === '0' && originalOrderId) {
+      // Update payment status in database (since webhook may not reach localhost)
+      try {
+        await orderRepository.updatePaymentStatus(originalOrderId, 'paid');
+        
+        // Update sub-orders to pending
+        const subOrders = await orderRepository.findSubOrdersByOrderId(originalOrderId);
+        for (const subOrder of subOrders) {
+          await orderRepository.updateSubOrderStatus(subOrder.id, 'pending');
+        }
+        
+        console.log('[Payment] MoMo payment success, updated order:', originalOrderId);
+      } catch (updateError) {
+        console.error('[Payment] Failed to update payment status:', updateError.message);
+      }
+      
+      return res.redirect(`${frontendUrl}/payment/success?orderId=${originalOrderId}`);
+    } else {
+      // Payment failed - update status
+      if (originalOrderId) {
+        try {
+          await orderRepository.updatePaymentStatus(originalOrderId, 'failed');
+          await orderRepository.updateOrderStatus(originalOrderId, 'payment_failed');
+        } catch (updateError) {
+          console.error('[Payment] Failed to update failed status:', updateError.message);
+        }
+      }
+      
+      const errorMsg = message || 'Payment failed';
+      return res.redirect(`${frontendUrl}/payment/failed?orderId=${originalOrderId}&error=${encodeURIComponent(errorMsg)}`);
+    }
+  } catch (error) {
+    console.error('[Payment] MoMo return error:', error);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     return res.redirect(`${frontendUrl}/payment/failed?error=${encodeURIComponent(error.message)}`);
   }
 }
@@ -260,6 +314,7 @@ module.exports = {
   createPaymentSession,
   getPaymentStatus,
   momoWebhook,
+  momoReturn,
   vnpayReturn,
   vnpayWebhook,
   zalopayWebhook,

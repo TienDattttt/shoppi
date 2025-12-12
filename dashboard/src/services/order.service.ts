@@ -1,273 +1,158 @@
 import api from "./api";
 
-// Order status constants
-export const ORDER_STATUS = {
-    PENDING_PAYMENT: 'pending_payment',
-    PAYMENT_FAILED: 'payment_failed',
-    CONFIRMED: 'confirmed',
-    COMPLETED: 'completed',
-    CANCELLED: 'cancelled',
-    REFUNDED: 'refunded',
-} as const;
+// Order status types
+export type OrderStatus = 'pending_payment' | 'payment_failed' | 'confirmed' | 'completed' | 'cancelled' | 'refunded';
+export type SubOrderStatus = 'pending' | 'confirmed' | 'processing' | 'ready_to_ship' | 'shipping' | 'delivered' | 'completed' | 'cancelled' | 'return_requested' | 'return_approved' | 'returned' | 'refunded';
 
-// SubOrder status constants
-export const SUB_ORDER_STATUS = {
-    PENDING: 'pending',
-    CONFIRMED: 'confirmed',
-    PROCESSING: 'processing',
-    READY_TO_SHIP: 'ready_to_ship',
-    SHIPPING: 'shipping',
-    DELIVERED: 'delivered',
-    COMPLETED: 'completed',
-    CANCELLED: 'cancelled',
-    RETURN_REQUESTED: 'return_requested',
-    RETURN_APPROVED: 'return_approved',
-    RETURNED: 'returned',
-    REFUNDED: 'refunded',
-} as const;
-
-export interface Order {
+export interface OrderItem {
     id: string;
-    user_id: string;
-    status: keyof typeof ORDER_STATUS;
-    payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
-    payment_method: string;
-    subtotal: number;
-    discount_amount: number;
-    shipping_fee: number;
-    total_amount: number;
-    shipping_address: {
-        fullName: string;
-        phone: string;
-        address: string;
-        city: string;
-        district: string;
-        ward: string;
-    };
-    voucher_id: string | null;
-    notes: string | null;
-    created_at: string;
-    updated_at: string;
-    // Relations
-    sub_orders?: SubOrder[];
-    user?: { id: string; full_name: string; phone: string };
+    productId: string;
+    variantId: string;
+    productName: string;
+    variantName: string | null;
+    sku: string | null;
+    unitPrice: number;
+    quantity: number;
+    totalPrice: number;
+    imageUrl: string | null;
 }
 
 export interface SubOrder {
     id: string;
-    order_id: string;
-    shop_id: string;
-    shipper_id: string | null;
-    status: keyof typeof SUB_ORDER_STATUS;
+    orderId: string;
+    shopId: string;
     subtotal: number;
-    shipping_fee: number;
-    total_amount: number;
-    shipped_at: string | null;
-    delivered_at: string | null;
-    created_at: string;
-    // Relations
-    items?: OrderItem[];
-    shop?: { id: string; shop_name: string };
-    tracking_events?: TrackingEvent[];
+    shippingFee: number;
+    discount: number;
+    total: number;
+    status: SubOrderStatus;
+    trackingNumber: string | null;
+    shipperId: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+    items: OrderItem[];
+    order?: {
+        orderNumber: string;
+        shippingName: string;
+        shippingPhone: string;
+        shippingAddress: string;
+        paymentMethod: string;
+        paymentStatus: string;
+    };
 }
 
-export interface OrderItem {
+export interface Order {
     id: string;
-    sub_order_id: string;
-    product_id: string;
-    variant_id: string;
-    product_name: string;
-    variant_name: string | null;
-    product_image: string | null;
-    unit_price: number;
-    quantity: number;
-    total_price: number;
-}
-
-export interface TrackingEvent {
-    id: string;
-    sub_order_id: string;
-    event_type: string;
-    description: string;
-    location: string | null;
-    created_by: string;
-    created_at: string;
-}
-
-export interface CartItem {
-    id: string;
-    cart_id: string;
-    product_id: string;
-    variant_id: string;
-    quantity: number;
-    // Relations
-    product?: { id: string; name: string; base_price: number };
-    variant?: { id: string; name: string; price: number; quantity: number };
+    orderNumber: string;
+    userId: string;
+    subtotal: number;
+    shippingTotal: number;
+    discountTotal: number;
+    grandTotal: number;
+    status: OrderStatus;
+    paymentMethod: string;
+    paymentStatus: string;
+    paidAt: string | null;
+    shippingName: string;
+    shippingPhone: string;
+    shippingAddress: string;
+    customerNote: string | null;
+    cancelReason: string | null;
+    createdAt: string;
+    updatedAt: string;
+    completedAt: string | null;
+    cancelledAt: string | null;
+    subOrders: SubOrder[];
 }
 
 export interface CheckoutData {
-    items: Array<{ variantId: string; quantity: number }>;
-    shippingAddress: {
-        fullName: string;
-        phone: string;
-        address: string;
-        city: string;
-        district: string;
-        ward: string;
-    };
+    cartItemIds: string[];
+    shippingAddressId: string;
     paymentMethod: 'cod' | 'momo' | 'vnpay' | 'zalopay';
-    voucherId?: string;
-    notes?: string;
+    platformVoucherCode?: string;
+    shopVouchers?: Record<string, string>;
+    customerNote?: string;
+}
+
+export interface CheckoutResponse {
+    order: Order;
+    payment: {
+        paymentId?: string;
+        payUrl?: string;
+        provider?: string;
+        expiresAt?: string;
+    } | null;
+}
+
+export interface PaymentSession {
+    paymentId: string;
+    payUrl: string;
+    provider: string;
+    expiresAt: string;
 }
 
 export const orderService = {
-    // ============================================
-    // CART OPERATIONS (Customer)
-    // ============================================
-
-    // Get cart
-    getCart: async () => {
-        const response = await api.get("/cart");
-        return response.data;
-    },
-
-    // Add to cart
-    addToCart: async (variantId: string, quantity: number) => {
-        const response = await api.post("/cart/items", { variantId, quantity });
-        return response.data;
-    },
-
-    // Update cart item
-    updateCartItem: async (itemId: string, quantity: number) => {
-        const response = await api.put(`/cart/items/${itemId}`, { quantity });
-        return response.data;
-    },
-
-    // Remove from cart
-    removeFromCart: async (itemId: string) => {
-        const response = await api.delete(`/cart/items/${itemId}`);
-        return response.data;
-    },
-
-    // ============================================
-    // ORDER OPERATIONS (Customer)
-    // ============================================
-
-    // Checkout
-    checkout: async (data: CheckoutData) => {
+    // Checkout - create order
+    checkout: async (data: CheckoutData): Promise<CheckoutResponse> => {
         const response = await api.post("/orders/checkout", data);
         return response.data;
     },
 
-    // Get customer orders
-    getOrders: async (params?: { status?: string; page?: number; limit?: number }) => {
+    // Get user's orders
+    getOrders: async (params?: {
+        status?: string;
+        page?: number;
+        limit?: number;
+    }): Promise<{ orders: Order[]; pagination: any }> => {
         const response = await api.get("/orders", { params });
         return response.data;
     },
 
     // Get order by ID
-    getOrderById: async (id: string) => {
-        const response = await api.get(`/orders/${id}`);
+    getOrderById: async (orderId: string): Promise<Order> => {
+        const response = await api.get(`/orders/${orderId}`);
         return response.data;
     },
 
     // Cancel order
-    cancelOrder: async (id: string, reason: string) => {
-        const response = await api.post(`/orders/${id}/cancel`, { reason });
+    cancelOrder: async (orderId: string, reason: string): Promise<Order> => {
+        const response = await api.post(`/orders/${orderId}/cancel`, { reason });
         return response.data;
     },
 
     // Confirm receipt
-    confirmReceipt: async (id: string) => {
-        const response = await api.post(`/orders/${id}/confirm-receipt`);
+    confirmReceipt: async (orderId: string): Promise<Order> => {
+        const response = await api.post(`/orders/${orderId}/confirm-receipt`);
         return response.data;
     },
 
     // Request return
-    requestReturn: async (id: string, reason: string) => {
-        const response = await api.post(`/orders/${id}/return`, { reason });
+    requestReturn: async (orderId: string, data: {
+        reason: string;
+        description?: string;
+        images?: string[];
+    }): Promise<any> => {
+        const response = await api.post(`/orders/${orderId}/return`, data);
         return response.data;
     },
 
-    // ============================================
-    // PARTNER ORDER OPERATIONS
-    // ============================================
-
-    // Get partner orders (alias: getShopOrders)
-    getPartnerOrders: async (params?: { status?: string; page?: number; limit?: number }) => {
-        const response = await api.get("/partner/orders", { params });
+    // Create payment session
+    createPaymentSession: async (orderId: string, provider: string, returnUrl?: string): Promise<PaymentSession> => {
+        const response = await api.post("/payments/create-session", {
+            orderId,
+            provider,
+            returnUrl,
+        });
         return response.data;
     },
 
-    // Alias for getPartnerOrders
-    getShopOrders: async (params?: { status?: string; page?: number; limit?: number }) => {
-        const response = await api.get("/partner/orders", { params });
-        return response.data;
-    },
-
-    // Confirm order
-    confirmOrder: async (subOrderId: string) => {
-        const response = await api.post(`/partner/orders/${subOrderId}/confirm`);
-        return response.data;
-    },
-
-    // Pack order
-    packOrder: async (subOrderId: string) => {
-        const response = await api.post(`/partner/orders/${subOrderId}/pack`);
-        return response.data;
-    },
-
-    // Cancel by partner
-    cancelByPartner: async (subOrderId: string, reason: string) => {
-        const response = await api.post(`/partner/orders/${subOrderId}/cancel`, { reason });
-        return response.data;
-    },
-
-    // ============================================
-    // SHIPPER ORDER OPERATIONS
-    // ============================================
-
-    // Pickup order
-    pickupOrder: async (subOrderId: string) => {
-        const response = await api.post(`/shipper/orders/${subOrderId}/pickup`);
-        return response.data;
-    },
-
-    // Deliver order
-    deliverOrder: async (subOrderId: string, proofOfDelivery?: string) => {
-        const response = await api.post(`/shipper/orders/${subOrderId}/deliver`, { proofOfDelivery });
-        return response.data;
-    },
-
-    // Fail delivery
-    failDelivery: async (subOrderId: string, reason: string) => {
-        const response = await api.post(`/shipper/orders/${subOrderId}/fail`, { reason });
-        return response.data;
-    },
-
-    // ============================================
-    // VOUCHER OPERATIONS
-    // ============================================
-
-    // Validate voucher
-    validateVoucher: async (code: string, orderTotal: number) => {
-        const response = await api.get("/vouchers/validate", { params: { code, orderTotal } });
-        return response.data;
-    },
-
-    // ============================================
-    // ADMIN ORDER OPERATIONS
-    // ============================================
-
-    // Get all orders (Admin)
-    getAllOrders: async (params?: { status?: string; page?: number; limit?: number; startDate?: string; endDate?: string }) => {
-        const response = await api.get("/admin/orders", { params });
-        return response.data;
-    },
-
-    // Get order by ID (Admin)
-    getAdminOrderById: async (id: string) => {
-        const response = await api.get(`/admin/orders/${id}`);
+    // Get payment status
+    getPaymentStatus: async (orderId: string): Promise<{
+        orderId: string;
+        paymentStatus: string;
+        paymentMethod?: string;
+    }> => {
+        const response = await api.get(`/payments/${orderId}/status`);
         return response.data;
     },
 };

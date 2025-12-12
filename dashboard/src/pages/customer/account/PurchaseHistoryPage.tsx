@@ -1,63 +1,94 @@
-import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OrderCard, type Order } from "@/components/customer/order/OrderCard";
+import { useState, useEffect } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OrderCard } from "@/components/customer/order/OrderCard";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
+import { orderService, type Order } from "@/services/order.service";
 
-const MOCK_ORDERS: Order[] = [
-    {
-        id: "ORD-001",
-        shopId: "shop1",
-        shopName: "Official Store VN",
-        status: "Completed",
-        items: [
-            {
-                id: "p1",
-                name: "Wireless Headphones Bluetooth 5.0",
-                image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-                variant: "Black",
-                price: 450000,
-                quantity: 1
-            }
-        ],
-        total: 480000
-    },
-    {
-        id: "ORD-002",
-        shopId: "shop2",
-        shopName: "Fashion Hub",
-        status: "To Receive",
-        items: [
-            {
-                id: "p2",
-                name: "Cotton T-Shirt Basic",
-                image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-                variant: "L, White",
-                price: 120000,
-                quantity: 2
-            },
-            {
-                id: "p3",
-                name: "Denim Jeans Slim Fit",
-                image: "https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-                variant: "32, Blue",
-                price: 350000,
-                quantity: 1
-            }
-        ],
-        total: 620000
-    }
-];
+// Map backend status to display status
+function getDisplayStatus(order: Order): string {
+    if (order.status === 'pending_payment') return 'To Pay';
+    if (order.status === 'payment_failed') return 'Payment Failed';
+    if (order.status === 'cancelled') return 'Cancelled';
+    if (order.status === 'completed') return 'Completed';
+    if (order.status === 'refunded') return 'Refunded';
+    
+    // Check sub-orders for more specific status
+    const subOrders = order.subOrders || [];
+    if (subOrders.some(so => so.status === 'shipping')) return 'To Receive';
+    if (subOrders.some(so => so.status === 'ready_to_ship')) return 'To Ship';
+    if (subOrders.some(so => so.status === 'delivered')) return 'To Receive';
+    if (subOrders.some(so => so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing')) return 'To Ship';
+    
+    return 'Processing';
+}
+
+// Transform Order to OrderCard format
+function transformOrder(order: Order) {
+    const items = order.subOrders?.flatMap(so => 
+        so.items.map(item => ({
+            id: item.id,
+            name: item.productName,
+            image: item.imageUrl || 'https://placehold.co/100x100?text=Product',
+            variant: item.variantName || undefined,
+            price: item.unitPrice,
+            quantity: item.quantity,
+        }))
+    ) || [];
+
+    return {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        shopId: order.subOrders?.[0]?.shopId || '',
+        shopName: 'Shop', // TODO: Get shop name from API
+        status: getDisplayStatus(order),
+        items,
+        total: order.grandTotal,
+        createdAt: order.createdAt,
+    };
+}
 
 export default function PurchaseHistoryPage() {
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
 
-    const filteredOrders = MOCK_ORDERS.filter(order => {
-        const matchesSearch = order.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase())) || order.shopName.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === "All" || order.status === statusFilter;
+    useEffect(() => {
+        fetchOrders();
+    }, []);
+
+    const fetchOrders = async () => {
+        setLoading(true);
+        try {
+            const result = await orderService.getOrders({ limit: 50 });
+            setOrders(result.orders);
+        } catch (error) {
+            console.error("Failed to fetch orders:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filteredOrders = orders.filter(order => {
+        const transformed = transformOrder(order);
+        const matchesSearch = 
+            transformed.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const displayStatus = getDisplayStatus(order);
+        const matchesStatus = statusFilter === "All" || displayStatus === statusFilter;
+        
         return matchesSearch && matchesStatus;
     });
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-shopee-orange" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -70,7 +101,12 @@ export default function PurchaseHistoryPage() {
                                 value={status}
                                 className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-shopee-orange data-[state=active]:text-shopee-orange pb-3 pt-3"
                             >
-                                {status}
+                                {status === 'All' ? 'Tất cả' : 
+                                 status === 'To Pay' ? 'Chờ thanh toán' :
+                                 status === 'To Ship' ? 'Chờ giao hàng' :
+                                 status === 'To Receive' ? 'Đang giao' :
+                                 status === 'Completed' ? 'Hoàn thành' :
+                                 'Đã hủy'}
                             </TabsTrigger>
                         ))}
                     </TabsList>
@@ -79,7 +115,7 @@ export default function PurchaseHistoryPage() {
                 <div className="mt-4 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
-                        placeholder="Search by Shop name, Order ID or Product name"
+                        placeholder="Tìm kiếm theo mã đơn hàng hoặc tên sản phẩm"
                         className="pl-9 bg-gray-50 border-none"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -90,14 +126,14 @@ export default function PurchaseHistoryPage() {
             <div className="space-y-4">
                 {filteredOrders.length > 0 ? (
                     filteredOrders.map(order => (
-                        <OrderCard key={order.id} order={order} />
+                        <OrderCard key={order.id} order={transformOrder(order)} />
                     ))
                 ) : (
                     <div className="bg-white p-12 flex flex-col items-center justify-center text-gray-500 min-h-[400px]">
                         <div className="h-24 w-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                             <span className="text-4xl">📄</span>
                         </div>
-                        <p>No orders found</p>
+                        <p>Chưa có đơn hàng nào</p>
                     </div>
                 )}
             </div>

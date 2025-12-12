@@ -77,6 +77,7 @@ async function createOrder(userId, checkoutData) {
     });
     
     // Create order items
+    // Note: product_variants uses 'price' and 'compare_at_price' (not 'sale_price')
     const orderItems = shopItems.map(item => ({
       subOrderId: subOrder.id,
       productId: item.product_id,
@@ -84,9 +85,9 @@ async function createOrder(userId, checkoutData) {
       productName: item.products?.name || 'Unknown Product',
       variantName: item.product_variants?.name || null,
       sku: item.product_variants?.sku || null,
-      unitPrice: item.product_variants?.sale_price || item.product_variants?.price || 0,
+      unitPrice: item.product_variants?.price || 0,
       quantity: item.quantity,
-      totalPrice: (item.product_variants?.sale_price || item.product_variants?.price || 0) * item.quantity,
+      totalPrice: (item.product_variants?.price || 0) * item.quantity,
       imageUrl: item.product_variants?.image_url || item.products?.thumbnail_url || null,
     }));
     
@@ -161,9 +162,12 @@ async function validateStockAvailability(items) {
         `Product variant not found for item`, 400);
     }
     
-    if (variant.stock_quantity < item.quantity) {
+    // Database uses 'quantity' column (not 'stock_quantity')
+    const availableStock = variant.quantity || 0;
+    
+    if (availableStock < item.quantity) {
       throw new AppError('INSUFFICIENT_STOCK', 
-        `Insufficient stock for ${item.products?.name || 'item'}. Available: ${variant.stock_quantity}`, 400);
+        `Insufficient stock for ${item.products?.name || 'item'}. Available: ${availableStock}`, 400);
     }
   }
 }
@@ -179,13 +183,15 @@ async function calculateOrderTotals(itemsByShop, shippingAddressId, platformVouc
   
   for (const [shopId, items] of Object.entries(itemsByShop)) {
     // Calculate shop subtotal
+    // Note: product_variants uses 'price' column (not 'sale_price')
     const shopSubtotal = items.reduce((sum, item) => {
-      const price = item.product_variants?.sale_price || item.product_variants?.price || 0;
+      const price = item.product_variants?.price || 0;
       return sum + (parseFloat(price) * item.quantity);
     }, 0);
     
     // Calculate shipping fee
-    const shippingFee = await shippingService.calculateShippingFee(shopId, shippingAddressId, items);
+    const shippingResult = await shippingService.calculateShippingFee(shopId, shippingAddressId, items);
+    const shippingFee = shippingResult.fee || 0;
     
     // Calculate shop discount
     let shopDiscount = 0;
@@ -243,14 +249,27 @@ async function reserveStock(items) {
 
 /**
  * Get shipping address details
+ * For now, we use mock data. In production, this would fetch from user_addresses table.
  */
 async function getShippingAddress(addressId) {
-  // Would fetch from user addresses table
-  // Placeholder
-  return {
-    name: 'Customer Name',
+  // Mock addresses - in production, fetch from database
+  const mockAddresses = {
+    'addr-1': {
+      name: 'Nguyễn Văn A',
+      phone: '0912345678',
+      fullAddress: 'Số 1, Đại Cồ Việt, Hai Bà Trưng, Hà Nội',
+    },
+    'addr-2': {
+      name: 'Nguyễn Văn A',
+      phone: '0987654321',
+      fullAddress: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
+    },
+  };
+  
+  return mockAddresses[addressId] || {
+    name: 'Khách hàng',
     phone: '0123456789',
-    fullAddress: '123 Street, District, City',
+    fullAddress: 'Địa chỉ giao hàng',
   };
 }
 

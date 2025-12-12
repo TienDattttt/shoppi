@@ -268,9 +268,16 @@ async function getVariantWithStock(variantId) {
  * Find cart items by IDs
  */
 async function findCartItemsByIds(itemIds, userId) {
+  console.log('[CartRepo] findCartItemsByIds called with:', { itemIds, userId });
+  
   // First get user's cart
   const cart = await findCartByUserId(userId);
-  if (!cart) return [];
+  if (!cart) {
+    console.log('[CartRepo] No cart found for user');
+    return [];
+  }
+  
+  console.log('[CartRepo] Found cart:', cart.id);
   
   const { data: cartItems, error } = await supabase
     .from('cart_items')
@@ -278,7 +285,13 @@ async function findCartItemsByIds(itemIds, userId) {
     .eq('cart_id', cart.id)
     .in('id', itemIds);
   
-  if (error) throw error;
+  if (error) {
+    console.error('[CartRepo] Error fetching cart items:', error);
+    throw error;
+  }
+  
+  console.log('[CartRepo] Found cart items:', cartItems?.length, cartItems);
+  
   if (!cartItems || cartItems.length === 0) return [];
   
   // Get unique product and variant IDs
@@ -297,10 +310,18 @@ async function findCartItemsByIds(itemIds, userId) {
   }
   
   // Fetch variants
-  const { data: variants } = await supabase
+  console.log('[CartRepo] Fetching variants for IDs:', variantIds);
+  
+  const { data: variants, error: variantError } = await supabase
     .from('product_variants')
-    .select('id, name, sku, price, compare_at_price, quantity, image_url, weight, attributes')
+    .select('id, name, sku, price, compare_at_price, quantity, image_url, attributes')
     .in('id', variantIds);
+  
+  if (variantError) {
+    console.error('[CartRepo] Error fetching variants:', variantError);
+  }
+  
+  console.log('[CartRepo] Found variants:', variants?.length, variants);
   
   const variantMap = {};
   for (const v of variants || []) {
@@ -320,9 +341,17 @@ async function findCartItemsByIds(itemIds, userId) {
   }
   
   // Combine data
-  return cartItems.map(item => {
+  const result = cartItems.map(item => {
     const product = productMap[item.product_id];
     const variant = variantMap[item.variant_id];
+    
+    console.log('[CartRepo] Mapping item:', {
+      itemId: item.id,
+      productId: item.product_id,
+      variantId: item.variant_id,
+      hasProduct: !!product,
+      hasVariant: !!variant,
+    });
     
     return {
       ...item,
@@ -330,6 +359,9 @@ async function findCartItemsByIds(itemIds, userId) {
       product_variants: variant || null,
     };
   });
+  
+  console.log('[CartRepo] Final result count:', result.length);
+  return result;
 }
 
 /**

@@ -74,4 +74,10 @@ router.get('/callback/vnpay', paymentController.vnpayReturn);
  */
 router.get('/callback/zalopay', paymentController.zalopayReturn);
 
+/**
+ * MoMo return URL (user redirected back from MoMo)
+ * GET /payments/callback/momo
+ */
+router.get('/callback/momo', paymentController.momoReturn);
+
 module.exports = router;

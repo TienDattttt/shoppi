@@ -20,6 +20,118 @@ async function findVoucherByCode(code) {
 }
 
 /**
+ * Get platform vouchers (public, for săn voucher page)
+ */
+async function getPlatformVouchers() {
+  const now = new Date().toISOString();
+  
+  const { data, error } = await supabase
+    .from('vouchers')
+    .select('*')
+    .eq('type', 'platform')
+    .eq('is_active', true)
+    .lte('start_date', now)
+    .gte('end_date', now)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get shop vouchers
+ */
+async function getShopVouchers(shopId) {
+  const now = new Date().toISOString();
+  
+  const { data, error } = await supabase
+    .from('vouchers')
+    .select('*')
+    .eq('type', 'shop')
+    .eq('shop_id', shopId)
+    .eq('is_active', true)
+    .lte('start_date', now)
+    .gte('end_date', now)
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Check if user has collected a voucher
+ */
+async function hasUserCollectedVoucher(userId, voucherId) {
+  const { count, error } = await supabase
+    .from('user_vouchers')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('voucher_id', voucherId);
+  
+  if (error) throw error;
+  return count > 0;
+}
+
+/**
+ * Collect voucher for user
+ */
+async function collectVoucher(userId, voucherId) {
+  const { data, error } = await supabase
+    .from('user_vouchers')
+    .insert({
+      user_id: userId,
+      voucher_id: voucherId,
+    })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get user's collected vouchers
+ */
+async function getUserVouchers(userId, status = 'all') {
+  const now = new Date().toISOString();
+  
+  let query = supabase
+    .from('user_vouchers')
+    .select(`
+      id,
+      collected_at,
+      voucher:vouchers(*)
+    `)
+    .eq('user_id', userId);
+  
+  const { data, error } = await query.order('collected_at', { ascending: false });
+  
+  if (error) throw error;
+  
+  // Filter by status
+  let vouchers = (data || []).map(uv => ({
+    ...uv.voucher,
+    collectedAt: uv.collected_at,
+  })).filter(v => v !== null);
+  
+  if (status === 'active') {
+    vouchers = vouchers.filter(v => 
+      v.is_active && 
+      new Date(v.end_date) >= new Date(now) &&
+      (!v.usage_limit || v.used_count < v.usage_limit)
+    );
+  } else if (status === 'expired') {
+    vouchers = vouchers.filter(v => 
+      !v.is_active || 
+      new Date(v.end_date) < new Date(now) ||
+      (v.usage_limit && v.used_count >= v.usage_limit)
+    );
+  }
+  
+  return vouchers;
+}
+
+/**
  * Find voucher by ID
  */
 async function findVoucherById(voucherId) {
@@ -195,4 +307,9 @@ module.exports = {
   getOrderVoucherUsages,
   findAvailableVouchers,
   createVoucher,
+  getPlatformVouchers,
+  getShopVouchers,
+  hasUserCollectedVoucher,
+  collectVoucher,
+  getUserVouchers,
 };

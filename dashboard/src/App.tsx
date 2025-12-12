@@ -64,6 +64,7 @@ const CategoryPage = lazy(() => import("@/pages/customer/CategoryPage"));
 const ProductDetailPageCustomer = lazy(() => import("@/pages/customer/ProductDetailPage"));
 const CartPage = lazy(() => import("@/pages/customer/CartPage"));
 const CheckoutPage = lazy(() => import("@/pages/customer/CheckoutPage"));
+const PaymentResultPage = lazy(() => import("@/pages/customer/PaymentResultPage"));
 const ProfilePage = lazy(() => import("@/pages/customer/account/ProfilePage"));
 const AddressBookPage = lazy(() => import("@/pages/customer/account/AddressBookPage"));
 const ChangePasswordPage = lazy(() => import("@/pages/customer/account/ChangePasswordPage"));
@@ -72,6 +73,7 @@ const OrderDetailPageCustomer = lazy(() => import("@/pages/customer/account/Orde
 const NotificationsPageCustomer = lazy(() => import("@/pages/customer/account/NotificationsPage"));
 const VoucherWalletPage = lazy(() => import("@/pages/customer/account/VoucherWalletPage"));
 const FollowedShopsPage = lazy(() => import("@/pages/customer/account/FollowedShopsPage"));
+const VoucherHuntPage = lazy(() => import("@/pages/customer/VoucherHuntPage"));
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: ('admin' | 'partner')[] }) => {
   const user = useAuthStore((state) => state.user);
@@ -109,6 +111,9 @@ function App() {
             <Route path="/categories/:slug" element={<CategoryPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/vouchers" element={<VoucherHuntPage />} />
+            <Route path="/payment/success" element={<PaymentResultPage />} />
+            <Route path="/payment/failed" element={<PaymentResultPage />} />
 
             {/* User Account Routes */}
             <Route path="/user" element={<AccountLayout />}>

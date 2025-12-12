@@ -11,6 +11,7 @@ const PAYMENT_METHODS = {
   COD: 'cod',
   VNPAY: 'vnpay',
   MOMO: 'momo',
+  ZALOPAY: 'zalopay',
   WALLET: 'wallet',
 };
 
@@ -31,6 +32,8 @@ async function initiatePayment(orderId, method) {
       return createVNPayPayment(order);
     case PAYMENT_METHODS.MOMO:
       return createMoMoPayment(order);
+    case PAYMENT_METHODS.ZALOPAY:
+      return createZaloPayPayment(order);
     case PAYMENT_METHODS.WALLET:
       return handleWalletPayment(order);
     default:
@@ -62,60 +65,84 @@ async function handleCODPayment(order) {
  * Create VNPay payment URL
  */
 async function createVNPayPayment(order) {
-  // VNPay integration placeholder
-  const vnpayUrl = generateVNPayUrl(order);
+  const VNPayProvider = require('./payment/providers/vnpay.provider');
+  const vnpayProvider = new VNPayProvider();
   
-  return {
-    method: PAYMENT_METHODS.VNPAY,
-    status: 'pending',
-    paymentUrl: vnpayUrl,
-    message: 'Redirect to VNPay to complete payment',
-  };
-}
-
-
-/**
- * Generate VNPay payment URL
- */
-function generateVNPayUrl(order) {
-  // VNPay URL generation placeholder
-  // Would use VNPay SDK/API
-  const baseUrl = process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
-  const params = new URLSearchParams({
-    vnp_Version: '2.1.0',
-    vnp_Command: 'pay',
-    vnp_TmnCode: process.env.VNPAY_TMN_CODE || 'DEMO',
-    vnp_Amount: Math.round(order.grand_total * 100),
-    vnp_OrderInfo: `Payment for order ${order.order_number}`,
-    vnp_TxnRef: order.id,
-    vnp_ReturnUrl: `${process.env.APP_URL}/api/payments/callback/vnpay`,
-  });
-  
-  return `${baseUrl}?${params.toString()}`;
+  try {
+    const result = await vnpayProvider.createPayment({
+      id: order.id,
+      orderNumber: order.order_number,
+      amount: order.grand_total,
+      currency: 'VND',
+      description: `Thanh toán đơn hàng ${order.order_number}`,
+    });
+    
+    return {
+      paymentId: result.paymentId,
+      payUrl: result.payUrl,
+      provider: 'vnpay',
+      expiresAt: result.expiresAt,
+    };
+  } catch (error) {
+    console.error('[Payment] VNPay payment creation failed:', error.message);
+    throw new AppError('PAYMENT_FAILED', 'Failed to create VNPay payment: ' + error.message, 500);
+  }
 }
 
 /**
  * Create MoMo payment
  */
 async function createMoMoPayment(order) {
-  // MoMo integration placeholder
-  const momoUrl = generateMoMoUrl(order);
+  const MoMoProvider = require('./payment/providers/momo.provider');
+  const momoProvider = new MoMoProvider();
   
-  return {
-    method: PAYMENT_METHODS.MOMO,
-    status: 'pending',
-    paymentUrl: momoUrl,
-    message: 'Redirect to MoMo to complete payment',
-  };
+  try {
+    const result = await momoProvider.createPayment({
+      id: order.id,
+      orderNumber: order.order_number,
+      amount: order.grand_total,
+      currency: 'VND',
+      description: `Thanh toán đơn hàng ${order.order_number}`,
+    });
+    
+    return {
+      paymentId: result.paymentId,
+      payUrl: result.payUrl,
+      provider: 'momo',
+      expiresAt: result.expiresAt,
+    };
+  } catch (error) {
+    console.error('[Payment] MoMo payment creation failed:', error.message);
+    throw new AppError('PAYMENT_FAILED', 'Failed to create MoMo payment: ' + error.message, 500);
+  }
 }
 
 /**
- * Generate MoMo payment URL
+ * Create ZaloPay payment
  */
-function generateMoMoUrl(order) {
-  // MoMo URL generation placeholder
-  const baseUrl = process.env.MOMO_URL || 'https://test-payment.momo.vn/v2/gateway/api/create';
-  return `${baseUrl}?orderId=${order.id}`;
+async function createZaloPayPayment(order) {
+  const ZaloPayProvider = require('./payment/providers/zalopay.provider');
+  const zalopayProvider = new ZaloPayProvider();
+  
+  try {
+    const result = await zalopayProvider.createPayment({
+      id: order.id,
+      orderNumber: order.order_number,
+      amount: order.grand_total,
+      currency: 'VND',
+      description: `Thanh toán đơn hàng ${order.order_number}`,
+    });
+    
+    return {
+      paymentId: result.paymentId,
+      payUrl: result.payUrl,
+      provider: 'zalopay',
+      expiresAt: result.expiresAt,
+    };
+  } catch (error) {
+    console.error('[Payment] ZaloPay payment creation failed:', error.message);
+    throw new AppError('PAYMENT_FAILED', 'Failed to create ZaloPay payment: ' + error.message, 500);
+  }
 }
 
 /**

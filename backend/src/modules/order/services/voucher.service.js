@@ -129,10 +129,101 @@ async function getAvailableVouchers(userId, orderTotal, shopId = null) {
   }));
 }
 
+/**
+ * Get platform vouchers (public)
+ */
+async function getPlatformVouchers(userId = null) {
+  const vouchers = await voucherRepository.getPlatformVouchers();
+  
+  // If user is logged in, check which vouchers they've collected
+  const result = [];
+  for (const voucher of vouchers) {
+    const serialized = orderDTO.serializeVoucher(voucher);
+    if (userId) {
+      serialized.isCollected = await voucherRepository.hasUserCollectedVoucher(userId, voucher.id);
+    }
+    result.push(serialized);
+  }
+  
+  return result;
+}
+
+/**
+ * Get shop vouchers
+ */
+async function getShopVouchers(shopId, userId = null) {
+  const vouchers = await voucherRepository.getShopVouchers(shopId);
+  
+  const result = [];
+  for (const voucher of vouchers) {
+    const serialized = orderDTO.serializeVoucher(voucher);
+    if (userId) {
+      serialized.isCollected = await voucherRepository.hasUserCollectedVoucher(userId, voucher.id);
+    }
+    result.push(serialized);
+  }
+  
+  return result;
+}
+
+/**
+ * Collect voucher to user's wallet
+ */
+async function collectVoucher(userId, code) {
+  const voucher = await voucherRepository.findVoucherByCode(code);
+  
+  if (!voucher) {
+    throw new AppError('VOUCHER_INVALID', 'Mã voucher không tồn tại', 400);
+  }
+  
+  // Check if voucher is active
+  if (!voucher.is_active) {
+    throw new AppError('VOUCHER_INVALID', 'Voucher không còn hoạt động', 400);
+  }
+  
+  // Check date validity
+  const now = new Date();
+  if (new Date(voucher.start_date) > now) {
+    throw new AppError('VOUCHER_INVALID', 'Voucher chưa có hiệu lực', 400);
+  }
+  
+  if (new Date(voucher.end_date) < now) {
+    throw new AppError('VOUCHER_EXPIRED', 'Voucher đã hết hạn', 400);
+  }
+  
+  // Check if already collected
+  const alreadyCollected = await voucherRepository.hasUserCollectedVoucher(userId, voucher.id);
+  if (alreadyCollected) {
+    throw new AppError('VOUCHER_ALREADY_COLLECTED', 'Bạn đã lưu voucher này rồi', 400);
+  }
+  
+  // Check usage limit
+  if (voucher.usage_limit && voucher.used_count >= voucher.usage_limit) {
+    throw new AppError('VOUCHER_USAGE_LIMIT', 'Voucher đã hết lượt sử dụng', 400);
+  }
+  
+  await voucherRepository.collectVoucher(userId, voucher.id);
+  
+  return { success: true, message: 'Lưu voucher thành công' };
+}
+
+/**
+ * Get user's collected vouchers (voucher wallet)
+ */
+async function getMyVouchers(userId, status = 'all') {
+  const vouchers = await voucherRepository.getUserVouchers(userId, status);
+  
+  return vouchers.map(voucher => orderDTO.serializeVoucher(voucher));
+}
+
 module.exports = {
   validateVoucher,
   calculateDiscount,
   applyVoucher,
   restoreVoucher,
   getAvailableVouchers,
+  getPlatformVouchers,
+  getShopVouchers,
+  collectVoucher,
+  getMyVouchers,
 };

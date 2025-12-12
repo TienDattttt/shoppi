@@ -58,8 +58,15 @@ const paymentRouter = require('./payment.routes');
 // Voucher Router
 const voucherRouter = express.Router();
 
-voucherRouter.use(authenticate);
-voucherRouter.get('/validate', orderController.validateVoucher);
+// Public routes (optional auth for checking collected status)
+voucherRouter.get('/platform', authenticate, orderController.getPlatformVouchers);
+voucherRouter.get('/shop/:shopId', authenticate, orderController.getShopVouchers);
+
+// Protected routes
+voucherRouter.get('/validate', authenticate, orderController.validateVoucher);
+voucherRouter.get('/available', authenticate, orderController.getAvailableVouchers);
+voucherRouter.get('/my-vouchers', authenticate, orderController.getMyVouchers);
+voucherRouter.post('/collect', authenticate, orderController.collectVoucher);
 
 module.exports = {
   cartRouter,

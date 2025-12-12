@@ -59,8 +59,9 @@ async function calculateShippingFee(shopId, addressId, items) {
   }
   
   // Calculate subtotal for free shipping check
+  // Note: product_variants uses 'price' column (not 'sale_price')
   const subtotal = items.reduce((sum, item) => {
-    const price = item.product_variants?.sale_price || item.product_variants?.price || 0;
+    const price = item.product_variants?.price || 0;
     return sum + (parseFloat(price) * item.quantity);
   }, 0);
   

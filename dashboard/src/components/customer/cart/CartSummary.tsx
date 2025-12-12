@@ -1,12 +1,33 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCartStore } from "@/store/cartStore";
+import { useAuthStore } from "@/store/authStore";
 import { formatCurrency } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function CartSummary() {
+    const navigate = useNavigate();
     const { items, toggleAllSelection, selectedItemsCount, subtotal, total, discountAmount } = useCartStore();
+    const { token } = useAuthStore();
 
     const allSelected = items.length > 0 && items.every(i => i.selected);
+    const selectedCount = selectedItemsCount();
+
+    const handleCheckout = () => {
+        if (!token) {
+            toast.error("Vui lòng đăng nhập để thanh toán");
+            navigate("/login");
+            return;
+        }
+
+        if (selectedCount === 0) {
+            toast.error("Vui lòng chọn ít nhất một sản phẩm");
+            return;
+        }
+
+        navigate("/checkout");
+    };
 
     return (
         <div className="sticky bottom-0 bg-white border-t py-4 px-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col md:flex-row items-center justify-between gap-4 z-40">
@@ -24,7 +45,7 @@ export function CartSummary() {
             <div className="flex items-center gap-6 w-full md:w-auto justify-end">
                 <div className="flex flex-col items-end text-sm">
                     <div className="flex items-center gap-2">
-                        <span>Tổng thanh toán ({selectedItemsCount()} sản phẩm):</span>
+                        <span>Tổng thanh toán ({selectedCount} sản phẩm):</span>
                         <span className="text-xl font-medium text-shopee-orange">{formatCurrency(total())}</span>
                     </div>
                     {discountAmount > 0 && (
@@ -33,7 +54,11 @@ export function CartSummary() {
                         </div>
                     )}
                 </div>
-                <Button className="bg-shopee-orange hover:bg-shopee-orange-hover text-white px-10 h-10 w-full md:w-auto">
+                <Button 
+                    className="bg-shopee-orange hover:bg-shopee-orange-hover text-white px-10 h-10 w-full md:w-auto"
+                    onClick={handleCheckout}
+                    disabled={selectedCount === 0}
+                >
                     Mua hàng
                 </Button>
             </div>
