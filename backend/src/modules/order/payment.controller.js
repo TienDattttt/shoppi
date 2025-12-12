@@ -77,7 +77,7 @@ async function createPaymentSession(req, res) {
       payUrl: result.payUrl,
       provider: result.provider,
       expiresAt: result.expiresAt,
-    }, 'Payment session created');
+    });
   } catch (error) {
     console.error('[Payment] Create session error:', error);
     return sendError(res, error.message, error.statusCode || 500);
@@ -214,6 +214,94 @@ async function zalopayReturn(req, res) {
 }
 
 /**
+ * Confirm payment status (called by frontend after redirect from payment gateway)
+ * POST /payments/:orderId/confirm
+ * Used when webhook doesn't reach localhost (sandbox environment)
+ */
+async function confirmPayment(req, res) {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await orderRepository.findOrderById(orderId);
+    if (!order) {
+      return sendBadRequest(res, 'Order not found');
+    }
+    
+    // Already paid, no need to confirm
+    if (order.payment_status === 'paid') {
+      return sendSuccess(res, {
+        orderId,
+        paymentStatus: 'paid',
+        message: 'Payment already confirmed',
+      });
+    }
+    
+    // Check if we have provider order ID to query
+    if (!order.payment_provider_order_id || !order.payment_method) {
+      return sendBadRequest(res, 'No payment session found for this order');
+    }
+    
+    const provider = providers[order.payment_method];
+    if (!provider) {
+      return sendBadRequest(res, 'Payment provider not supported');
+    }
+    
+    // Query payment status from provider
+    try {
+      const status = await provider.getStatus(orderId, order.payment_provider_order_id);
+      console.log('[Payment] Provider status:', status);
+      
+      if (status.success || status.status === 'paid') {
+        // Update payment status in database
+        await orderRepository.updatePaymentStatus(orderId, 'paid');
+        
+        // Update sub-orders to pending
+        const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+        for (const subOrder of subOrders) {
+          await orderRepository.updateSubOrderStatus(subOrder.id, 'pending');
+        }
+        
+        console.log('[Payment] Payment confirmed via provider query:', orderId);
+        
+        return sendSuccess(res, {
+          orderId,
+          paymentStatus: 'paid',
+          providerTransactionId: status.providerTransactionId,
+          message: 'Payment confirmed successfully',
+        });
+      } else if (status.status === 'pending') {
+        return sendSuccess(res, {
+          orderId,
+          paymentStatus: 'pending',
+          message: 'Payment is still processing',
+        });
+      } else {
+        // Payment failed
+        await orderRepository.updatePaymentStatus(orderId, 'failed');
+        await orderRepository.updateOrderStatus(orderId, 'payment_failed');
+        
+        return sendSuccess(res, {
+          orderId,
+          paymentStatus: 'failed',
+          errorMessage: status.errorMessage,
+        });
+      }
+    } catch (providerError) {
+      console.error('[Payment] Provider query error:', providerError.message);
+      // Return current status from database
+      return sendSuccess(res, {
+        orderId,
+        paymentStatus: order.payment_status,
+        message: 'Could not verify with provider, returning local status',
+      });
+    }
+  } catch (error) {
+    console.error('[Payment] Confirm payment error:', error);
+    return sendError(res, error.message, error.statusCode || 500);
+  }
+}
+
+/**
  * MoMo return URL handler (user redirected back from MoMo)
  * GET /payments/callback/momo
  */
@@ -303,7 +391,7 @@ async function processRefund(req, res) {
       await orderRepository.updatePaymentStatus(orderId, 'refunded');
     }
 
-    return sendSuccess(res, result, result.success ? 'Refund processed' : 'Refund failed');
+    return sendSuccess(res, result);
   } catch (error) {
     console.error('[Payment] Refund error:', error);
     return sendError(res, error.message, error.statusCode || 500);
@@ -319,5 +407,6 @@ module.exports = {
   vnpayWebhook,
   zalopayWebhook,
   zalopayReturn,
+  confirmPayment,
   processRefund,
 };

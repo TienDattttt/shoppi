@@ -70,6 +70,7 @@ export interface CheckoutData {
     shippingAddressId: string;
     paymentMethod: 'cod' | 'momo' | 'vnpay' | 'zalopay';
     platformVoucherCode?: string;
+    voucherCode?: string; // Alias for platformVoucherCode
     shopVouchers?: Record<string, string>;
     customerNote?: string;
 }
@@ -153,6 +154,18 @@ export const orderService = {
         paymentMethod?: string;
     }> => {
         const response = await api.get(`/payments/${orderId}/status`);
+        return response.data;
+    },
+
+    // Confirm payment (call after redirect from payment gateway)
+    confirmPayment: async (orderId: string): Promise<{
+        orderId: string;
+        paymentStatus: string;
+        providerTransactionId?: string;
+        errorMessage?: string;
+        message?: string;
+    }> => {
+        const response = await api.post(`/payments/${orderId}/confirm`);
         return response.data;
     },
 };

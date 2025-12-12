@@ -141,7 +141,12 @@ async function createZaloPayPayment(order) {
     };
   } catch (error) {
     console.error('[Payment] ZaloPay payment creation failed:', error.message);
-    throw new AppError('PAYMENT_FAILED', 'Failed to create ZaloPay payment: ' + error.message, 500);
+    // Return null instead of throwing - order is created, user can retry payment
+    return {
+      provider: 'zalopay',
+      status: 'failed',
+      error: 'ZaloPay không khả dụng. Vui lòng thử phương thức thanh toán khác.',
+    };
   }
 }
 

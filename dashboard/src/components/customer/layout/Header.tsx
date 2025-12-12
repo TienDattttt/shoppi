@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Menu, User, LogOut, Settings, Package } from "lucide-react";
+import { ShoppingCart, Menu, User, LogOut, Settings, Package, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/authStore";
@@ -103,33 +103,39 @@ export function Header() {
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="rounded-full">
                                         <Avatar className="h-8 w-8">
-                                            <AvatarImage src={user.avatar || "https://github.com/shadcn.png"} />
-                                            <AvatarFallback>{user.name?.charAt(0) || 'U'}</AvatarFallback>
+                                            <AvatarImage src={user.avatarUrl || "https://github.com/shadcn.png"} />
+                                            <AvatarFallback>{user.fullName?.charAt(0) || 'U'}</AvatarFallback>
                                         </Avatar>
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                                    <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => navigate('/user/profile')}>
-                                        <User className="mr-2 h-4 w-4" /> Profile
+                                        <User className="mr-2 h-4 w-4" /> Hồ sơ
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => navigate('/user/purchase')}>
-                                        <Package className="mr-2 h-4 w-4" /> My Orders
+                                        <Package className="mr-2 h-4 w-4" /> Đơn hàng
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => navigate('/user/voucher-wallet')}>
+                                        <Ticket className="mr-2 h-4 w-4" /> Ví voucher
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => navigate('/vouchers')}>
+                                        <Ticket className="mr-2 h-4 w-4" /> Săn voucher
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => navigate('/user/account/password')}>
-                                        <Settings className="mr-2 h-4 w-4" /> Change Password
+                                        <Settings className="mr-2 h-4 w-4" /> Đổi mật khẩu
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive" onClick={() => logout()}>
-                                        <LogOut className="mr-2 h-4 w-4" /> Log out
+                                        <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         ) : (
                             <div className="flex items-center gap-2 text-sm font-medium">
-                                <Button variant="ghost" onClick={() => setShowLogin(true)}>Login</Button>
-                                <Button onClick={() => setShowRegister(true)}>Register</Button>
+                                <Button variant="ghost" onClick={() => setShowLogin(true)}>Đăng nhập</Button>
+                                <Button onClick={() => setShowRegister(true)}>Đăng ký</Button>
                             </div>
                         )}
                     </div>

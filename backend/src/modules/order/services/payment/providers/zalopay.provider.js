@@ -61,13 +61,16 @@ class ZaloPayProvider extends BasePaymentProvider {
 
   /**
    * Generate app_trans_id
+   * Format: yyMMdd_xxxxxx (max 40 chars, no special chars except underscore)
    * @param {string} orderId - Order ID
    * @returns {string}
    */
   generateAppTransId(orderId) {
     const date = this.formatDate(new Date());
-    const random = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-    return `${date}_${orderId}_${random}`;
+    // Use timestamp + random to ensure uniqueness (ZaloPay doesn't allow UUID format)
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `${date}_${timestamp}${random}`;
   }
 
   /**
@@ -86,26 +89,25 @@ class ZaloPayProvider extends BasePaymentProvider {
     const description = this.buildOrderInfo(order);
     const callbackUrl = options.callbackUrl || this.getNotifyUrl('zalopay');
 
-    // Embed data for callback
+    // Frontend return URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const returnUrl = `${frontendUrl}/payment/success?orderId=${order.id}`;
+
+    // Embed data for callback - must include redirecturl for ZaloPay to redirect after payment
     const embedData = JSON.stringify({
-      redirecturl: options.returnUrl || this.getReturnUrl('zalopay'),
+      redirecturl: returnUrl,
       orderId: order.id,
     });
 
-    // Item data (required by ZaloPay)
-    const items = JSON.stringify(options.items || []);
+    // Item data (required by ZaloPay) - empty array is fine
+    const items = JSON.stringify([]);
 
-    // Build mac string
-    const macData = [
-      this.appId,
-      appTransId,
-      order.userId || 'anonymous',
-      amount,
-      appTime,
-      embedData,
-      items,
-    ].join('|');
-
+    // Build mac string - MUST follow exact order per ZaloPay docs
+    // Format: app_id|app_trans_id|app_user|amount|app_time|embed_data|item
+    const macData = `${this.appId}|${appTransId}|${order.userId || 'anonymous'}|${amount}|${appTime}|${embedData}|${items}`;
+    
+    console.log('[ZaloPay] MAC data:', macData);
+    
     const mac = this.generateHmacSha256(macData, this.key1);
 
     const requestBody = {
@@ -123,6 +125,9 @@ class ZaloPayProvider extends BasePaymentProvider {
     };
 
     try {
+      console.log('[ZaloPay] Request URL:', `${this.baseUrl}/create`);
+      console.log('[ZaloPay] Request body:', requestBody);
+      
       const response = await this.makeRequest(`${this.baseUrl}/create`, {
         method: 'POST',
         headers: {
@@ -131,10 +136,12 @@ class ZaloPayProvider extends BasePaymentProvider {
         body: new URLSearchParams(requestBody).toString(),
       });
 
+      console.log('[ZaloPay] Response:', response);
+
       if (response.return_code !== ZALOPAY_RETURN_CODES.SUCCESS) {
         throw new AppError(
           PAYMENT_ERRORS.PROVIDER_ERROR.code,
-          response.return_message || 'ZaloPay payment creation failed',
+          response.return_message || response.sub_return_message || 'ZaloPay payment creation failed',
           400
         );
       }

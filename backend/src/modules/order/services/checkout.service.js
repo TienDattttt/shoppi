@@ -22,9 +22,13 @@ async function createOrder(userId, checkoutData) {
     shippingAddressId,
     paymentMethod,
     platformVoucherCode,
+    voucherCode, // Alias for platformVoucherCode
     shopVouchers,
     customerNote,
   } = checkoutData;
+  
+  // Use voucherCode as alias for platformVoucherCode
+  const effectiveVoucherCode = platformVoucherCode || voucherCode;
   
   // Get cart items
   const cartItems = await cartRepository.findCartItemsByIds(cartItemIds, userId);
@@ -41,7 +45,7 @@ async function createOrder(userId, checkoutData) {
   
   // Calculate totals
   const { subtotal, shippingTotal, discountTotal, grandTotal, shopTotals } = 
-    await calculateOrderTotals(itemsByShop, shippingAddressId, platformVoucherCode, shopVouchers, userId);
+    await calculateOrderTotals(itemsByShop, shippingAddressId, effectiveVoucherCode, shopVouchers, userId);
   
   // Get shipping address details
   const shippingAddress = await getShippingAddress(shippingAddressId);
@@ -248,11 +252,27 @@ async function reserveStock(items) {
 }
 
 /**
- * Get shipping address details
- * For now, we use mock data. In production, this would fetch from user_addresses table.
+ * Get shipping address details from database
  */
 async function getShippingAddress(addressId) {
-  // Mock addresses - in production, fetch from database
+  const { supabaseAdmin } = require('../../../shared/supabase/supabase.client');
+  
+  // Try to fetch from database
+  const { data, error } = await supabaseAdmin
+    .from('user_addresses')
+    .select('*')
+    .eq('id', addressId)
+    .single();
+  
+  if (data) {
+    return {
+      name: data.name,
+      phone: data.phone,
+      fullAddress: data.full_address || data.address_line,
+    };
+  }
+  
+  // Fallback for legacy mock IDs
   const mockAddresses = {
     'addr-1': {
       name: 'Nguyễn Văn A',

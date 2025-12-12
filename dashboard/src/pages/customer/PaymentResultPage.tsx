@@ -17,18 +17,28 @@ export default function PaymentResultPage() {
 
     useEffect(() => {
         if (orderId) {
-            checkPaymentStatus();
+            confirmAndCheckPayment();
         } else {
             setLoading(false);
         }
     }, [orderId]);
 
-    const checkPaymentStatus = async () => {
+    const confirmAndCheckPayment = async () => {
         try {
-            const result = await orderService.getPaymentStatus(orderId!);
-            setPaymentStatus(result.paymentStatus);
+            // First, try to confirm payment with provider (for sandbox where webhook doesn't work)
+            // This will query the payment provider and update status if paid
+            const confirmResult = await orderService.confirmPayment(orderId!);
+            console.log("Payment confirm result:", confirmResult);
+            setPaymentStatus(confirmResult.paymentStatus);
         } catch (error) {
-            console.error("Failed to check payment status:", error);
+            console.error("Failed to confirm payment:", error);
+            // Fallback to just checking status
+            try {
+                const result = await orderService.getPaymentStatus(orderId!);
+                setPaymentStatus(result.paymentStatus);
+            } catch (statusError) {
+                console.error("Failed to check payment status:", statusError);
+            }
         } finally {
             setLoading(false);
         }

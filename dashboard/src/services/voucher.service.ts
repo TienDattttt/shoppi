@@ -17,6 +17,7 @@ export interface Voucher {
     isActive: boolean;
     createdAt: string;
     estimatedDiscount?: number;
+    isCollected?: boolean;
 }
 
 export interface ValidateVoucherResponse {

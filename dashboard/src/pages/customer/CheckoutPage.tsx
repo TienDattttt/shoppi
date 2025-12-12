@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AddressSection } from "../../components/customer/checkout/AddressSection";
-import { ShippingSection } from "../../components/customer/checkout/ShippingSection";
-import { PaymentSection } from "../../components/customer/checkout/PaymentSection";
+import { AddressSection } from "@/components/customer/checkout/AddressSection";
+import { ShippingSection } from "@/components/customer/checkout/ShippingSection";
+import { PaymentSection } from "@/components/customer/checkout/PaymentSection";
+import { VoucherSection } from "@/components/customer/checkout/VoucherSection";
 import { useCartStore } from "@/store/cartStore";
 import { useAuthStore } from "@/store/authStore";
 import { orderService } from "@/services/order.service";
@@ -13,13 +14,18 @@ import { Tickets, Loader2 } from "lucide-react";
 
 export default function CheckoutPage() {
     const navigate = useNavigate();
-    const { items, total, discountAmount, subtotal, clearLocalCart, fetchCart } = useCartStore();
+    const { items, subtotal, fetchCart } = useCartStore();
     const { token } = useAuthStore();
     
     const [loading, setLoading] = useState(false);
     const [selectedAddressId, setSelectedAddressId] = useState<string>("");
     const [paymentMethod, setPaymentMethod] = useState<'cod' | 'momo' | 'vnpay' | 'zalopay'>('cod');
     const [customerNote, setCustomerNote] = useState("");
+    const [appliedVoucher, setAppliedVoucher] = useState<{
+        code: string;
+        discount: number;
+        voucherId: string;
+    } | null>(null);
 
     const selectedItems = items.filter(i => i.selected);
 
@@ -42,7 +48,8 @@ export default function CheckoutPage() {
     }
 
     const shippingFee = 30000; // TODO: Calculate from API
-    const finalTotal = total() + shippingFee;
+    const discountAmount = appliedVoucher?.discount || 0;
+    const finalTotal = subtotal() + shippingFee - discountAmount;
 
     const handlePlaceOrder = async () => {
         if (!selectedAddressId) {
@@ -61,11 +68,20 @@ export default function CheckoutPage() {
                 shippingAddressId: selectedAddressId,
                 paymentMethod,
                 customerNote: customerNote || undefined,
+                voucherCode: appliedVoucher?.code,
             });
 
             // If payment method is not COD, redirect to payment
             if (paymentMethod !== 'cod' && result.payment?.payUrl) {
                 window.location.href = result.payment.payUrl;
+                return;
+            }
+
+            // Check if payment failed (e.g., ZaloPay unavailable)
+            if (result.payment?.status === 'failed') {
+                toast.error(result.payment.error || "Thanh toán thất bại. Đơn hàng đã được tạo, vui lòng thử lại.");
+                await fetchCart();
+                navigate(`/user/purchase/order/${result.order.id}`);
                 return;
             }
 
@@ -117,6 +133,12 @@ export default function CheckoutPage() {
 
                 <ShippingSection />
 
+                <VoucherSection 
+                    orderTotal={subtotal()}
+                    appliedVoucher={appliedVoucher}
+                    onApplyVoucher={setAppliedVoucher}
+                />
+
                 <PaymentSection 
                     selectedMethod={paymentMethod}
                     onMethodChange={setPaymentMethod}
@@ -146,10 +168,12 @@ export default function CheckoutPage() {
                                 <span className="text-muted-foreground">Phí vận chuyển:</span>
                                 <span>{formatCurrency(shippingFee)}</span>
                             </div>
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Giảm giá:</span>
-                                <span>-{formatCurrency(discountAmount)}</span>
-                            </div>
+                            {discountAmount > 0 && (
+                                <div className="flex justify-between text-green-600">
+                                    <span>Giảm giá voucher:</span>
+                                    <span>-{formatCurrency(discountAmount)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-lg font-medium pt-2 border-t mt-2">
                                 <span>Tổng thanh toán:</span>
                                 <span className="text-shopee-orange text-2xl">{formatCurrency(finalTotal)}</span>

@@ -28,6 +28,13 @@ router.post('/create-session', authenticate, paymentController.createPaymentSess
 router.get('/:orderId/status', authenticate, paymentController.getPaymentStatus);
 
 /**
+ * Confirm payment (called by frontend after redirect from payment gateway)
+ * POST /payments/:orderId/confirm
+ * Used when webhook doesn't reach localhost (sandbox environment)
+ */
+router.post('/:orderId/confirm', authenticate, paymentController.confirmPayment);
+
+/**
  * Process refund (Admin only)
  * POST /payments/:orderId/refund
  * Body: { amount?, reason? }

@@ -229,3 +229,53 @@ INSERT INTO reviews (id, product_id, user_id, rating, title, content, is_verifie
 ('r0000001-0000-0000-0000-000000000012', 'p0000001-0000-0000-0000-000000000014', 'u0000001-0000-0000-0000-000000000002', 5, 'Chống ồn xuất sắc', 'ANC hoạt động rất tốt, nghe nhạc cực phê. Pin dùng được 30 tiếng. Worth every penny!', true, 'active', 55, NOW() - INTERVAL '30 days'),
 ('r0000001-0000-0000-0000-000000000013', 'p0000001-0000-0000-0000-000000000014', 'u0000001-0000-0000-0000-000000000003', 5, 'Đáng mua nhất năm', 'Âm thanh chi tiết, bass mạnh mẽ. Đệm tai mềm, đeo lâu không mỏi. 10/10!', true, 'active', 38, NOW() - INTERVAL '28 days')
 ON CONFLICT (id) DO NOTHING;
+
+
+-- ========================================
+-- 8. VOUCHERS (Platform and Shop vouchers)
+-- ========================================
+INSERT INTO vouchers (id, code, type, shop_id, discount_type, discount_value, max_discount, min_order_value, usage_limit, used_count, per_user_limit, start_date, end_date, is_active, name, description) VALUES
+-- Platform vouchers
+('v0000001-0000-0000-0000-000000000001', 'WELCOME50', 'platform', NULL, 'fixed', 50000, NULL, 200000, 1000, 0, 1, NOW(), NOW() + INTERVAL '90 days', true, 'Chào mừng thành viên mới', 'Giảm 50K cho đơn từ 200K'),
+('v0000001-0000-0000-0000-000000000002', 'FREESHIP30', 'platform', NULL, 'fixed', 30000, NULL, 99000, 5000, 0, 3, NOW(), NOW() + INTERVAL '60 days', true, 'Miễn phí vận chuyển', 'Giảm 30K phí ship cho đơn từ 99K'),
+('v0000001-0000-0000-0000-000000000003', 'SALE20', 'platform', NULL, 'percentage', 20, 100000, 500000, 500, 0, 1, NOW(), NOW() + INTERVAL '30 days', true, 'Giảm 20%', 'Giảm 20% tối đa 100K cho đơn từ 500K'),
+('v0000001-0000-0000-0000-000000000004', 'MEGA100', 'platform', NULL, 'fixed', 100000, NULL, 1000000, 100, 0, 1, NOW(), NOW() + INTERVAL '15 days', true, 'Mega Sale', 'Giảm 100K cho đơn từ 1 triệu'),
+('v0000001-0000-0000-0000-000000000005', 'NEWYEAR25', 'platform', NULL, 'percentage', 25, 150000, 600000, 200, 0, 1, NOW(), NOW() + INTERVAL '45 days', true, 'Năm mới giảm 25%', 'Giảm 25% tối đa 150K cho đơn từ 600K'),
+-- Shop vouchers (for Shoppi Official Store)
+('v0000001-0000-0000-0000-000000000006', 'SHOP10', 'shop', 's0000001-0000-0000-0000-000000000001', 'percentage', 10, 50000, 100000, 1000, 0, 2, NOW(), NOW() + INTERVAL '60 days', true, 'Giảm 10% từ Shop', 'Giảm 10% tối đa 50K cho đơn từ 100K'),
+('v0000001-0000-0000-0000-000000000007', 'SHOP50K', 'shop', 's0000001-0000-0000-0000-000000000001', 'fixed', 50000, NULL, 300000, 500, 0, 1, NOW(), NOW() + INTERVAL '30 days', true, 'Giảm 50K từ Shop', 'Giảm 50K cho đơn từ 300K')
+ON CONFLICT (code) DO NOTHING;
+
+
+-- ========================================
+-- 9. USER ADDRESSES (Sample addresses for customers)
+-- ========================================
+INSERT INTO user_addresses (id, user_id, name, phone, province, district, ward, address_line, full_address, is_default) 
+SELECT 
+    'a0000001-0000-0000-0000-000000000001',
+    id,
+    'Nguyễn Văn A',
+    '0912345678',
+    'Hà Nội',
+    'Hai Bà Trưng',
+    'Bách Khoa',
+    'Số 1, Đại Cồ Việt',
+    'Số 1, Đại Cồ Việt, Bách Khoa, Hai Bà Trưng, Hà Nội',
+    true
+FROM users WHERE email = 'customer@shoppi.com'
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO user_addresses (id, user_id, name, phone, province, district, ward, address_line, full_address, is_default) 
+SELECT 
+    'a0000001-0000-0000-0000-000000000002',
+    id,
+    'Nguyễn Văn A',
+    '0987654321',
+    'TP. Hồ Chí Minh',
+    'Quận 1',
+    'Bến Nghé',
+    '123 Nguyễn Huệ',
+    '123 Nguyễn Huệ, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    false
+FROM users WHERE email = 'customer@shoppi.com'
+ON CONFLICT (id) DO NOTHING;

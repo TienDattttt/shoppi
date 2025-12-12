@@ -80,6 +80,10 @@ app.use('/api/shop/reviews', shopReviewRoutes);
 const { initializeModule: initShipperModule } = require('./modules/shipper/shipper.module');
 initShipperModule(app);
 
+// User Address Routes
+const addressRoutes = require('./modules/user/address.routes');
+app.use('/api/addresses', addressRoutes);
+
 // Admin Routes
 const adminSettingsRoutes = require('./modules/admin/settings.routes');
 const adminUsersRoutes = require('./modules/admin/users.routes');
