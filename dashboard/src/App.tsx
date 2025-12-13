@@ -74,6 +74,7 @@ const NotificationsPageCustomer = lazy(() => import("@/pages/customer/account/No
 const VoucherWalletPage = lazy(() => import("@/pages/customer/account/VoucherWalletPage"));
 const FollowedShopsPage = lazy(() => import("@/pages/customer/account/FollowedShopsPage"));
 const VoucherHuntPage = lazy(() => import("@/pages/customer/VoucherHuntPage"));
+const CustomerChatPage = lazy(() => import("@/pages/customer/account/ChatPage"));
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: ('admin' | 'partner')[] }) => {
   const user = useAuthStore((state) => state.user);
@@ -125,6 +126,7 @@ function App() {
               <Route path="notifications" element={<NotificationsPageCustomer />} />
               <Route path="voucher-wallet" element={<VoucherWalletPage />} />
               <Route path="following" element={<FollowedShopsPage />} />
+              <Route path="chat" element={<CustomerChatPage />} />
             </Route>
           </Route>
 

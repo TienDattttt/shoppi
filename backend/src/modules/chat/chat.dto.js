@@ -24,7 +24,7 @@ function toChatRoomDto(room, currentUserId = null) {
     participant: {
       id: isCustomer ? room.partner?.id : room.customer?.id,
       name: isCustomer 
-        ? (room.partner?.shop_name || room.partner?.full_name) 
+        ? (room.partner?.business_name || room.partner?.full_name) 
         : room.customer?.full_name,
       avatar: isCustomer ? room.partner?.avatar_url : room.customer?.avatar_url,
       isPartner: isCustomer,

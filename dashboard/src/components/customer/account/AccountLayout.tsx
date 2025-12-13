@@ -1,17 +1,30 @@
+import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { User, MapPin, Lock, FileText, Bell, Ticket, Store } from "lucide-react";
+import { User, MapPin, Lock, FileText, Bell, Ticket, Store, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
+import { useChatStore } from "@/store/chatStore";
 
 export default function AccountLayout() {
     const location = useLocation();
     const { user } = useAuthStore();
+    const { conversations, loadConversations, setCurrentUserId } = useChatStore();
+    const unreadCount = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
+
+    // Load conversations when user is logged in to show unread badge
+    useEffect(() => {
+        if (user?.id) {
+            setCurrentUserId(user.id);
+            loadConversations();
+        }
+    }, [user?.id]);
 
     const menuItems = [
         { icon: User, label: "Hồ sơ của tôi", href: "/user/profile" },
         { icon: MapPin, label: "Địa chỉ", href: "/user/account/address" },
         { icon: Lock, label: "Đổi mật khẩu", href: "/user/account/password" },
         { icon: FileText, label: "Đơn mua", href: "/user/purchase" },
+        { icon: MessageSquare, label: "Tin nhắn", href: "/user/chat", badge: unreadCount },
         { icon: Store, label: "Shop đang theo dõi", href: "/user/following" },
         { icon: Bell, label: "Thông báo", href: "/user/notifications" },
         { icon: Ticket, label: "Kho voucher", href: "/user/voucher-wallet" },
@@ -48,13 +61,21 @@ export default function AccountLayout() {
                             >
                                 <item.icon className="h-4 w-4" />
                                 {item.label}
+                                {item.badge !== undefined && item.badge > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                                        {item.badge > 99 ? '99+' : item.badge}
+                                    </span>
+                                )}
                             </Link>
                         ))}
                     </div>
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 bg-white rounded-sm shadow-sm p-6 min-h-[500px]">
+                <div className={cn(
+                    "flex-1 bg-white rounded-sm shadow-sm",
+                    location.pathname === "/user/chat" ? "p-0 overflow-hidden" : "p-6 min-h-[500px]"
+                )}>
                     <Outlet />
                 </div>
             </div>

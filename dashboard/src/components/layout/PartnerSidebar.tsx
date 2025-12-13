@@ -1,4 +1,4 @@
-
+import { useEffect } from "react";
 import {
     LayoutDashboard,
     Package2,
@@ -16,8 +16,10 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useChatStore } from "@/store/chatStore";
+import { useAuthStore } from "@/store/authStore";
 
-const sidebarItems = [
+const baseSidebarItems = [
     { title: "Kênh Người Bán", icon: LayoutDashboard, href: "/partner" },
     { title: "Quản Lý Đơn Hàng", icon: ShoppingCart, href: "/partner/orders" },
     { title: "Quản Lý Sản Phẩm", icon: Package2, href: "/partner/products" },
@@ -25,13 +27,29 @@ const sidebarItems = [
     { title: "Mã Giảm Giá", icon: Ticket, href: "/partner/vouchers" },
     { title: "Đánh Giá", icon: Star, href: "/partner/reviews" },
     { title: "Người Theo Dõi", icon: Users, href: "/partner/followers" },
-    { title: "Tin Nhắn", icon: MessageSquare, href: "/partner/chat" },
+    { title: "Tin Nhắn", icon: MessageSquare, href: "/partner/chat", hasBadge: true },
     { title: "Hồ Sơ Shop", icon: User, href: "/partner/profile" },
     { title: "Thiết Lập", icon: Settings, href: "/partner/settings" },
 ];
 
 export function PartnerSidebar() {
     const location = useLocation();
+    const { user } = useAuthStore();
+    const { conversations, loadConversations, setCurrentUserId } = useChatStore();
+    const unreadCount = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
+
+    // Load conversations when user is logged in to show unread badge
+    useEffect(() => {
+        if (user?.id) {
+            setCurrentUserId(user.id);
+            loadConversations();
+        }
+    }, [user?.id]);
+
+    const sidebarItems = baseSidebarItems.map(item => ({
+        ...item,
+        badge: item.hasBadge ? unreadCount : 0
+    }));
 
     return (
         <div className="w-64 bg-card h-screen fixed left-0 top-0 border-r border-border/50 z-50 flex flex-col shadow-premium">
@@ -66,6 +84,11 @@ export function PartnerSidebar() {
                                     )}
                                 />
                                 {item.title}
+                                {item.badge > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                                        {item.badge > 99 ? '99+' : item.badge}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

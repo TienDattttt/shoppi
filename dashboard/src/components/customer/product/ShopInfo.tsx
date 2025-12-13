@@ -2,10 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageCircle, Store } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useChatStore } from "@/store/chatStore";
+import { useAuthStore } from "@/store/authStore";
 
 interface ShopInfoProps {
     shop?: {
         id: string;
+        partner_id?: string;
         shop_name?: string;
         name?: string;
         city?: string;
@@ -21,6 +24,9 @@ interface ShopInfoProps {
 }
 
 export function ShopInfo({ shop }: ShopInfoProps) {
+    const { openChatWithShop } = useChatStore();
+    const { user } = useAuthStore();
+    const isAuthenticated = !!user;
     const shopName = shop?.shop_name || shop?.name || 'Shop';
     const shopId = shop?.id;
     const logoUrl = shop?.logo_url || "https://github.com/shadcn.png";
@@ -62,7 +68,17 @@ export function ShopInfo({ shop }: ShopInfoProps) {
                     <h3 className="font-medium text-lg">{shopName}</h3>
                     <p className="text-xs text-muted-foreground mb-2">Hoạt động 5 phút trước</p>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="h-8 text-xs border-shopee-orange text-shopee-orange hover:bg-orange-50 bg-orange-50/50">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-xs border-shopee-orange text-shopee-orange hover:bg-orange-50 bg-orange-50/50"
+                            onClick={() => {
+                                if (isAuthenticated && shop?.partner_id) {
+                                    openChatWithShop(shopId || '', shop.partner_id, shopName, logoUrl);
+                                }
+                            }}
+                            disabled={!isAuthenticated || !shop?.partner_id}
+                        >
                             <MessageCircle className="mr-1 h-3 w-3" /> Chat ngay
                         </Button>
                         {shopId ? (

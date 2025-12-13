@@ -1,6 +1,28 @@
 version: '3.8'
 
 services:
+  # Cassandra - Chat Messages Storage
+  cassandra:
+    image: cassandra:4.1
+    container_name: ecommerce-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ecommerce_cluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=100M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
   # Redis - Cache & Session Store & GEO (Shipper locations)
   redis:
     image: redis:7-alpine
@@ -37,6 +59,27 @@ services:
       timeout: 10s
       retries: 5
 
+  # RabbitMQ - Message Queue for async processing
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
+  cassandra_data:
   redis_data:
   elasticsearch_data:
+  rabbitmq_data:

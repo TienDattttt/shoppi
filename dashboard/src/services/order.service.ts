@@ -17,6 +17,13 @@ export interface OrderItem {
     imageUrl: string | null;
 }
 
+export interface ShopInfo {
+    id: string;
+    shop_name: string;
+    logo_url: string | null;
+    partner_id: string; // partnerId
+}
+
 export interface SubOrder {
     id: string;
     orderId: string;
@@ -31,6 +38,7 @@ export interface SubOrder {
     shippedAt: string | null;
     deliveredAt: string | null;
     items: OrderItem[];
+    shops?: ShopInfo;
     order?: {
         orderNumber: string;
         shippingName: string;
@@ -166,6 +174,42 @@ export const orderService = {
         message?: string;
     }> => {
         const response = await api.post(`/payments/${orderId}/confirm`);
+        return response.data;
+    },
+
+    // ==================== PARTNER/SHOP ORDER FUNCTIONS ====================
+
+    // Get shop orders (for partner)
+    getShopOrders: async (params?: {
+        status?: string;
+        page?: number;
+        limit?: number;
+    }): Promise<{ orders: SubOrder[]; pagination: any }> => {
+        const response = await api.get("/partner/orders", { params });
+        return response.data;
+    },
+
+    // Confirm order (partner)
+    confirmOrder: async (subOrderId: string): Promise<SubOrder> => {
+        const response = await api.post(`/partner/orders/${subOrderId}/confirm`);
+        return response.data;
+    },
+
+    // Pack order / mark as processing (partner)
+    packOrder: async (subOrderId: string): Promise<SubOrder> => {
+        const response = await api.post(`/partner/orders/${subOrderId}/pack`);
+        return response.data;
+    },
+
+    // Mark order ready to ship (partner)
+    readyToShip: async (subOrderId: string): Promise<SubOrder> => {
+        const response = await api.post(`/partner/orders/${subOrderId}/ready-to-ship`);
+        return response.data;
+    },
+
+    // Cancel order by partner
+    cancelByPartner: async (subOrderId: string, reason: string): Promise<SubOrder> => {
+        const response = await api.post(`/partner/orders/${subOrderId}/cancel`, { reason });
         return response.data;
     },
 };
