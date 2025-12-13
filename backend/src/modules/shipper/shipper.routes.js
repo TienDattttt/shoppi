@@ -24,6 +24,7 @@ router.use(authenticate);
 router.post('/', shipperController.createShipper);
 router.get('/me', shipperController.getMyShipperProfile);
 router.get('/pending', authorize('admin'), shipperController.getPendingShippers);
+router.get('/earnings', shipperController.getEarnings);
 router.get('/:id', shipperController.getShipperById);
 router.patch('/:id', shipperController.updateShipper);
 

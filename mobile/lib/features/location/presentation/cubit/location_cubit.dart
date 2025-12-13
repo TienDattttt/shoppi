@@ -27,6 +27,15 @@ class LocationCubit extends Cubit<LocationState> {
     return result.fold((_) => false, (isGranted) => isGranted);
   }
 
+  /// Get current location once
+  Future<LocationEntity?> getCurrentLocation() async {
+    final result = await _repository.getCurrentLocation();
+    return result.fold(
+      (failure) => null,
+      (location) => location,
+    );
+  }
+
   Future<void> startTracking() async {
     try {
       final hasPermission = await _repository.checkPermission();

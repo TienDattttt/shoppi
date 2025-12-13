@@ -8,6 +8,7 @@
 const shipperService = require('./shipper.service');
 const shipmentService = require('./shipment.service');
 const locationService = require('./location.service');
+const trackingService = require('./tracking.service');
 const shipperValidator = require('./shipper.validator');
 const shipperDto = require('./shipper.dto');
 const { sendSuccess: successResponse, sendError } = require('../../shared/utils/response.util');
@@ -30,7 +31,7 @@ const errorResponse = (res, error) => {
  */
 async function createShipper(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     shipperValidator.validateCreateShipper(req.body);
     
     const shipper = await shipperService.createShipper(userId, req.body);
@@ -71,7 +72,7 @@ async function getShipperById(req, res) {
  */
 async function getMyShipperProfile(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const shipper = await shipperService.getShipperByUserId(userId);
     
     return successResponse(res, {
@@ -93,7 +94,7 @@ async function updateShipper(req, res) {
     
     // Verify ownership or admin
     const shipper = await shipperService.getShipperById(id);
-    if (shipper.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (shipper.user_id !== req.user.userId && req.user.role !== 'admin') {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
     
@@ -134,7 +135,7 @@ async function getPendingShippers(req, res) {
 async function approveShipper(req, res) {
   try {
     const { id } = req.params;
-    const adminId = req.user.id;
+    const adminId = req.user.userId;
     
     const shipper = await shipperService.approveShipper(id, adminId);
     
@@ -201,7 +202,7 @@ async function goOnline(req, res) {
     
     // Verify ownership
     const shipper = await shipperService.getShipperById(id);
-    if (shipper.user_id !== req.user.id) {
+    if (shipper.user_id !== req.user.userId) {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
     
@@ -229,7 +230,7 @@ async function goOffline(req, res) {
     
     // Verify ownership
     const shipper = await shipperService.getShipperById(id);
-    if (shipper.user_id !== req.user.id) {
+    if (shipper.user_id !== req.user.userId) {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
     
@@ -259,7 +260,7 @@ async function updateLocation(req, res) {
     
     // Verify ownership
     const shipper = await shipperService.getShipperById(id);
-    if (shipper.user_id !== req.user.id) {
+    if (shipper.user_id !== req.user.userId) {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
     
@@ -343,7 +344,7 @@ async function getShipments(req, res) {
     
     // If shipper role, only get own shipments
     if (req.user.role === 'shipper') {
-      const shipper = await shipperService.getShipperByUserId(req.user.id);
+      const shipper = await shipperService.getShipperByUserId(req.user.userId);
       const result = await shipmentService.getShipmentsByShipper(shipper.id, {
         ...pagination,
         status,
@@ -389,7 +390,7 @@ async function getShipments(req, res) {
  */
 async function getActiveShipments(req, res) {
   try {
-    const shipper = await shipperService.getShipperByUserId(req.user.id);
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
     const shipments = await shipmentService.getActiveShipments(shipper.id);
     
     return successResponse(res, {
@@ -446,7 +447,7 @@ async function updateShipmentStatus(req, res) {
     shipperValidator.validateStatusUpdate(req.body);
     
     // Get shipper ID for verification
-    const shipper = await shipperService.getShipperByUserId(req.user.id);
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
     
     let updatedShipment;
     
@@ -578,6 +579,104 @@ async function getShipmentLocation(req, res) {
   }
 }
 
+// ============================================
+// TRACKING ENDPOINTS
+// ============================================
+
+/**
+ * Get shipment tracking history
+ * GET /shipments/:id/tracking
+ */
+async function getTrackingHistory(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // Get shipment info
+    const shipment = await shipmentService.getShipmentById(id);
+    
+    // Get tracking events
+    const events = await trackingService.getTrackingHistory(id);
+    
+    return successResponse(res, {
+      data: {
+        shipment: {
+          id: shipment.id,
+          trackingNumber: shipment.tracking_number,
+          status: shipment.status,
+          currentLocation: shipment.current_location_name,
+          estimatedDelivery: shipment.estimated_delivery,
+        },
+        events: events.map(e => ({
+          id: e.id,
+          status: e.status,
+          statusVi: e.status_vi,
+          description: e.description,
+          descriptionVi: e.description_vi,
+          locationName: e.location_name,
+          locationAddress: e.location_address,
+          lat: e.location_lat,
+          lng: e.location_lng,
+          actorName: e.actor_name,
+          eventTime: e.event_time,
+        })),
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+// ============================================
+// EARNINGS ENDPOINTS
+// ============================================
+
+/**
+ * Get shipper earnings
+ * GET /shippers/earnings
+ */
+async function getEarnings(req, res) {
+  try {
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    const { period = 'today' } = req.query;
+    
+    // Calculate date range based on period
+    const now = new Date();
+    let startDate, endDate = now;
+    
+    switch (period) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    
+    // Get completed shipments in date range
+    const earnings = await shipmentService.getShipperEarnings(shipper.id, startDate, endDate);
+    
+    return successResponse(res, {
+      data: {
+        period,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        totalEarnings: earnings.totalEarnings,
+        totalDeliveries: earnings.totalDeliveries,
+        totalShippingFee: earnings.totalShippingFee,
+        totalCodCollected: earnings.totalCodCollected,
+        deliveries: earnings.deliveries,
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 module.exports = {
   // Shipper
   createShipper,
@@ -608,4 +707,10 @@ module.exports = {
   autoAssignShipper,
   rateShipment,
   getShipmentLocation,
+  
+  // Earnings
+  getEarnings,
+  
+  // Tracking
+  getTrackingHistory,
 };

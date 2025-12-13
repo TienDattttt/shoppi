@@ -16,17 +16,28 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
 
   @override
   Future<List<NotificationModel>> getNotifications() async {
-    final response = await _client.get('/shipper/notifications');
-    return (response as List).map((e) => NotificationModel.fromJson(e)).toList();
+    // Backend endpoint: GET /api/notifications
+    final response = await _client.get('/notifications');
+    if (response is List) {
+      return response.map((e) => NotificationModel.fromJson(e)).toList();
+    }
+    // Handle paginated response
+    final data = response['data'] ?? response['notifications'] ?? response;
+    return (data as List).map((e) => NotificationModel.fromJson(e)).toList();
   }
 
   @override
   Future<void> markAsRead(String id) async {
-    await _client.post('/shipper/notifications/$id/read');
+    // Backend endpoint: PATCH /api/notifications/:id/read
+    await _client.put('/notifications/$id/read');
   }
 
   @override
   Future<void> registerDeviceToken(String token) async {
-    await _client.post('/shipper/device-token', data: {'token': token});
+    // Backend endpoint: POST /api/notifications/device-token
+    await _client.post('/notifications/device-token', data: {
+      'token': token,
+      'platform': 'android', // or 'ios' based on platform
+    });
   }
 }

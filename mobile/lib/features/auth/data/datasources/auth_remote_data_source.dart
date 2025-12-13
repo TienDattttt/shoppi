@@ -19,9 +19,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<LoginResponseModel> login(String phone, String password) async {
-    // Ideally this endpoint returns tokens
-    final response = await _client.post('/shipper/auth/login', data: {
-      'phone': phone,
+    // Backend auth endpoint: POST /api/auth/login
+    final response = await _client.post('/auth/login', data: {
+      'email': phone, // Backend accepts email or phone in email field
       'password': password,
     });
     return LoginResponseModel.fromJson(response);
@@ -29,14 +29,16 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<void> requestOtp(String phone) async {
-    await _client.post('/shipper/auth/otp/request', data: {
+    // Backend auth endpoint: POST /api/auth/login/otp/request
+    await _client.post('/auth/login/otp/request', data: {
       'phone': phone,
     });
   }
 
   @override
   Future<LoginResponseModel> verifyOtp(String phone, String otp) async {
-    final response = await _client.post('/shipper/auth/otp/verify', data: {
+    // Backend auth endpoint: POST /api/auth/login/otp/verify
+    final response = await _client.post('/auth/login/otp/verify', data: {
       'phone': phone,
       'otp': otp,
     });
@@ -45,7 +47,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<LoginResponseModel> register(RegisterParams params) async {
-    final response = await _client.post('/shippers', data: {
+    // Step 1: Register shipper account via auth endpoint
+    final response = await _client.post('/auth/register/shipper', data: {
       'fullName': params.fullName,
       'phone': params.phone,
       'password': params.password,
@@ -60,6 +63,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<ShipperModel> getCurrentShipper() async {
+    // Backend shipper endpoint: GET /api/shippers/me
     final response = await _client.get('/shippers/me');
     return ShipperModel.fromJson(response);
   }

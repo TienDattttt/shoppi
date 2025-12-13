@@ -141,6 +141,32 @@ async function createTables() {
     ) WITH CLUSTERING ORDER BY (created_at DESC, event_id DESC)
   `);
   console.log('[Cassandra] Table order_events ready');
+
+  // Shipper location history table - for tracking shipper movements
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS shipper_location_history (
+      shipper_id UUID,
+      date DATE,
+      timestamp TIMESTAMP,
+      location_id UUID,
+      lat DECIMAL,
+      lng DECIMAL,
+      accuracy FLOAT,
+      speed FLOAT,
+      heading FLOAT,
+      shipment_id UUID,
+      event_type TEXT,
+      metadata TEXT,
+      PRIMARY KEY ((shipper_id, date), timestamp, location_id)
+    ) WITH CLUSTERING ORDER BY (timestamp DESC, location_id DESC)
+  `);
+  console.log('[Cassandra] Table shipper_location_history ready');
+
+  // Index for querying by shipment
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_shipper_location_shipment 
+    ON shipper_location_history (shipment_id)
+  `);
 }
 
 /**

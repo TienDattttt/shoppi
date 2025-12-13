@@ -10,7 +10,8 @@ import {
     Layers,
     Ticket,
     Settings,
-    LogOut
+    LogOut,
+    Building2
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const sidebarItems = [
     { title: "Đơn hàng", icon: ClipboardList, href: "/admin/orders" },
     { title: "Vouchers", icon: Ticket, href: "/admin/vouchers" },
     { title: "Shipper", icon: Truck, href: "/admin/shippers" },
+    { title: "Bưu cục", icon: Building2, href: "/admin/post-offices" },
     { title: "Báo cáo", icon: BarChart3, href: "/admin/reports" },
     { title: "Cài đặt", icon: Settings, href: "/admin/settings" },
 ];

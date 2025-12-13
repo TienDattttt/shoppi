@@ -32,6 +32,9 @@ router.get('/active', authorize('shipper'), shipperController.getActiveShipments
 // Get shipment by ID
 router.get('/:id', shipperController.getShipmentById);
 
+// Get tracking history for shipment
+router.get('/:id/tracking', shipperController.getTrackingHistory);
+
 // Get real-time location for shipment
 router.get('/:id/location', shipperController.getShipmentLocation);
 
