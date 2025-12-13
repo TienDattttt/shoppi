@@ -42,19 +42,19 @@ export const notificationService = {
 
     // Get unread count
     getUnreadCount: async () => {
-        const response = await api.get("/notifications/unread/count");
+        const response = await api.get("/notifications/unread-count");
         return response.data;
     },
 
     // Mark as read
     markAsRead: async (id: string) => {
-        const response = await api.patch(`/notifications/${id}/read`);
+        const response = await api.put(`/notifications/${id}/read`);
         return response.data;
     },
 
     // Mark all as read
     markAllAsRead: async () => {
-        const response = await api.patch("/notifications/read-all");
+        const response = await api.put("/notifications/read-all");
         return response.data;
     },
 
@@ -76,11 +76,17 @@ export const notificationService = {
 
     // Update preference
     updatePreference: async (channel: string, notificationType: string, isEnabled: boolean) => {
-        const response = await api.patch("/notifications/preferences", {
+        const response = await api.put("/notifications/preferences", {
             channel,
             notificationType,
             isEnabled,
         });
+        return response.data;
+    },
+
+    // Update preferences (batch)
+    updatePreferences: async (preferences: Record<string, boolean>) => {
+        const response = await api.put("/notifications/preferences", preferences);
         return response.data;
     },
 

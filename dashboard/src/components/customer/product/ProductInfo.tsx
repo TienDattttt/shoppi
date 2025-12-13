@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Minus, Plus, ShoppingCart, Heart, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Rating } from "../common/Rating";
@@ -47,9 +48,11 @@ interface ProductInfoProps {
 }
 
 export function ProductInfo({ product }: ProductInfoProps) {
+    const navigate = useNavigate();
     const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
     const [quantity, setQuantity] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [buyNowLoading, setBuyNowLoading] = useState(false);
     
     const { addToCart } = useCartStore();
     const { token } = useAuthStore();
@@ -151,6 +154,63 @@ export function ProductInfo({ product }: ProductInfoProps) {
         }
     };
 
+    const handleBuyNow = async () => {
+        if (!token) {
+            toast.error("Vui lòng đăng nhập để mua hàng");
+            return;
+        }
+
+        // Validate variant selection
+        if (product.variantGroups && product.variantGroups.length > 0) {
+            const missingAttribute = product.variantGroups.find(vg => !selectedAttributes[vg.name]);
+            if (missingAttribute) {
+                toast.error(`Vui lòng chọn ${missingAttribute.name}`);
+                return;
+            }
+        }
+
+        // Get variant ID
+        let variantId: string;
+        if (selectedVariant) {
+            variantId = selectedVariant.id;
+        } else if (product.rawVariants && product.rawVariants.length > 0) {
+            variantId = product.rawVariants[0].id;
+        } else {
+            toast.error("Sản phẩm không có biến thể");
+            return;
+        }
+
+        if (currentStock < quantity) {
+            toast.error(`Chỉ còn ${currentStock} sản phẩm`);
+            return;
+        }
+
+        setBuyNowLoading(true);
+        try {
+            // Add to cart first
+            await addToCart({
+                productId: product.id,
+                variantId,
+                quantity,
+                name: product.name,
+                price: currentPrice,
+                originalPrice: currentOriginalPrice,
+                image: selectedVariant?.imageUrl || product.images?.[0] || '',
+                variant: Object.values(selectedAttributes).join(', ') || undefined,
+                shopId: product.shop?.id || '',
+                shopName: product.shop?.name || 'Shop',
+                stock: currentStock,
+            });
+            
+            // Navigate to cart page to proceed to checkout
+            navigate('/cart');
+        } catch (error: any) {
+            toast.error(error.message || "Không thể mua ngay");
+        } finally {
+            setBuyNowLoading(false);
+        }
+    };
+
     return (
         <div className="flex flex-col gap-6">
             <h1 className="text-xl md:text-2xl font-medium">{product.name}</h1>
@@ -244,9 +304,10 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <Button
                     size="lg"
                     className="h-12 px-12 bg-shopee-orange hover:bg-shopee-orange-hover text-white"
-                    disabled={currentStock === 0}
+                    disabled={currentStock === 0 || buyNowLoading}
+                    onClick={handleBuyNow}
                 >
-                    Mua ngay
+                    {buyNowLoading ? "Đang xử lý..." : "Mua ngay"}
                 </Button>
             </div>
 

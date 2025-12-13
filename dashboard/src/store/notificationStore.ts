@@ -1,12 +1,17 @@
 import { create } from 'zustand';
+import { notificationService } from '@/services/notification.service';
 
 export interface Notification {
     id: string;
-    type: 'ORDER' | 'PROMOTION' | 'WALLET' | 'SYSTEM';
+    type: string;
     title: string;
-    description: string;
-    timestamp: Date;
+    body: string;
+    description?: string; // Alias for body
+    data: Record<string, unknown> | null;
     isRead: boolean;
+    readAt: string | null;
+    createdAt: string;
+    timestamp?: Date; // Computed from createdAt
     image?: string;
     link?: string;
 }
@@ -14,74 +19,118 @@ export interface Notification {
 interface NotificationState {
     notifications: Notification[];
     unreadCount: number;
-    fetchNotifications: () => void;
-    markAsRead: (id: string) => void;
-    markAllAsRead: () => void;
+    loading: boolean;
+    fetchNotifications: () => Promise<void>;
+    fetchUnreadCount: () => Promise<void>;
+    markAsRead: (id: string) => Promise<void>;
+    markAllAsRead: () => Promise<void>;
     addNotification: (notification: Notification) => void;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-    {
-        id: 'n1',
-        type: 'ORDER',
-        title: 'Order Completed',
-        description: 'Order #ORD-001 has been delivered successfully. Please rate the product.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-        isRead: false,
-        image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100&q=60',
-        link: '/user/purchase/order/ORD-001'
-    },
-    {
-        id: 'n2',
-        type: 'PROMOTION',
-        title: 'Super Sale 12.12',
-        description: 'Get up to 50% off on all Fashion items today!',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-        isRead: false,
-        image: 'https://via.placeholder.com/100x100.png?text=Sale',
-        link: '/'
-    },
-    {
-        id: 'n3',
-        type: 'WALLET',
-        title: 'Refund Processed',
-        description: 'Refund for order #ORD-000 has been initiated to your wallet.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
-        isRead: true,
-        link: '/user/wallet'
+// Parse timestamp ensuring UTC timezone is handled correctly
+function parseTimestamp(timestamp: string): Date {
+    if (!timestamp) return new Date();
+    // If timestamp doesn't have timezone info, assume it's UTC
+    const ts = timestamp.endsWith('Z') || timestamp.includes('+') || timestamp.includes('-', 10) 
+        ? timestamp 
+        : timestamp + 'Z';
+    return new Date(ts);
+}
+
+// Transform API response to store format
+function transformNotification(n: any): Notification {
+    const createdAt = n.created_at || n.createdAt;
+    return {
+        id: n.id,
+        type: n.type || 'SYSTEM',
+        title: n.title,
+        body: n.body,
+        description: n.body, // Alias
+        data: n.data,
+        isRead: n.is_read || n.isRead || false,
+        readAt: n.read_at || n.readAt,
+        createdAt: createdAt,
+        timestamp: parseTimestamp(createdAt),
+        image: n.data?.image || n.image,
+        link: n.data?.link || n.link || getNotificationLink(n),
+    };
+}
+
+// Generate link based on notification type and data
+function getNotificationLink(n: any): string | undefined {
+    const type = n.type?.toLowerCase();
+    const data = n.data || {};
+    
+    if (type?.includes('order') && data.orderId) {
+        return `/user/purchase`;
     }
-];
+    if (type?.includes('promo') || type?.includes('voucher')) {
+        return '/vouchers';
+    }
+    if (type?.includes('chat') || type?.includes('message')) {
+        return '/user/chat';
+    }
+    return undefined;
+}
 
 export const useNotificationStore = create<NotificationState>((set) => ({
-    notifications: MOCK_NOTIFICATIONS,
-    unreadCount: MOCK_NOTIFICATIONS.filter(n => !n.isRead).length,
+    notifications: [],
+    unreadCount: 0,
+    loading: false,
 
-    fetchNotifications: () => {
-        // TODO: Fetch from API when backend is ready
-        // For now, use mock data already loaded
-        set((state) => ({
-            notifications: state.notifications,
-            unreadCount: state.notifications.filter(n => !n.isRead).length
-        }));
+    fetchNotifications: async () => {
+        set({ loading: true });
+        try {
+            const response = await notificationService.getNotifications({ limit: 50 });
+            // API returns { data: [...], total, page, limit, hasMore }
+            const rawData = response.data || response || [];
+            const notifications = (Array.isArray(rawData) ? rawData : []).map(transformNotification);
+            const unreadCount = notifications.filter((n: Notification) => !n.isRead).length;
+            
+            set({ notifications, unreadCount, loading: false });
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+            set({ loading: false });
+        }
     },
 
-    markAsRead: (id) => set((state) => {
-        const newNotifications = state.notifications.map(n =>
-            n.id === id ? { ...n, isRead: true } : n
-        );
-        return {
-            notifications: newNotifications,
-            unreadCount: newNotifications.filter(n => !n.isRead).length
-        };
-    }),
+    fetchUnreadCount: async () => {
+        try {
+            const response = await notificationService.getUnreadCount();
+            set({ unreadCount: response.count || response.unreadCount || 0 });
+        } catch (error) {
+            console.error('Failed to fetch unread count:', error);
+        }
+    },
 
-    markAllAsRead: () => set((state) => {
-        const newNotifications = state.notifications.map(n => ({ ...n, isRead: true }));
-        return {
-            notifications: newNotifications,
-            unreadCount: 0
-        };
-    }),
+    markAsRead: async (id: string) => {
+        try {
+            await notificationService.markAsRead(id);
+            set((state) => {
+                const newNotifications = state.notifications.map(n =>
+                    n.id === id ? { ...n, isRead: true } : n
+                );
+                return {
+                    notifications: newNotifications,
+                    unreadCount: newNotifications.filter(n => !n.isRead).length
+                };
+            });
+        } catch (error) {
+            console.error('Failed to mark as read:', error);
+        }
+    },
+
+    markAllAsRead: async () => {
+        try {
+            await notificationService.markAllAsRead();
+            set((state) => ({
+                notifications: state.notifications.map(n => ({ ...n, isRead: true })),
+                unreadCount: 0
+            }));
+        } catch (error) {
+            console.error('Failed to mark all as read:', error);
+        }
+    },
 
     addNotification: (notification) => set((state) => {
         const newNotifications = [notification, ...state.notifications];
