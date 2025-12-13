@@ -7,7 +7,8 @@
 
 const shipperRepository = require('./shipper.repository');
 const redisClient = require('../../shared/redis/redis.client');
-const cassandraClient = require('../../shared/cassandra/cassandra.client');
+const shipperLocationCache = require('../../shared/redis/shipper-location.cache');
+const shipperTrackingRepo = require('../../shared/cassandra/shipper-tracking.cassandra.repository');
 const { AppError } = require('../../shared/utils/error.util');
 
 // Redis key prefixes
@@ -217,13 +218,15 @@ async function getDistanceToPoint(shipperId, lat, lng) {
  */
 async function logLocationHistory(shipperId, lat, lng, metadata = {}) {
   try {
-    await cassandraClient.logShipperLocation(shipperId, {
+    await shipperTrackingRepo.saveLocation({
+      shipperId,
       lat,
       lng,
       accuracy: metadata.accuracy,
       speed: metadata.speed,
       heading: metadata.heading,
       shipmentId: metadata.shipmentId,
+      eventType: 'location_update',
     });
   } catch (error) {
     // Log but don't throw - history logging is not critical
@@ -241,12 +244,13 @@ async function logLocationHistory(shipperId, lat, lng, metadata = {}) {
  */
 async function getLocationHistory(shipperId, startTime, endTime, limit = 100) {
   try {
-    return await cassandraClient.getShipperLocationHistory(
-      shipperId,
-      startTime,
-      endTime,
-      limit
-    );
+    // Get date from startTime for partition key
+    const date = startTime ? startTime.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    return await shipperTrackingRepo.getLocationHistory(shipperId, date, {
+      startTime: startTime?.toISOString(),
+      endTime: endTime?.toISOString(),
+      limit,
+    });
   } catch (error) {
     console.error('Failed to get location history:', error.message);
     return [];
@@ -261,7 +265,8 @@ async function getLocationHistory(shipperId, startTime, endTime, limit = 100) {
  */
 async function getShipmentLocationHistory(shipmentId, shipperId) {
   try {
-    return await cassandraClient.getShipmentLocationHistory(shipmentId, shipperId);
+    const date = new Date().toISOString().split('T')[0];
+    return await shipperTrackingRepo.getShipmentRoute(shipperId, shipmentId, date);
   } catch (error) {
     console.error('Failed to get shipment location history:', error.message);
     return [];

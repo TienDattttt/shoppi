@@ -27,8 +27,14 @@ class OnlineStatusError extends OnlineStatusState {
 class OnlineStatusCubit extends Cubit<OnlineStatusState> {
   final ApiClient _client;
   final LocationCubit _locationCubit;
+  String? _shipperId;
 
   OnlineStatusCubit(this._client, this._locationCubit) : super(OnlineStatusOffline());
+
+  /// Set shipper ID for API calls
+  void setShipperId(String shipperId) {
+    _shipperId = shipperId;
+  }
 
   Future<void> toggleOnlineStatus(bool isOnline) async {
     // Mock mode for UI testing
@@ -43,6 +49,11 @@ class OnlineStatusCubit extends Cubit<OnlineStatusState> {
       return;
     }
 
+    if (_shipperId == null) {
+      emit(const OnlineStatusError('Shipper ID not set'));
+      return;
+    }
+
     if (isOnline) {
       emit(OnlineStatusLoading());
       // 1. Check GPS Service
@@ -54,32 +65,39 @@ class OnlineStatusCubit extends Cubit<OnlineStatusState> {
              return;
            }
 
-           // 2. Start Tracking in LocationCubit
-           await _locationCubit.startTracking();
-           
-           if (_locationCubit.state is LocationError) {
-              emit(OnlineStatusError((_locationCubit.state as LocationError).message));
-              emit(OnlineStatusOffline());
-           } else {
-              // 3. Mark Online (Call API to update status to 'online')
-              try {
-                await _client.post('/shippers/status', data: {'status': 'online'});
-                emit(OnlineStatusOnline());
-              } catch (e) {
-                emit(OnlineStatusError("Failed to go online: $e"));
-                emit(OnlineStatusOffline());
-                _locationCubit.stopTracking();
-              }
+           // 2. Get current location first
+           final location = await _locationCubit.getCurrentLocation();
+           if (location == null) {
+             emit(const OnlineStatusError('Could not get current location'));
+             emit(OnlineStatusOffline());
+             return;
+           }
+
+           // 3. Mark Online with current location
+           // Backend endpoint: POST /api/shippers/:id/online
+           try {
+             await _client.post('/shippers/$_shipperId/online', data: {
+               'lat': location.lat,
+               'lng': location.lng,
+             });
+             
+             // 4. Start continuous tracking
+             await _locationCubit.startTracking();
+             emit(OnlineStatusOnline());
+           } catch (e) {
+             emit(OnlineStatusError("Failed to go online: $e"));
+             emit(OnlineStatusOffline());
            }
         }
       );
 
     } else {
       // Go Offline
+      // Backend endpoint: POST /api/shippers/:id/offline
       try {
-        await _client.post('/shippers/status', data: {'status': 'offline'});
+        await _client.post('/shippers/$_shipperId/offline');
       } catch (e) {
-        // Ignore error when going offline? Or show warning
+        // Ignore error when going offline
       }
       _locationCubit.stopTracking();
       emit(OnlineStatusOffline());

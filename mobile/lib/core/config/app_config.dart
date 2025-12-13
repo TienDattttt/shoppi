@@ -2,11 +2,43 @@
 class AppConfig {
   /// Set to true to use mock data instead of real API
   /// Useful for UI testing without backend
-  static const bool useMockData = true;
-  
+  static const bool useMockData = false;
+
   /// API base URL
-  static const String apiBaseUrl = 'https://api.shoppi.app/v1';
-  
+  /// For Android emulator: use 10.0.2.2 to access host machine's localhost
+  /// For iOS simulator: use localhost or 127.0.0.1
+  /// For real device: use your machine's IP address (e.g., 192.168.x.x)
+  static const String apiBaseUrl = 'http://10.0.2.2:3000/api';
+
+  /// WebSocket URL for real-time updates
+  static const String wsBaseUrl = 'ws://10.0.2.2:3000';
+
   /// Enable debug logging
   static const bool enableLogging = true;
+
+  /// Location update interval in seconds
+  static const int locationUpdateInterval = 10;
+
+  /// Location distance filter in meters (minimum distance to trigger update)
+  static const double locationDistanceFilter = 50;
+
+  // ========================================
+  // MAP CONFIGURATION
+  // ========================================
+
+  /// Google Maps API Key (for geocoding, distance matrix)
+  /// Get from: https://console.cloud.google.com
+  static const String googleMapsApiKey =
+      'AIzaSyD_6AN4CVrPSkr3iWDVzO-rtuccuq6jgaM';
+
+  /// Mapbox Access Token (for navigation, turn-by-turn directions)
+  /// Get from: https://account.mapbox.com
+  /// Free tier: 50,000 map loads/month
+  static const String mapboxAccessToken =
+      'pk.eyJ1Ijoic2hvcHBpLWRldiIsImEiOiJjbHh4eHh4eHgwMDAwMnFzOHh4eHh4eHh4In0.xxxxxxxxxxxxxxxxxxxx';
+
+  /// Default map center (Ho Chi Minh City)
+  static const double defaultLatitude = 10.8231;
+  static const double defaultLongitude = 106.6297;
+  static const double defaultZoom = 14.0;
 }

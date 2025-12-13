@@ -9,11 +9,16 @@ class AddressModel extends AddressEntity {
     super.city,
   });
 
+  /// Parse from backend response (supports both camelCase and snake_case)
   factory AddressModel.fromJson(Map<String, dynamic> json) {
     return AddressModel(
-      fullAddress: json['fullAddress'] as String,
-      lat: (json['lat'] as num).toDouble(),
-      lng: (json['lng'] as num).toDouble(),
+      fullAddress: json['full_address'] as String? ?? 
+                   json['fullAddress'] as String? ?? 
+                   json['address'] as String? ?? '',
+      lat: (json['lat'] as num?)?.toDouble() ?? 
+           (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      lng: (json['lng'] as num?)?.toDouble() ?? 
+           (json['longitude'] as num?)?.toDouble() ?? 0.0,
       district: json['district'] as String?,
       city: json['city'] as String?,
     );
@@ -21,7 +26,7 @@ class AddressModel extends AddressEntity {
 
   Map<String, dynamic> toJson() {
     return {
-      'fullAddress': fullAddress,
+      'full_address': fullAddress,
       'lat': lat,
       'lng': lng,
       'district': district,

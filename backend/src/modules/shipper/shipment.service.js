@@ -8,6 +8,7 @@
 const shipmentRepository = require('./shipment.repository');
 const shipperRepository = require('./shipper.repository');
 const shipperService = require('./shipper.service');
+const trackingService = require('./tracking.service');
 const { AppError, ValidationError } = require('../../shared/utils/error.util');
 const rabbitmqClient = require('../../shared/rabbitmq/rabbitmq.client');
 
@@ -70,6 +71,13 @@ async function createShipment(subOrder, deliveryInfo) {
   };
 
   const shipment = await shipmentRepository.createShipment(shipmentData);
+
+  // Initialize tracking events
+  try {
+    await trackingService.initializeTracking(shipment.id, shipment);
+  } catch (e) {
+    console.error('Failed to initialize tracking:', e.message);
+  }
 
   // Publish event
   await publishShipmentEvent('SHIPMENT_CREATED', shipment);
@@ -234,6 +242,20 @@ async function updateStatus(shipmentId, newStatus, additionalData = {}) {
 
   // Handle side effects based on status
   await handleStatusChange(updatedShipment, shipment.status);
+
+  // Add tracking event
+  try {
+    const shipper = updatedShipment.shipper_id 
+      ? await shipperService.getShipperById(updatedShipment.shipper_id)
+      : null;
+    await trackingService.simulateTrackingEvents(shipmentId, newStatus, {
+      shipment: updatedShipment,
+      shipper,
+      ...additionalData,
+    });
+  } catch (e) {
+    console.error('Failed to add tracking event:', e.message);
+  }
 
   // Publish event
   await publishShipmentEvent('SHIPMENT_STATUS_CHANGED', {
@@ -422,6 +444,54 @@ async function publishShipmentEvent(eventType, data) {
   }
 }
 
+// ============================================
+// EARNINGS
+// ============================================
+
+/**
+ * Get shipper earnings for a date range
+ * @param {string} shipperId
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {Promise<Object>}
+ */
+async function getShipperEarnings(shipperId, startDate, endDate) {
+  const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
+  
+  const { data: shipments, error } = await supabaseAdmin
+    .from('shipments')
+    .select('id, shipping_fee, cod_amount, delivered_at, status')
+    .eq('shipper_id', shipperId)
+    .eq('status', 'delivered')
+    .gte('delivered_at', startDate.toISOString())
+    .lte('delivered_at', endDate.toISOString())
+    .order('delivered_at', { ascending: false });
+
+  if (error) {
+    throw new AppError('QUERY_ERROR', `Failed to get earnings: ${error.message}`, 500);
+  }
+
+  const deliveries = shipments || [];
+  const totalShippingFee = deliveries.reduce((sum, s) => sum + (parseFloat(s.shipping_fee) || 0), 0);
+  const totalCodCollected = deliveries.reduce((sum, s) => sum + (parseFloat(s.cod_amount) || 0), 0);
+  
+  // Shipper earnings = shipping fee (COD is collected but returned to shop)
+  const totalEarnings = totalShippingFee;
+
+  return {
+    totalEarnings,
+    totalDeliveries: deliveries.length,
+    totalShippingFee,
+    totalCodCollected,
+    deliveries: deliveries.map(d => ({
+      id: d.id,
+      shippingFee: parseFloat(d.shipping_fee) || 0,
+      codAmount: parseFloat(d.cod_amount) || 0,
+      deliveredAt: d.delivered_at,
+    })),
+  };
+}
+
 module.exports = {
   // Creation
   createShipment,
@@ -447,4 +517,7 @@ module.exports = {
   
   // Rating
   rateDelivery,
+  
+  // Earnings
+  getShipperEarnings,
 };

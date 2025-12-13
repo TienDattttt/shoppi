@@ -32,6 +32,7 @@ const ProductApproval = lazy(() => import("@/pages/admin/ProductApproval"));
 const OrderManagement = lazy(() => import("@/pages/admin/OrderManagement"));
 const VoucherManagement = lazy(() => import("@/pages/admin/VoucherManagement"));
 const ShipperManagement = lazy(() => import("@/pages/admin/ShipperManagement"));
+const PostOfficeManagement = lazy(() => import("@/pages/admin/PostOfficeManagement"));
 const Reports = lazy(() => import("@/pages/admin/Reports"));
 const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
 const UserDetail = lazy(() => import("@/pages/admin/UserDetail"));
@@ -146,6 +147,7 @@ function App() {
             <Route path="/admin/vouchers/:id" element={<AdminLayout><VoucherDetail /></AdminLayout>} />
             <Route path="/admin/shippers" element={<AdminLayout><ShipperManagement /></AdminLayout>} />
             <Route path="/admin/shippers/:id" element={<AdminLayout><ShipperDetail /></AdminLayout>} />
+            <Route path="/admin/post-offices" element={<AdminLayout><PostOfficeManagement /></AdminLayout>} />
             <Route path="/admin/reports" element={<AdminLayout><Reports /></AdminLayout>} />
             <Route path="/admin/notifications" element={<AdminLayout><NotificationPage /></AdminLayout>} />
             <Route path="/admin/settings" element={<AdminLayout><AdminSettings /></AdminLayout>} />

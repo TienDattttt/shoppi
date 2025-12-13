@@ -71,6 +71,13 @@ class LocationDataSourceImpl implements LocationDataSource {
     return await Geolocator.isLocationServiceEnabled();
   }
 
+  String? _shipperId;
+  
+  /// Set shipper ID for location updates
+  void setShipperId(String shipperId) {
+    _shipperId = shipperId;
+  }
+
   @override
   Future<void> startTracking() async {
     if (_isTracking) return;
@@ -78,7 +85,7 @@ class LocationDataSourceImpl implements LocationDataSource {
 
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10,
+      distanceFilter: 50, // Update every 50 meters
     );
 
     _positionSubscription = Geolocator.getPositionStream(
@@ -94,15 +101,20 @@ class LocationDataSourceImpl implements LocationDataSource {
       );
       _locationController.add(entity);
 
-      try {
-        await _client.post('/shippers/location', data: {
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'heading': position.heading,
-          'speed': position.speed,
-        });
-      } catch (e) {
-        // Ignore error - location update failed
+      // Send location update to backend
+      // Backend endpoint: POST /api/shippers/:id/location
+      if (_shipperId != null) {
+        try {
+          await _client.post('/shippers/$_shipperId/location', data: {
+            'lat': position.latitude,
+            'lng': position.longitude,
+            'accuracy': position.accuracy,
+            'heading': position.heading,
+            'speed': position.speed,
+          });
+        } catch (e) {
+          // Ignore error - location update failed, will retry on next position
+        }
       }
     });
   }

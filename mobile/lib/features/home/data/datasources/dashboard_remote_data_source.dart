@@ -14,7 +14,26 @@ class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
 
   @override
   Future<DashboardStatsModel> getStats() async {
-    final response = await _client.get('/shippers/dashboard/stats');
-    return DashboardStatsModel.fromJson(response);
+    // Fetch earnings and shipper profile to build dashboard stats
+    // Backend endpoints: GET /api/shippers/earnings?period=today, GET /api/shippers/me
+    try {
+      final earningsResponse = await _client.get('/shippers/earnings', queryParameters: {'period': 'today'});
+      final shipperResponse = await _client.get('/shippers/me');
+      final activeShipmentsResponse = await _client.get('/shipments/active');
+      
+      return DashboardStatsModel.fromMultipleSources(
+        earnings: earningsResponse,
+        shipper: shipperResponse,
+        activeShipments: activeShipmentsResponse,
+      );
+    } catch (e) {
+      // Return default stats if API fails
+      return const DashboardStatsModel(
+        todayEarnings: 0,
+        todayTrips: 0,
+        currentRating: 0,
+        activeShipmentsCount: 0,
+      );
+    }
   }
 }

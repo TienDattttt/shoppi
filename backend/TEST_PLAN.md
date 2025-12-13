@@ -158,9 +158,9 @@
 
 
 #### Notification
-- [ ] List notifications (/notifications)
-- [ ] Mark as read (/notifications/:id/read)
-- [ ] Update preferences (/notifications/preferences)
+- [x] List notifications (/notifications)
+- [x] Mark as read (/notifications/:id/read)
+- [x] Update preferences (/notifications/preferences)
 
 #### Chat
 - [x] Create conversation (/chat/conversations)

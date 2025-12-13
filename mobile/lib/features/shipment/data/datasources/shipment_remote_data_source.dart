@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import '../../../../core/network/api_client.dart';
 import '../models/shipment_model.dart';
+import '../models/tracking_event_model.dart';
 
 abstract class ShipmentRemoteDataSource {
   Future<List<ShipmentModel>> getActiveShipments();
@@ -10,6 +11,7 @@ abstract class ShipmentRemoteDataSource {
   Future<ShipmentModel> markPickedUp(String id);
   Future<ShipmentModel> markDelivered(String id, String photoPath, String? signaturePath);
   Future<ShipmentModel> markFailed(String id, String reason);
+  Future<List<TrackingEventModel>> getTrackingHistory(String shipmentId);
 }
 
 @LazySingleton(as: ShipmentRemoteDataSource)
@@ -20,57 +22,98 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
 
   @override
   Future<List<ShipmentModel>> getActiveShipments() async {
-    final response = await _client.get('/shipper/shipments/active');
-    return (response as List).map((e) => ShipmentModel.fromJson(e)).toList();
+    // Backend endpoint: GET /api/shipments/active
+    final response = await _client.get('/shipments/active');
+    // Response is { data: [...] } which gets unwrapped to [...]
+    if (response is List) {
+      return response.map((e) => ShipmentModel.fromJson(e)).toList();
+    }
+    // Handle case where response might be wrapped in 'data' key
+    final data = response['data'] ?? response;
+    return (data as List).map((e) => ShipmentModel.fromJson(e)).toList();
   }
 
   @override
   Future<List<ShipmentModel>> getHistory({DateTime? fromDate, DateTime? toDate}) async {
-    final response = await _client.get('/shipper/shipments/history', queryParameters: {
+    // Backend endpoint: GET /api/shipments?status=delivered,failed
+    final response = await _client.get('/shipments', queryParameters: {
+      'status': 'delivered,failed',
       if (fromDate != null) 'fromDate': fromDate.toIso8601String(),
       if (toDate != null) 'toDate': toDate.toIso8601String(),
     });
-    return (response as List).map((e) => ShipmentModel.fromJson(e)).toList();
+    if (response is List) {
+      return response.map((e) => ShipmentModel.fromJson(e)).toList();
+    }
+    final data = response['data'] ?? response;
+    return (data as List).map((e) => ShipmentModel.fromJson(e)).toList();
   }
 
   @override
   Future<ShipmentModel> getShipmentById(String id) async {
-    final response = await _client.get('/shipper/shipments/$id');
+    // Backend endpoint: GET /api/shipments/:id
+    final response = await _client.get('/shipments/$id');
+    if (response is Map<String, dynamic> && response.containsKey('data')) {
+      return ShipmentModel.fromJson(response['data']);
+    }
     return ShipmentModel.fromJson(response);
   }
 
   @override
   Future<ShipmentModel> markPickedUp(String id) async {
-    final response = await _client.post('/shipments/$id/status', data: {
+    // Backend endpoint: PATCH /api/shipments/:id/status
+    final response = await _client.patch('/shipments/$id/status', data: {
       'status': 'picked_up',
     });
+    if (response is Map<String, dynamic> && response.containsKey('data')) {
+      return ShipmentModel.fromJson(response['data']);
+    }
     return ShipmentModel.fromJson(response);
   }
 
   @override
   Future<ShipmentModel> markDelivered(String id, String photoPath, String? signaturePath) async {
-    // Validate Property 4: Image Validation (Max 5MB) - Technically should be done in UI or Domain, 
-    // but good to check here or ensure we send multipart correctly.
-    
-    final formData = FormData.fromMap({
+    // Backend endpoint: PATCH /api/shipments/:id/status
+    // For now, send as JSON with URLs (photo upload should be done separately)
+    // TODO: Implement proper file upload to storage first, then send URLs
+    final response = await _client.patch('/shipments/$id/status', data: {
       'status': 'delivered',
-      'photo': await MultipartFile.fromFile(photoPath),
-      if (signaturePath != null) 'signature': await MultipartFile.fromFile(signaturePath),
+      'photoUrl': photoPath, // Should be uploaded URL
+      if (signaturePath != null) 'signatureUrl': signaturePath,
     });
-
-    final response = await _client.post(
-      '/shipments/$id/status',
-      data: formData,
-    );
+    if (response is Map<String, dynamic> && response.containsKey('data')) {
+      return ShipmentModel.fromJson(response['data']);
+    }
     return ShipmentModel.fromJson(response);
   }
 
   @override
   Future<ShipmentModel> markFailed(String id, String reason) async {
-    final response = await _client.post('/shipments/$id/status', data: {
+    // Backend endpoint: PATCH /api/shipments/:id/status
+    final response = await _client.patch('/shipments/$id/status', data: {
       'status': 'failed',
       'failureReason': reason,
     });
+    if (response is Map<String, dynamic> && response.containsKey('data')) {
+      return ShipmentModel.fromJson(response['data']);
+    }
     return ShipmentModel.fromJson(response);
+  }
+
+  @override
+  Future<List<TrackingEventModel>> getTrackingHistory(String shipmentId) async {
+    // Backend endpoint: GET /api/shipments/:id/tracking
+    final response = await _client.get('/shipments/$shipmentId/tracking');
+    
+    // Response format: { data: { shipment: {...}, events: [...] } }
+    List<dynamic> events = [];
+    if (response is Map<String, dynamic>) {
+      if (response.containsKey('events')) {
+        events = response['events'] as List;
+      } else if (response.containsKey('data') && response['data'] is Map) {
+        events = response['data']['events'] as List? ?? [];
+      }
+    }
+    
+    return events.map((e) => TrackingEventModel.fromJson(e)).toList();
   }
 }

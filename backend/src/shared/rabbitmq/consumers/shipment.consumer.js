@@ -216,13 +216,107 @@ async function handleShipmentCreateRequest(data, timestamp) {
   
   console.log(`[ShipmentConsumer] Processing SHIPMENT_CREATE_REQUEST for sub-order ${subOrderId}`);
   
-  // This would typically call shipment service to create shipment
-  // For now, just log it
-  console.log(`[ShipmentConsumer] Would create shipment for sub-order ${subOrderId}`);
-  
-  // In real implementation:
-  // const shipmentService = require('../../../modules/shipper/shipment.service');
-  // await shipmentService.createShipment(subOrderData, deliveryInfo);
+  try {
+    const { supabaseAdmin } = require('../../../shared/supabase/supabase.client');
+    const shipmentService = require('../../../modules/shipper/shipment.service');
+    const assignmentService = require('../../../modules/shipper/assignment.service');
+    
+    // 1. Get sub-order details
+    const { data: subOrder, error: subOrderError } = await supabaseAdmin
+      .from('sub_orders')
+      .select(`
+        *,
+        order:orders(
+          id,
+          user_id,
+          shipping_address,
+          shipping_name,
+          shipping_phone,
+          shipping_address_id
+        ),
+        shop:shops(
+          id,
+          name,
+          address,
+          lat,
+          lng,
+          phone
+        )
+      `)
+      .eq('id', subOrderId)
+      .single();
+    
+    if (subOrderError || !subOrder) {
+      console.error('[ShipmentConsumer] Sub-order not found:', subOrderId);
+      return;
+    }
+    
+    // 2. Get delivery address coordinates
+    let deliveryLat = null, deliveryLng = null;
+    if (subOrder.order?.shipping_address_id) {
+      const { data: address } = await supabaseAdmin
+        .from('user_addresses')
+        .select('lat, lng')
+        .eq('id', subOrder.order.shipping_address_id)
+        .single();
+      
+      if (address) {
+        deliveryLat = address.lat;
+        deliveryLng = address.lng;
+      }
+    }
+    
+    // 3. Create shipment
+    const deliveryInfo = {
+      pickupAddress: subOrder.shop?.address || 'Shop address',
+      pickupLat: subOrder.shop?.lat,
+      pickupLng: subOrder.shop?.lng,
+      pickupContactName: subOrder.shop?.name,
+      pickupContactPhone: subOrder.shop?.phone,
+      deliveryAddress: subOrder.order?.shipping_address,
+      deliveryLat,
+      deliveryLng,
+      deliveryContactName: subOrder.order?.shipping_name,
+      deliveryContactPhone: subOrder.order?.shipping_phone,
+      shippingFee: subOrder.shipping_fee || 0,
+      codAmount: 0, // TODO: Calculate COD if payment method is COD
+    };
+    
+    const shipment = await shipmentService.createShipment(subOrder, deliveryInfo);
+    console.log(`[ShipmentConsumer] Shipment created: ${shipment.id}`);
+    
+    // 4. Auto-assign shipper
+    try {
+      const assignedShipment = await assignmentService.autoAssignShipment(shipment.id);
+      console.log(`[ShipmentConsumer] Shipper auto-assigned for shipment ${shipment.id}`);
+      
+      // Notify shipper
+      if (assignedShipment.pickupShipper?.user_id) {
+        await notifyShipper(assignedShipment.pickupShipper.user_id, {
+          type: 'NEW_SHIPMENT',
+          shipmentId: shipment.id,
+          trackingNumber: shipment.tracking_number,
+          message: 'Bạn có đơn lấy hàng mới',
+        });
+      }
+    } catch (assignError) {
+      console.warn(`[ShipmentConsumer] Auto-assign failed: ${assignError.message}`);
+      // Shipment created but not assigned - admin can assign manually
+    }
+    
+    // 5. Notify customer
+    if (subOrder.order?.user_id) {
+      await notifyCustomer(subOrder.order.user_id, {
+        type: 'SHIPMENT_CREATED',
+        orderId,
+        trackingNumber: shipment.tracking_number,
+        message: `Đơn hàng đang được chuẩn bị giao. Mã vận đơn: ${shipment.tracking_number}`,
+      });
+    }
+    
+  } catch (error) {
+    console.error('[ShipmentConsumer] Failed to create shipment:', error.message);
+  }
 }
 
 // ============================================

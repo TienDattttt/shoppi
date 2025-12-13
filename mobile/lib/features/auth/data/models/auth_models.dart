@@ -14,53 +14,101 @@ class ShipperModel extends ShipperEntity {
     required super.totalDeliveries,
   });
 
+  /// Parse from backend response (snake_case)
   factory ShipperModel.fromJson(Map<String, dynamic> json) {
+    // Handle nested data structure from backend
+    final data = json['data'] ?? json;
+    
     return ShipperModel(
-      id: json['id'] as String,
-      userId: json['userId'] as String,
-      fullName: json['fullName'] as String,
-      phone: json['phone'] as String,
-      vehicleType: json['vehicleType'] as String,
-      vehiclePlate: json['vehiclePlate'] as String,
-      status: json['status'] as String,
-      isOnline: json['isOnline'] as bool? ?? false,
-      avgRating: (json['avgRating'] as num?)?.toDouble() ?? 0.0,
-      totalDeliveries: json['totalDeliveries'] as int? ?? 0,
+      id: data['id'] as String,
+      userId: data['user_id'] as String? ?? data['userId'] as String? ?? '',
+      fullName: data['full_name'] as String? ?? 
+                data['fullName'] as String? ?? 
+                (data['user'] as Map<String, dynamic>?)?['full_name'] as String? ?? '',
+      phone: data['phone'] as String? ?? 
+             (data['user'] as Map<String, dynamic>?)?['phone'] as String? ?? '',
+      vehicleType: data['vehicle_type'] as String? ?? data['vehicleType'] as String? ?? 'motorbike',
+      vehiclePlate: data['vehicle_plate'] as String? ?? data['vehiclePlate'] as String? ?? '',
+      status: data['status'] as String? ?? 'pending',
+      isOnline: data['is_online'] as bool? ?? data['isOnline'] as bool? ?? false,
+      avgRating: (data['avg_rating'] as num?)?.toDouble() ?? 
+                 (data['avgRating'] as num?)?.toDouble() ?? 0.0,
+      totalDeliveries: data['total_deliveries'] as int? ?? 
+                       data['totalDeliveries'] as int? ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'userId': userId,
-      'fullName': fullName,
+      'user_id': userId,
+      'full_name': fullName,
       'phone': phone,
-      'vehicleType': vehicleType,
-      'vehiclePlate': vehiclePlate,
+      'vehicle_type': vehicleType,
+      'vehicle_plate': vehiclePlate,
       'status': status,
-      'isOnline': isOnline,
-      'avgRating': avgRating,
-      'totalDeliveries': totalDeliveries,
+      'is_online': isOnline,
+      'avg_rating': avgRating,
+      'total_deliveries': totalDeliveries,
     };
   }
 }
 
 class LoginResponseModel {
   final String accessToken;
-  final String refreshToken;
-  final ShipperModel shipper;
+  final String? refreshToken;
+  final UserModel? user;
 
   const LoginResponseModel({
     required this.accessToken,
-    required this.refreshToken,
-    required this.shipper,
+    this.refreshToken,
+    this.user,
   });
 
+  /// Parse from backend response
+  /// Backend returns: { accessToken, refreshToken, user: {...} }
   factory LoginResponseModel.fromJson(Map<String, dynamic> json) {
+    // Handle nested data structure
+    final data = json['data'] ?? json;
+    
     return LoginResponseModel(
-      accessToken: json['accessToken'] as String,
-      refreshToken: json['refreshToken'] as String,
-      shipper: ShipperModel.fromJson(json['shipper'] as Map<String, dynamic>),
+      accessToken: data['accessToken'] as String? ?? 
+                   data['access_token'] as String? ?? '',
+      refreshToken: data['refreshToken'] as String? ?? 
+                    data['refresh_token'] as String?,
+      user: data['user'] != null 
+          ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+/// User model from auth response
+class UserModel {
+  final String id;
+  final String? email;
+  final String? phone;
+  final String? fullName;
+  final String role;
+  final String? avatarUrl;
+
+  const UserModel({
+    required this.id,
+    this.email,
+    this.phone,
+    this.fullName,
+    required this.role,
+    this.avatarUrl,
+  });
+
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id'] as String,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      fullName: json['full_name'] as String? ?? json['fullName'] as String?,
+      role: json['role'] as String? ?? 'shipper',
+      avatarUrl: json['avatar_url'] as String? ?? json['avatarUrl'] as String?,
     );
   }
 }

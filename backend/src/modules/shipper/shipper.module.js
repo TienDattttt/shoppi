@@ -10,6 +10,8 @@ const shipmentRoutes = require('./shipment.routes');
 const shipperService = require('./shipper.service');
 const shipmentService = require('./shipment.service');
 const locationService = require('./location.service');
+const trackingService = require('./tracking.service');
+const assignmentService = require('./assignment.service');
 const shipperRepository = require('./shipper.repository');
 const shipmentRepository = require('./shipment.repository');
 const shipperDto = require('./shipper.dto');
@@ -55,6 +57,7 @@ function getModuleInfo() {
       'GET /api/shipments/active - Get active shipments',
       'GET /api/shipments/track/:trackingNumber - Track shipment',
       'GET /api/shipments/:id - Get shipment by ID',
+      'GET /api/shipments/:id/tracking - Get tracking history',
       'GET /api/shipments/:id/location - Get shipment location',
       'PATCH /api/shipments/:id/status - Update shipment status',
       'POST /api/shipments/:id/assign - Assign shipper (admin)',
@@ -77,6 +80,8 @@ module.exports = {
   shipperService,
   shipmentService,
   locationService,
+  trackingService,
+  assignmentService,
   
   // Repositories
   shipperRepository,

@@ -1,6 +1,24 @@
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
+import '../config/app_config.dart';
 import 'auth_interceptor.dart';
+
+/// Interceptor to unwrap API response from { success: true, data: {...} } format
+class _ResponseInterceptor extends Interceptor {
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final data = response.data;
+    
+    // Unwrap response if it follows { success: true, data: {...} } format
+    if (data is Map<String, dynamic>) {
+      if (data.containsKey('success') && data.containsKey('data')) {
+        response.data = data['data'];
+      }
+    }
+    
+    handler.next(response);
+  }
+}
 
 @lazySingleton
 class ApiClient {
@@ -8,15 +26,22 @@ class ApiClient {
   final AuthInterceptor _authInterceptor;
 
   ApiClient(this._dio, this._authInterceptor) {
-    _dio.options.baseUrl = 'https://api.shoppi.app/v1'; // Replace with actual API URL
+    _dio.options.baseUrl = AppConfig.apiBaseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
     
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-    ));
+    if (AppConfig.enableLogging) {
+      _dio.interceptors.add(LogInterceptor(
+        requestBody: true,
+        responseBody: true,
+      ));
+    }
     _dio.interceptors.add(_authInterceptor);
+    _dio.interceptors.add(_ResponseInterceptor());
   }
 
   Future<dynamic> get(String path, {Map<String, dynamic>? queryParameters}) async {
@@ -40,6 +65,15 @@ class ApiClient {
   Future<dynamic> put(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
     try {
       final response = await _dio.put(path, data: data, queryParameters: queryParameters);
+      return response.data;
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  Future<dynamic> patch(String path, {dynamic data, Map<String, dynamic>? queryParameters}) async {
+    try {
+      final response = await _dio.patch(path, data: data, queryParameters: queryParameters);
       return response.data;
     } on DioException catch (e) {
       throw _handleDioError(e);
