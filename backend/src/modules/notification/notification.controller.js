@@ -38,8 +38,9 @@ async function getNotifications(req, res) {
 async function getUnreadCount(req, res) {
   try {
     const { userId } = req.user;
-    const count = await notificationService.getUnreadCount(userId);
-    return sendSuccess(res, { count });
+    const result = await notificationService.getUnreadCount(userId);
+    // result is { count: number }, return directly
+    return sendSuccess(res, result);
   } catch (error) {
     return sendError(res, error.code || 'NOTIFICATION_ERROR', error.message, error.statusCode || 400);
   }
@@ -172,6 +173,38 @@ async function updatePreferences(req, res) {
   }
 }
 
+/**
+ * Send test notification (development only)
+ * POST /api/notifications/test
+ */
+async function sendTestNotification(req, res) {
+  try {
+    const { userId, role } = req.user;
+    const { type = 'ORDER', title, body } = req.body;
+    
+    // Create test notification for current user
+    const notification = await notificationService.send(userId, type, {
+      title: title || (role === 'partner' ? 'Đơn hàng mới' : 'Đơn hàng đã xác nhận'),
+      body: body || (role === 'partner' 
+        ? 'Bạn có đơn hàng mới #TEST001 cần xử lý.' 
+        : 'Đơn hàng #TEST001 của bạn đã được xác nhận.'),
+      payload: {
+        orderId: 'test-order-id',
+        type,
+        isTest: true,
+      },
+      sendPush: false, // Don't send push for test
+    });
+    
+    return sendCreated(res, { 
+      message: 'Test notification sent successfully',
+      notification 
+    });
+  } catch (error) {
+    return sendError(res, error.code || 'NOTIFICATION_ERROR', error.message, error.statusCode || 400);
+  }
+}
+
 module.exports = {
   getNotifications,
   getUnreadCount,
@@ -183,4 +216,5 @@ module.exports = {
   getDevices,
   getPreferences,
   updatePreferences,
+  sendTestNotification,
 };

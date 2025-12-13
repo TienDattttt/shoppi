@@ -12,6 +12,7 @@ const paymentService = require('./payment.service');
 const orderDTO = require('../order.dto');
 const { AppError } = require('../../../shared/utils/error.util');
 const rabbitmq = require('../../../shared/rabbitmq/rabbitmq.client');
+const notificationService = require('../../notification/notification.service');
 
 /**
  * Create order from cart items
@@ -110,9 +111,9 @@ async function createOrder(userId, checkoutData) {
   // Get full order with sub-orders
   const fullOrder = await orderRepository.findOrderById(order.id);
   
-  // Publish ORDER_CREATED event
+  // Publish ORDER_CREATED event via RabbitMQ
   try {
-    await rabbitmq.publishOrderEvent('created', {
+    const eventData = {
       orderId: fullOrder.id,
       userId: fullOrder.user_id,
       grandTotal: fullOrder.grand_total,
@@ -123,9 +124,22 @@ async function createOrder(userId, checkoutData) {
         total: so.total,
       })) || [],
       createdAt: fullOrder.created_at,
-    });
+    };
+    
+    console.log('[Checkout] Publishing order.created event:', { orderId: fullOrder.id });
+    const published = await rabbitmq.publishOrderEvent('created', eventData);
+    
+    if (published) {
+      console.log('[Checkout] Event published to RabbitMQ successfully');
+    } else {
+      // Fallback: Send notifications directly if RabbitMQ not available
+      console.log('[Checkout] RabbitMQ not available, sending notifications directly');
+      await sendOrderNotificationsDirect(fullOrder);
+    }
   } catch (error) {
-    console.error('Failed to publish ORDER_CREATED event:', error.message);
+    console.error('[Checkout] Failed to publish ORDER_CREATED event:', error.message);
+    // Fallback on error
+    await sendOrderNotificationsDirect(fullOrder);
   }
   
   return {
@@ -134,6 +148,63 @@ async function createOrder(userId, checkoutData) {
   };
 }
 
+
+/**
+ * Send order notifications directly (fallback when RabbitMQ not available)
+ */
+async function sendOrderNotificationsDirect(order) {
+  const { supabaseAdmin } = require('../../../shared/supabase/supabase.client');
+  
+  try {
+    // 1. Send notification to customer
+    await notificationService.send(order.user_id, 'ORDER', {
+      title: 'Đặt hàng thành công',
+      body: `Đơn hàng #${order.id.substring(0, 8)} đã được tạo. Tổng: ${formatCurrency(order.grand_total)}`,
+      payload: {
+        orderId: order.id,
+        total: order.grand_total,
+      },
+      sendPush: false,
+    });
+    console.log('[Checkout] Customer notification sent');
+    
+    // 2. Send notification to each partner
+    for (const subOrder of (order.sub_orders || [])) {
+      // Get partner ID from shop
+      const { data: shop } = await supabaseAdmin
+        .from('shops')
+        .select('partner_id')
+        .eq('id', subOrder.shop_id)
+        .single();
+      
+      if (shop?.partner_id) {
+        await notificationService.send(shop.partner_id, 'ORDER', {
+          title: 'Đơn hàng mới',
+          body: `Bạn có đơn hàng mới #${order.id.substring(0, 8)}. Tổng: ${formatCurrency(subOrder.total)}`,
+          payload: {
+            orderId: order.id,
+            subOrderId: subOrder.id,
+            total: subOrder.total,
+          },
+          sendPush: false,
+        });
+        console.log('[Checkout] Partner notification sent to:', shop.partner_id);
+      }
+    }
+  } catch (error) {
+    console.error('[Checkout] Failed to send direct notifications:', error.message);
+  }
+}
+
+/**
+ * Format currency for display
+ */
+function formatCurrency(amount) {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+  }).format(amount);
+}
 
 /**
  * Group cart items by shop

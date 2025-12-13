@@ -8,11 +8,13 @@
 const rabbitmqClient = require('../rabbitmq.client');
 const cassandraClient = require('../../cassandra/cassandra.client');
 
-// Event types this consumer handles
-const HANDLED_EVENTS = [
-  'ORDER_CREATED',
-  'ORDER_STATUS_CHANGED',
-  'ORDER_CANCELLED',
+// Routing keys this consumer handles (must match what publisher sends)
+const ROUTING_KEYS = [
+  'order.created',
+  'order.status_changed',
+  'order.cancelled',
+  'order.payment_success',
+  'order.payment_failed',
 ];
 
 // Queue name for order events
@@ -23,23 +25,29 @@ const QUEUE_NAME = 'order_events';
  */
 async function initialize() {
   const channel = await rabbitmqClient.getChannel();
+  if (!channel) {
+    console.warn('[OrderConsumer] RabbitMQ not available, skipping initialization');
+    return false;
+  }
   
   // Assert queue
   await channel.assertQueue(QUEUE_NAME, { durable: true });
   
-  // Bind to events exchange
-  for (const event of HANDLED_EVENTS) {
-    await channel.bindQueue(QUEUE_NAME, rabbitmqClient.EXCHANGES.EVENTS, event);
+  // Bind to events exchange with correct routing keys
+  for (const routingKey of ROUTING_KEYS) {
+    await channel.bindQueue(QUEUE_NAME, rabbitmqClient.EXCHANGES.EVENTS, routingKey);
   }
   
-  console.log('[OrderConsumer] Initialized, listening for:', HANDLED_EVENTS.join(', '));
+  console.log('[OrderConsumer] Initialized, listening for:', ROUTING_KEYS.join(', '));
+  return true;
 }
 
 /**
  * Start consuming order events
  */
 async function start() {
-  await initialize();
+  const initialized = await initialize();
+  if (!initialized) return;
   
   await rabbitmqClient.consume(QUEUE_NAME, async (message) => {
     const { event, data, timestamp } = message;
@@ -47,15 +55,22 @@ async function start() {
     console.log(`[OrderConsumer] Received event: ${event}`, { orderId: data?.orderId });
     
     try {
+      // Event format is "order.created", "order.cancelled", etc.
       switch (event) {
-        case 'ORDER_CREATED':
+        case 'order.created':
           await handleOrderCreated(data, timestamp);
           break;
-        case 'ORDER_STATUS_CHANGED':
+        case 'order.status_changed':
           await handleOrderStatusChanged(data, timestamp);
           break;
-        case 'ORDER_CANCELLED':
+        case 'order.cancelled':
           await handleOrderCancelled(data, timestamp);
+          break;
+        case 'order.payment_success':
+          await handlePaymentSuccess(data, timestamp);
+          break;
+        case 'order.payment_failed':
+          await handlePaymentFailed(data, timestamp);
           break;
         default:
           console.warn(`[OrderConsumer] Unknown event: ${event}`);
@@ -68,48 +83,46 @@ async function start() {
 }
 
 /**
- * Handle ORDER_CREATED event
- * @param {Object} data - Event data
+ * Handle order.created event
+ * @param {Object} data - Event data from checkout service
  * @param {string} timestamp - Event timestamp
  */
 async function handleOrderCreated(data, timestamp) {
-  const { orderId, customerId, partnerId, totalAmount, items } = data;
+  // Data from checkout service: { orderId, userId, grandTotal, paymentMethod, subOrders, createdAt }
+  const { orderId, userId, grandTotal, subOrders } = data;
   
-  console.log(`[OrderConsumer] Processing ORDER_CREATED for order ${orderId}`);
+  console.log(`[OrderConsumer] Processing order.created for order ${orderId}`);
   
   // 1. Log to Cassandra for analytics
-  await logOrderEvent(orderId, 'CREATED', customerId, 'customer', {
-    totalAmount: String(totalAmount),
-    itemCount: String(items?.length || 0),
+  await logOrderEvent(orderId, 'CREATED', userId, 'customer', {
+    totalAmount: String(grandTotal),
+    subOrderCount: String(subOrders?.length || 0),
   });
   
-  // 2. Send notification to partner(s)
-  await notifyPartner(partnerId, {
-    type: 'NEW_ORDER',
-    orderId,
-    totalAmount,
-    itemCount: items?.length || 0,
-    timestamp,
-  });
+  // 2. Send notification to each partner (shop owner)
+  for (const subOrder of (subOrders || [])) {
+    // Get partner ID from shop
+    const partnerId = await getPartnerIdFromShop(subOrder.shopId);
+    if (partnerId) {
+      await notifyPartner(partnerId, {
+        type: 'NEW_ORDER',
+        orderId,
+        subOrderId: subOrder.id,
+        totalAmount: subOrder.total,
+        timestamp,
+      });
+    }
+  }
   
   // 3. Send confirmation to customer
-  await notifyCustomer(customerId, {
+  await notifyCustomer(userId, {
     type: 'ORDER_CONFIRMED',
     orderId,
-    totalAmount,
+    totalAmount: grandTotal,
     timestamp,
   });
   
-  // 4. Update analytics
-  await updateAnalytics('order_created', {
-    orderId,
-    customerId,
-    partnerId,
-    totalAmount,
-    timestamp,
-  });
-  
-  console.log(`[OrderConsumer] ORDER_CREATED processed for order ${orderId}`);
+  console.log(`[OrderConsumer] order.created processed for order ${orderId}`);
 }
 
 /**
@@ -243,6 +256,106 @@ async function updateAnalytics(eventName, data) {
 }
 
 /**
+ * Get partner ID from shop ID
+ */
+async function getPartnerIdFromShop(shopId) {
+  if (!shopId) return null;
+  
+  try {
+    const { supabaseAdmin } = require('../../supabase/supabase.client');
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .select('partner_id')
+      .eq('id', shopId)
+      .single();
+    
+    if (error || !data) return null;
+    return data.partner_id;
+  } catch (error) {
+    console.error('[OrderConsumer] Failed to get partner ID:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Handle order.payment_success event
+ */
+async function handlePaymentSuccess(data, timestamp) {
+  const { orderId, provider, amount, transactionId } = data;
+  
+  console.log(`[OrderConsumer] Processing order.payment_success for order ${orderId}`);
+  
+  // Log to Cassandra
+  await logOrderEvent(orderId, 'PAYMENT_SUCCESS', null, 'system', {
+    provider,
+    amount: String(amount),
+    transactionId,
+  });
+  
+  // Get order details to notify customer
+  try {
+    const { supabaseAdmin } = require('../../supabase/supabase.client');
+    const { data: order } = await supabaseAdmin
+      .from('orders')
+      .select('user_id, grand_total')
+      .eq('id', orderId)
+      .single();
+    
+    if (order) {
+      await notifyCustomer(order.user_id, {
+        type: 'ORDER_CONFIRMED',
+        orderId,
+        totalAmount: order.grand_total,
+        message: 'Thanh toán thành công! Đơn hàng của bạn đã được xác nhận.',
+        timestamp,
+      });
+    }
+  } catch (error) {
+    console.error('[OrderConsumer] Failed to notify payment success:', error.message);
+  }
+  
+  console.log(`[OrderConsumer] order.payment_success processed for order ${orderId}`);
+}
+
+/**
+ * Handle order.payment_failed event
+ */
+async function handlePaymentFailed(data, timestamp) {
+  const { orderId, provider, reason } = data;
+  
+  console.log(`[OrderConsumer] Processing order.payment_failed for order ${orderId}`);
+  
+  // Log to Cassandra
+  await logOrderEvent(orderId, 'PAYMENT_FAILED', null, 'system', {
+    provider,
+    reason,
+  });
+  
+  // Get order details to notify customer
+  try {
+    const { supabaseAdmin } = require('../../supabase/supabase.client');
+    const { data: order } = await supabaseAdmin
+      .from('orders')
+      .select('user_id')
+      .eq('id', orderId)
+      .single();
+    
+    if (order) {
+      await notifyCustomer(order.user_id, {
+        type: 'ORDER_CANCELLED',
+        orderId,
+        reason: reason || 'Thanh toán không thành công',
+        timestamp,
+      });
+    }
+  } catch (error) {
+    console.error('[OrderConsumer] Failed to notify payment failed:', error.message);
+  }
+  
+  console.log(`[OrderConsumer] order.payment_failed processed for order ${orderId}`);
+}
+
+/**
  * Stop consumer
  */
 async function stop() {
@@ -254,5 +367,5 @@ module.exports = {
   start,
   stop,
   QUEUE_NAME,
-  HANDLED_EVENTS,
+  ROUTING_KEYS,
 };

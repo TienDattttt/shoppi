@@ -70,6 +70,13 @@ notificationRouter.delete(
   notificationController.deleteNotification
 );
 
+// Test endpoint - Send test notification (development only)
+notificationRouter.post(
+  '/test',
+  authMiddleware.authenticate,
+  notificationController.sendTestNotification
+);
+
 /**
  * Device Routes - /api/devices
  * All routes require authentication
