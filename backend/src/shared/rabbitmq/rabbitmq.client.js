@@ -25,17 +25,29 @@ const EXCHANGES = {
   ORDERS: 'orders',
 };
 
+// Track if RabbitMQ is available
+let isAvailable = true;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 3;
+
 /**
  * Connect to RabbitMQ
- * @returns {Promise<amqp.Connection>}
+ * @returns {Promise<amqp.Connection|null>}
  */
 async function connect() {
   if (connection) return connection;
+  
+  // Skip if we've exceeded reconnect attempts
+  if (!isAvailable && reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    return null;
+  }
 
-  const url = process.env.RABBITMQ_URL || 'amqp://localhost:5672';
+  const url = process.env.RABBITMQ_URL || 'amqp://admin:admin123@localhost:5672';
   
   try {
     connection = await amqp.connect(url);
+    isAvailable = true;
+    reconnectAttempts = 0;
     
     connection.on('error', (err) => {
       console.error('RabbitMQ connection error:', err.message);
@@ -49,23 +61,55 @@ async function connect() {
       channel = null;
     });
 
-    console.log('RabbitMQ: Connected');
+    console.log('RabbitMQ: Connected to', url.replace(/:[^:@]+@/, ':***@'));
     return connection;
   } catch (error) {
-    console.error('Failed to connect to RabbitMQ:', error.message);
-    throw error;
+    reconnectAttempts++;
+    console.warn(`[RabbitMQ] Connection failed (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}):`, error.message);
+    
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      isAvailable = false;
+      console.warn('[RabbitMQ] Max reconnect attempts reached. RabbitMQ features disabled.');
+    }
+    return null;
   }
 }
 
 /**
  * Get or create channel
- * @returns {Promise<amqp.Channel>}
+ * @returns {Promise<amqp.Channel|null>}
  */
 async function getChannel() {
-  if (channel) return channel;
+  // Check if channel is still valid
+  if (channel) {
+    try {
+      // Test if channel is still open
+      await channel.checkQueue(QUEUES.NOTIFICATIONS);
+      return channel;
+    } catch {
+      // Channel is closed, reset
+      channel = null;
+      connection = null;
+    }
+  }
 
   const conn = await connect();
+  if (!conn) {
+    return null; // RabbitMQ not available
+  }
+  
   channel = await conn.createChannel();
+  
+  // Handle channel errors
+  channel.on('error', (err) => {
+    console.error('RabbitMQ channel error:', err.message);
+    channel = null;
+  });
+
+  channel.on('close', () => {
+    console.log('RabbitMQ channel closed');
+    channel = null;
+  });
   
   // Setup exchanges
   await channel.assertExchange(EXCHANGES.EVENTS, 'topic', { durable: true });
@@ -95,8 +139,11 @@ async function getChannel() {
  */
 async function publishToQueue(queue, message, options = {}) {
   const ch = await getChannel();
-  const content = Buffer.from(JSON.stringify(message));
+  if (!ch) {
+    return false; // RabbitMQ not available
+  }
   
+  const content = Buffer.from(JSON.stringify(message));
   return ch.sendToQueue(queue, content, {
     persistent: true,
     ...options,
@@ -111,8 +158,11 @@ async function publishToQueue(queue, message, options = {}) {
  */
 async function publishToExchange(exchange, routingKey, message) {
   const ch = await getChannel();
-  const content = Buffer.from(JSON.stringify(message));
+  if (!ch) {
+    return false; // RabbitMQ not available
+  }
   
+  const content = Buffer.from(JSON.stringify(message));
   return ch.publish(exchange, routingKey, content, { persistent: true });
 }
 
@@ -124,6 +174,10 @@ async function publishToExchange(exchange, routingKey, message) {
  */
 async function consume(queue, handler, options = {}) {
   const ch = await getChannel();
+  if (!ch) {
+    console.warn(`[RabbitMQ] Cannot consume from ${queue} - not connected`);
+    return;
+  }
   
   await ch.consume(queue, async (msg) => {
     if (!msg) return;
@@ -146,11 +200,17 @@ async function consume(queue, handler, options = {}) {
  * @param {object} payload - Notification payload
  */
 async function publishNotification(type, payload) {
-  return publishToExchange(EXCHANGES.NOTIFICATIONS, type, {
-    type,
-    payload,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    return await publishToExchange(EXCHANGES.NOTIFICATIONS, type, {
+      type,
+      payload,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    // Log but don't throw - notifications are non-critical
+    console.warn(`[RabbitMQ] Failed to publish notification ${type}:`, error.message);
+    return false;
+  }
 }
 
 /**
@@ -159,11 +219,17 @@ async function publishNotification(type, payload) {
  * @param {object} orderData - Order data
  */
 async function publishOrderEvent(eventType, orderData) {
-  return publishToExchange(EXCHANGES.EVENTS, `order.${eventType}`, {
-    event: `order.${eventType}`,
-    data: orderData,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    return await publishToExchange(EXCHANGES.EVENTS, `order.${eventType}`, {
+      event: `order.${eventType}`,
+      data: orderData,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    // Log but don't throw - RabbitMQ is optional for order processing
+    console.warn(`[RabbitMQ] Failed to publish order event ${eventType}:`, error.message);
+    return false;
+  }
 }
 
 /**

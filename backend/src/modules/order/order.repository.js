@@ -111,8 +111,50 @@ async function findOrdersByUser(userId, filters = {}) {
   
   if (error) throw error;
   
+  // Enrich sub_orders with shop info
+  const orders = data || [];
+  for (const order of orders) {
+    if (order.sub_orders) {
+      for (const subOrder of order.sub_orders) {
+        if (subOrder.shop_id) {
+          // Try to find shop by id first
+          let { data: shop, error: shopError } = await supabase
+            .from('shops')
+            .select('id, shop_name, logo_url, partner_id')
+            .eq('id', subOrder.shop_id)
+            .single();
+          
+          // If not found, try to find by partner_id (in case shop_id is actually partner_id)
+          if (!shop) {
+            const { data: shopByPartner } = await supabase
+              .from('shops')
+              .select('id, shop_name, logo_url, partner_id')
+              .eq('partner_id', subOrder.shop_id)
+              .single();
+            shop = shopByPartner;
+          }
+          
+          if (shop) {
+            subOrder.shops = shop;
+          } else {
+            console.log(`[OrderRepo] Shop not found for shop_id: ${subOrder.shop_id}`, shopError?.message);
+          }
+        }
+      }
+    }
+  }
+  
+  // Debug log
+  console.log('[OrderRepo] Orders enriched with shop info:', orders.map(o => ({
+    orderId: o.id,
+    subOrders: o.sub_orders?.map(so => ({
+      shopId: so.shop_id,
+      shops: so.shops ? { id: so.shops.id, name: so.shops.shop_name, partnerId: so.shops.partner_id } : null
+    }))
+  })));
+  
   return {
-    orders: data || [],
+    orders,
     pagination: {
       page,
       limit,

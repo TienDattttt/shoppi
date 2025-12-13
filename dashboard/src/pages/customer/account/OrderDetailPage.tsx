@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MapPin, Truck, CreditCard, Loader2 } from "lucide-react";
+import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { orderService, type Order } from "@/services/order.service";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ReviewModal } from "@/components/customer/review/ReviewModal";
 
 // Map status to Vietnamese
 function getStatusText(status: string): string {
@@ -55,6 +56,7 @@ export default function OrderDetailPage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
+    const [showReviewModal, setShowReviewModal] = useState(false);
 
     useEffect(() => {
         if (id) {
@@ -157,6 +159,18 @@ export default function OrderDetailPage() {
     
     // Check if needs payment
     const needsPayment = order.status === 'pending_payment' && order.paymentMethod !== 'cod';
+    
+    // Check if can review (order completed)
+    const canReview = order.status === 'completed' || 
+        order.subOrders?.some(so => so.status === 'completed' || so.status === 'delivered');
+    
+    // Get items for review
+    const reviewItems = allItems.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        variantName: item.variantName,
+        imageUrl: item.imageUrl,
+    }));
 
     return (
         <div className="space-y-6">
@@ -323,6 +337,17 @@ export default function OrderDetailPage() {
                     </Button>
                 )}
                 
+                {canReview && (
+                    <Button 
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setShowReviewModal(true)}
+                    >
+                        <Star className="h-4 w-4" />
+                        Đánh giá
+                    </Button>
+                )}
+                
                 <Button variant="outline" onClick={() => navigate("/user/purchase")}>
                     Quay lại
                 </Button>
@@ -358,6 +383,14 @@ export default function OrderDetailPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Review Modal */}
+            <ReviewModal
+                open={showReviewModal}
+                onOpenChange={setShowReviewModal}
+                items={reviewItems}
+                onSuccess={() => toast.success("Cảm ơn bạn đã đánh giá!")}
+            />
         </div>
     );
 }

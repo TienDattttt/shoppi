@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChatStore } from "@/store/chatStore";
-import { ChatList } from "./ChatList";
-import { MessageBubble } from "./MessageBubble";
-import { X, Minus, Send, Smile, Image as ImageIcon, Store, Loader2 } from "lucide-react";
+import { PartnerChatList } from "./PartnerChatList";
+import { X, Minus, Send, Smile, Image as ImageIcon, User, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
-import { debounce } from "@/lib/utils";
+import { cn, debounce } from "@/lib/utils";
+import dayjs from "dayjs";
 
-export function ChatWindow() {
+export function PartnerChatWindow() {
     const { 
         isOpen, 
         isMinimized, 
@@ -44,16 +44,13 @@ export function ChatWindow() {
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setInputText(e.target.value);
         
-        // Send typing indicator
         if (activeConversationId && e.target.value.length > 0) {
             sendTypingIndicator(activeConversationId, true);
             
-            // Clear previous timeout
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
             }
             
-            // Stop typing after 2 seconds of no input
             typingTimeoutRef.current = setTimeout(() => {
                 if (activeConversationId) {
                     setTyping(activeConversationId, false);
@@ -87,10 +84,10 @@ export function ChatWindow() {
                 className="fixed bottom-0 right-4 w-72 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.15)] rounded-t-lg overflow-hidden z-50 cursor-pointer border border-gray-200"
                 onClick={() => minimizeChat(false)}
             >
-                <div className="bg-shopee-orange text-white px-4 py-3 flex items-center justify-between">
+                <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2 font-medium">
                         <span className="animate-pulse h-2 w-2 bg-green-400 rounded-full"></span>
-                        Chat {totalUnread > 0 && `(${totalUnread})`}
+                        Chat với khách hàng {totalUnread > 0 && `(${totalUnread})`}
                     </div>
                 </div>
             </div>
@@ -119,14 +116,14 @@ export function ChatWindow() {
     };
 
     return (
-        <div className="fixed bottom-0 right-4 w-[600px] h-[500px] bg-white shadow-[0_-2px_20px_rgba(0,0,0,0.2)] rounded-t-lg z-50 flex flex-col border border-gray-200 overflow-hidden">
+        <div className="fixed bottom-0 right-4 w-[650px] h-[550px] bg-white shadow-[0_-2px_20px_rgba(0,0,0,0.2)] rounded-t-lg z-50 flex flex-col border border-gray-200 overflow-hidden">
             {/* Header */}
-            <div className="bg-shopee-orange text-white shrink-0 px-4 py-3 flex items-center justify-between shadow-sm">
+            <div className="bg-blue-600 text-white shrink-0 px-4 py-3 flex items-center justify-between shadow-sm">
                 <div className="font-medium flex items-center gap-2">
-                    <span className="text-lg">Chat</span>
+                    <span className="text-lg">Chat với khách hàng</span>
                     {activeConversation && (
                         <>
-                            <span className="text-orange-200">|</span>
+                            <span className="text-blue-200">|</span>
                             <span className="text-sm font-normal">{activeConversation.recipientName}</span>
                         </>
                     )}
@@ -143,21 +140,21 @@ export function ChatWindow() {
 
             <div className="flex flex-1 overflow-hidden">
                 {/* List */}
-                <ChatList />
+                <PartnerChatList />
 
                 {/* Main Chat Area */}
                 <div className="flex-1 flex flex-col bg-gray-50 h-full">
                     {loading ? (
                         <div className="flex-1 flex items-center justify-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-shopee-orange" />
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                         </div>
                     ) : activeConversation ? (
                         <>
                             {/* Chat Header Info */}
                             <div className="bg-white border-b px-4 py-2 flex justify-between items-center text-xs text-gray-500">
                                 <div className="flex items-center gap-1">
-                                    <Store className="h-3 w-3" />
-                                    {activeConversation.isShop ? 'Shop' : 'Customer'}
+                                    <User className="h-3 w-3" />
+                                    Khách hàng
                                 </div>
                                 <div>
                                     {activeConversation.online ? (
@@ -172,15 +169,29 @@ export function ChatWindow() {
                             <div className="flex-1 overflow-y-auto p-4 space-y-2">
                                 {activeConversation.messages.length === 0 ? (
                                     <div className="text-center text-gray-400 py-8">
-                                        <p>Bắt đầu cuộc trò chuyện</p>
+                                        <p>Bắt đầu cuộc trò chuyện với khách hàng</p>
                                     </div>
                                 ) : (
                                     activeConversation.messages.map(msg => (
-                                        <MessageBubble
+                                        <div 
                                             key={msg.id}
-                                            message={msg}
-                                            isOwn={msg.senderId === user?.id}
-                                        />
+                                            className={cn("flex w-full mb-3", msg.senderId === user?.id ? "justify-end" : "justify-start")}
+                                        >
+                                            <div className={cn(
+                                                "max-w-[70%] rounded-lg px-3 py-2 text-sm",
+                                                msg.senderId === user?.id 
+                                                    ? "bg-blue-600 text-white rounded-br-none" 
+                                                    : "bg-white border rounded-bl-none text-gray-800 shadow-sm"
+                                            )}>
+                                                <div>{msg.text}</div>
+                                                <div className={cn(
+                                                    "text-[10px] mt-1 text-right", 
+                                                    msg.senderId === user?.id ? "text-blue-100" : "text-gray-400"
+                                                )}>
+                                                    {dayjs(msg.timestamp).format('HH:mm')}
+                                                </div>
+                                            </div>
+                                        </div>
                                     ))
                                 )}
                                 {/* Typing indicator */}
@@ -200,8 +211,8 @@ export function ChatWindow() {
                             {/* Input */}
                             <div className="bg-white p-3 border-t">
                                 <div className="flex gap-2 items-center mb-2 text-gray-400">
-                                    <Smile className="h-5 w-5 cursor-pointer hover:text-shopee-orange" />
-                                    <ImageIcon className="h-5 w-5 cursor-pointer hover:text-shopee-orange" />
+                                    <Smile className="h-5 w-5 cursor-pointer hover:text-blue-600" />
+                                    <ImageIcon className="h-5 w-5 cursor-pointer hover:text-blue-600" />
                                 </div>
                                 <div className="flex gap-2">
                                     <Input
@@ -209,13 +220,13 @@ export function ChatWindow() {
                                         onChange={handleInputChange}
                                         onKeyDown={handleKeyDown}
                                         placeholder="Nhập tin nhắn..."
-                                        className="flex-1 border-gray-200 focus-visible:ring-shopee-orange"
+                                        className="flex-1 border-gray-200 focus-visible:ring-blue-600"
                                         disabled={sending}
                                     />
                                     <Button 
                                         onClick={handleSend} 
                                         size="icon" 
-                                        className="bg-shopee-orange hover:bg-shopee-orange-hover text-white"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white"
                                         disabled={sending || !inputText.trim()}
                                     >
                                         {sending ? (
@@ -230,7 +241,7 @@ export function ChatWindow() {
                     ) : (
                         <div className="flex-1 flex items-center justify-center flex-col text-gray-400 gap-2">
                             <div className="h-20 w-20 bg-gray-200 rounded-full flex items-center justify-center">
-                                <Store className="h-10 w-10 text-white" />
+                                <User className="h-10 w-10 text-white" />
                             </div>
                             <p>Chọn cuộc trò chuyện để bắt đầu</p>
                         </div>

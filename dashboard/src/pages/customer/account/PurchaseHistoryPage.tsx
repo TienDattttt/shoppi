@@ -25,9 +25,13 @@ function getDisplayStatus(order: Order): string {
 
 // Transform Order to OrderCard format
 function transformOrder(order: Order) {
+    const firstSubOrder = order.subOrders?.[0];
+    const shopInfo = firstSubOrder?.shops;
+    
     const items = order.subOrders?.flatMap(so => 
         so.items.map(item => ({
             id: item.id,
+            productId: item.productId,
             name: item.productName,
             image: item.imageUrl || 'https://placehold.co/100x100?text=Product',
             variant: item.variantName || undefined,
@@ -39,8 +43,10 @@ function transformOrder(order: Order) {
     return {
         id: order.id,
         orderNumber: order.orderNumber,
-        shopId: order.subOrders?.[0]?.shopId || '',
-        shopName: 'Shop', // TODO: Get shop name from API
+        shopId: firstSubOrder?.shopId || '',
+        partnerId: shopInfo?.partner_id || '',
+        shopName: shopInfo?.shop_name || 'Shop',
+        shopAvatar: shopInfo?.logo_url || '',
         status: getDisplayStatus(order),
         items,
         total: order.grandTotal,

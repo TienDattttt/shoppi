@@ -142,6 +142,14 @@ function serializeSubOrder(subOrder) {
       paymentMethod: subOrder.orders.payment_method,
       paymentStatus: subOrder.orders.payment_status,
     } : null,
+    
+    // Shop info (if joined)
+    shops: subOrder.shops ? {
+      id: subOrder.shops.id,
+      shop_name: subOrder.shops.shop_name,
+      logo_url: subOrder.shops.logo_url,
+      partner_id: subOrder.shops.partner_id,
+    } : null,
   };
 }
 

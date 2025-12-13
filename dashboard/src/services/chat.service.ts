@@ -2,115 +2,166 @@ import api from "./api";
 
 export interface ChatRoom {
     id: string;
-    customer_id: string;
-    shop_id: string;
-    last_message: string | null;
-    last_message_at: string | null;
-    customer_unread_count: number;
-    shop_unread_count: number;
-    is_active: boolean;
-    created_at: string;
-    updated_at: string;
-    // Relations
-    customer?: { id: string; full_name: string; avatar_url: string | null };
-    shop?: { id: string; shop_name: string; logo_url: string | null };
+    customerId: string;
+    partnerId: string;
+    productId?: string;
+    orderId?: string;
+    status: 'active' | 'closed' | 'archived';
+    lastMessageAt?: string;
+    unreadCount: number;
+    participant: {
+        id: string;
+        name: string;
+        avatar?: string;
+        isPartner: boolean;
+    };
+    product?: {
+        id: string;
+        name: string;
+        image?: string;
+    };
+    order?: {
+        id: string;
+        orderNumber: string;
+        status: string;
+    };
+    createdAt: string;
+    updatedAt?: string;
+    // Aliases for convenience
+    shopName?: string;
+    shopAvatar?: string;
+    customerName?: string;
+    customerAvatar?: string;
 }
 
 export interface ChatMessage {
     id: string;
-    room_id: string;
-    sender_id: string;
-    sender_type: 'customer' | 'shop';
-    message_type: 'text' | 'image' | 'product' | 'order';
-    content: string;
-    metadata: Record<string, any> | null;
-    is_read: boolean;
-    read_at: string | null;
-    created_at: string;
+    roomId: string;
+    senderId: string;
+    messageType: 'text' | 'image' | 'product' | 'order' | 'system';
+    content: string | null;
+    metadata?: Record<string, any>;
+    isRead: boolean;
+    readAt?: string;
+    isDeleted?: boolean;
+    deletedAt?: string;
+    sender?: {
+        id: string;
+        name: string;
+        avatar?: string;
+    };
+    replyTo?: {
+        id: string;
+        content: string;
+        senderName?: string;
+    };
+    createdAt: string;
+    updatedAt?: string;
 }
 
-export interface SendMessageData {
-    roomId: string;
-    messageType: 'text' | 'image' | 'product' | 'order';
-    content: string;
-    metadata?: Record<string, any>;
+export interface StartChatData {
+    partnerId: string;
+    productId?: string;
+    orderId?: string;
 }
 
 export const chatService = {
-    // ============================================
-    // CONVERSATION OPERATIONS
-    // ============================================
-
-    // Get conversations
-    getConversations: async (params?: { page?: number; limit?: number }) => {
-        const response = await api.get("/chat/conversations", { params });
+    // Start or get chat with partner/shop
+    startChat: async (data: StartChatData): Promise<ChatRoom> => {
+        const response = await api.post("/chat/start", data);
         return response.data;
     },
 
-    // Create conversation (Customer initiates chat with shop)
-    createConversation: async (shopId: string) => {
-        const response = await api.post("/chat/conversations", { shopId });
+    // Get user's chat rooms
+    getChatRooms: async (params?: { page?: number; limit?: number; status?: string }): Promise<{
+        data: ChatRoom[];
+        pagination: { page: number; limit: number; total: number; hasMore: boolean };
+    }> => {
+        const response = await api.get("/chat/rooms", { params });
         return response.data;
     },
 
-    // Get conversation by ID
-    getConversationById: async (id: string) => {
-        const response = await api.get(`/chat/conversations/${id}`);
+    // Get chat room details
+    getChatRoom: async (roomId: string): Promise<ChatRoom> => {
+        const response = await api.get(`/chat/rooms/${roomId}`);
         return response.data;
     },
 
-    // Get or create conversation with shop
-    getOrCreateConversation: async (shopId: string) => {
-        const response = await api.post("/chat/conversations/find-or-create", { shopId });
+    // Get messages in chat room
+    getMessages: async (roomId: string, params?: { page?: number; limit?: number; before?: string }): Promise<{
+        data: ChatMessage[];
+        pagination: { page: number; limit: number; total: number; hasMore: boolean };
+    }> => {
+        const response = await api.get(`/chat/rooms/${roomId}/messages`, { params });
         return response.data;
     },
 
-    // ============================================
-    // MESSAGE OPERATIONS
-    // ============================================
+    // Send text message
+    sendMessage: async (roomId: string, content: string, replyToId?: string): Promise<ChatMessage> => {
+        const response = await api.post(`/chat/rooms/${roomId}/messages`, { content, replyToId });
+        return response.data;
+    },
 
-    // Get messages
-    getMessages: async (roomId: string, params?: { page?: number; limit?: number; before?: string }) => {
-        const response = await api.get("/chat/messages", { 
-            params: { conversationId: roomId, ...params } 
+    // Send image message
+    sendImage: async (roomId: string, file: File, caption?: string): Promise<ChatMessage> => {
+        const formData = new FormData();
+        formData.append('image', file);
+        if (caption) formData.append('caption', caption);
+        
+        const response = await api.post(`/chat/rooms/${roomId}/images`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
         });
         return response.data;
     },
 
-    // Send message
-    sendMessage: async (data: SendMessageData) => {
-        const response = await api.post("/chat/messages", data);
+    // Share product in chat
+    sendProduct: async (roomId: string, productId: string, message?: string): Promise<ChatMessage> => {
+        const response = await api.post(`/chat/rooms/${roomId}/product`, { productId, message });
+        return response.data;
+    },
+
+    // Share order in chat
+    sendOrder: async (roomId: string, orderId: string, message?: string): Promise<ChatMessage> => {
+        const response = await api.post(`/chat/rooms/${roomId}/order`, { orderId, message });
         return response.data;
     },
 
     // Mark messages as read
-    markAsRead: async (roomId: string) => {
-        const response = await api.patch(`/chat/conversations/${roomId}/read`);
+    markAsRead: async (roomId: string): Promise<void> => {
+        await api.put(`/chat/rooms/${roomId}/read`);
+    },
+
+    // Send typing indicator
+    sendTyping: async (roomId: string, isTyping: boolean = true): Promise<void> => {
+        await api.post(`/chat/rooms/${roomId}/typing`, { isTyping });
+    },
+
+    // Get unread count
+    getUnreadCount: async (): Promise<{ count: number }> => {
+        const response = await api.get("/chat/unread-count");
         return response.data;
     },
 
-    // ============================================
-    // UNREAD COUNT
-    // ============================================
-
-    // Get total unread count
-    getUnreadCount: async () => {
-        const response = await api.get("/chat/unread/count");
+    // Close chat room
+    closeChatRoom: async (roomId: string): Promise<ChatRoom> => {
+        const response = await api.put(`/chat/rooms/${roomId}/close`);
         return response.data;
     },
 
-    // ============================================
-    // IMAGE UPLOAD
-    // ============================================
-
-    // Upload chat image
-    uploadImage: async (file: File) => {
-        const formData = new FormData();
-        formData.append('image', file);
-        
-        const response = await api.post("/chat/upload", formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
+    // Archive chat room
+    archiveChatRoom: async (roomId: string): Promise<ChatRoom> => {
+        const response = await api.put(`/chat/rooms/${roomId}/archive`);
         return response.data;
+    },
+
+    // Reopen chat room
+    reopenChatRoom: async (roomId: string): Promise<ChatRoom> => {
+        const response = await api.put(`/chat/rooms/${roomId}/reopen`);
+        return response.data;
+    },
+
+    // Delete message
+    deleteMessage: async (messageId: string): Promise<void> => {
+        await api.delete(`/chat/messages/${messageId}`);
     },
 };

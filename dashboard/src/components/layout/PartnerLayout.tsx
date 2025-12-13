@@ -1,5 +1,6 @@
 import { PartnerHeader } from "./PartnerHeader";
 import { PartnerSidebar } from "./PartnerSidebar";
+import { PartnerChatWidget } from "@/components/partner/chat/PartnerChatWidget";
 
 export default function PartnerLayout({ children }: { children: React.ReactNode }) {
 
@@ -12,6 +13,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
                     {children}
                 </main>
             </div>
+            <PartnerChatWidget />
         </div>
     );
 }

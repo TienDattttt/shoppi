@@ -15,7 +15,7 @@ const { AppError, ValidationError } = require('../../shared/utils/error.util');
  */
 async function startChat(req, res) {
   try {
-    const customerId = req.user.id;
+    const customerId = req.user.userId;
     const { partnerId, productId, orderId } = req.body;
 
     const validatedData = chatValidator.validateStartChat({
@@ -45,7 +45,7 @@ async function startChat(req, res) {
  */
 async function getChatRooms(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { page = 1, limit = 20, status = 'active' } = req.query;
 
     const validatedQuery = chatValidator.validateGetChatRooms({
@@ -69,7 +69,7 @@ async function getChatRooms(req, res) {
  */
 async function getChatRoom(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
 
     const validatedData = chatValidator.validateRoomId({ roomId });
@@ -88,7 +88,7 @@ async function getChatRoom(req, res) {
  */
 async function sendMessage(req, res) {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.userId;
     const { roomId } = req.params;
     const { content, replyToId } = req.body;
 
@@ -118,7 +118,7 @@ async function sendMessage(req, res) {
  */
 async function sendImage(req, res) {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.userId;
     const { roomId } = req.params;
     const { caption = '' } = req.body;
     const imageFile = req.file;
@@ -152,7 +152,7 @@ async function sendImage(req, res) {
  */
 async function sendProduct(req, res) {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.userId;
     const { roomId } = req.params;
     const { productId, message = '' } = req.body;
 
@@ -182,7 +182,7 @@ async function sendProduct(req, res) {
  */
 async function sendOrder(req, res) {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.userId;
     const { roomId } = req.params;
     const { orderId, message = '' } = req.body;
 
@@ -212,7 +212,7 @@ async function sendOrder(req, res) {
  */
 async function getMessages(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
     const { page = 1, limit = 50, before } = req.query;
 
@@ -246,7 +246,7 @@ async function getMessages(req, res) {
  */
 async function markAsRead(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
 
     const validatedData = chatValidator.validateRoomId({ roomId });
@@ -264,7 +264,7 @@ async function markAsRead(req, res) {
  */
 async function deleteMessage(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { messageId } = req.params;
 
     const validatedData = chatValidator.validateMessageId({ messageId });
@@ -282,7 +282,7 @@ async function deleteMessage(req, res) {
  */
 async function closeChatRoom(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
 
     const validatedData = chatValidator.validateRoomId({ roomId });
@@ -301,7 +301,7 @@ async function closeChatRoom(req, res) {
  */
 async function archiveChatRoom(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
 
     const validatedData = chatValidator.validateRoomId({ roomId });
@@ -320,7 +320,7 @@ async function archiveChatRoom(req, res) {
  */
 async function reopenChatRoom(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
 
     const validatedData = chatValidator.validateRoomId({ roomId });
@@ -339,7 +339,7 @@ async function reopenChatRoom(req, res) {
  */
 async function getUnreadCount(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const count = await chatService.getUnreadCount(userId);
     const responseData = chatDto.toUnreadCountDto(count);
 
@@ -355,7 +355,7 @@ async function getUnreadCount(req, res) {
  */
 async function sendTyping(req, res) {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { roomId } = req.params;
     const { isTyping = true } = req.body;
 

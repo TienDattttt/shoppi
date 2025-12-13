@@ -15,39 +15,10 @@ import { toast } from "sonner";
 import { CancelOrderDialog } from "@/components/partner/CancelOrderDialog";
 import { Package, Ban, Download } from "lucide-react";
 
-// Extended SubOrder with parent order info from backend
-interface ShopOrder {
-    id: string;
-    orderId: string;
-    shopId: string;
-    subtotal: number;
-    shippingFee: number;
-    discount: number;
-    total: number;
-    status: string;
-    trackingNumber: string | null;
-    shipperId: string | null;
-    shippedAt: string | null;
-    deliveredAt: string | null;
-    createdAt: string;
-    items: Array<{
-        id: string;
-        productName: string;
-        variantName: string | null;
-        quantity: number;
-        unitPrice: number;
-        totalPrice: number;
-        imageUrl: string | null;
-    }>;
-    order: {
-        orderNumber: string;
-        shippingName: string;
-        shippingPhone: string;
-        shippingAddress: string;
-        paymentMethod: string;
-        paymentStatus: string;
-    } | null;
-}
+// Use SubOrder type from order.service
+import type { SubOrder } from "@/services/order.service";
+
+type ShopOrder = SubOrder;
 
 export default function PartnerOrderManagement() {
     const [orders, setOrders] = useState<ShopOrder[]>([]);
@@ -75,23 +46,55 @@ export default function PartnerOrderManagement() {
         }
     };
 
+    // Optimistic update helper - update order status locally
+    const updateOrderStatus = (orderId: string, newStatus: string) => {
+        setOrders(prev => prev.map(order => 
+            order.id === orderId ? { ...order, status: newStatus as ShopOrder['status'] } : order
+        ));
+    };
+
+    // Remove order from list (for filtered views)
+    const removeOrderFromList = (orderId: string) => {
+        setOrders(prev => prev.filter(order => order.id !== orderId));
+    };
+
     const handleConfirm = async (id: string) => {
+        // Optimistic update
+        const previousOrders = [...orders];
+        updateOrderStatus(id, 'processing');
+        
+        // If viewing filtered tab, remove from list
+        if (activeTab === 'pending') {
+            removeOrderFromList(id);
+        }
+        
         try {
             await orderService.confirmOrder(id);
-            toast.success("Order confirmed");
-            loadOrders();
+            toast.success("Đã xác nhận đơn hàng");
         } catch (error) {
-            toast.error("Failed to confirm order");
+            // Rollback on error
+            setOrders(previousOrders);
+            toast.error("Xác nhận đơn thất bại");
         }
     };
 
     const handlePack = async (id: string) => {
+        // Optimistic update
+        const previousOrders = [...orders];
+        updateOrderStatus(id, 'ready_to_ship');
+        
+        // If viewing filtered tab, remove from list
+        if (activeTab === 'processing') {
+            removeOrderFromList(id);
+        }
+        
         try {
             await orderService.packOrder(id);
-            toast.success("Order marked as packed");
-            loadOrders();
+            toast.success("Đã đóng gói đơn hàng");
         } catch (error) {
-            toast.error("Failed to pack order");
+            // Rollback on error
+            setOrders(previousOrders);
+            toast.error("Đóng gói đơn thất bại");
         }
     };
 
@@ -102,12 +105,23 @@ export default function PartnerOrderManagement() {
 
     const handleCancelConfirm = async (reason: string) => {
         if (!selectedOrder) return;
+        
+        // Optimistic update
+        const previousOrders = [...orders];
+        updateOrderStatus(selectedOrder.id, 'cancelled');
+        
+        // If viewing filtered tab (not 'all'), remove from list
+        if (activeTab !== 'all') {
+            removeOrderFromList(selectedOrder.id);
+        }
+        
         try {
             await orderService.cancelByPartner(selectedOrder.id, reason);
-            toast.success("Order cancelled");
-            loadOrders();
+            toast.success("Đã hủy đơn hàng");
         } catch (error) {
-            toast.error("Failed to cancel order");
+            // Rollback on error
+            setOrders(previousOrders);
+            toast.error("Hủy đơn thất bại");
         }
     };
 

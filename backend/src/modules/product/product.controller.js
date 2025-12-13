@@ -846,7 +846,7 @@ async function getReviewStats(req, res, next) {
 async function createReview(req, res, next) {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.userId;
     
     const review = await reviewService.createReview(userId, id, req.body);
     
@@ -866,7 +866,7 @@ async function createReview(req, res, next) {
 async function replyToReview(req, res, next) {
   try {
     const { reviewId } = req.params;
-    const partnerId = req.user.id;
+    const partnerId = req.user.userId;
     const { reply } = req.body;
     
     const review = await reviewService.replyToReview(reviewId, partnerId, reply);

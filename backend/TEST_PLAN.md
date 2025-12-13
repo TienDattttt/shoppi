@@ -139,19 +139,19 @@
 - [x] Remove from cart (/cart/items/:id)
 
 #### Checkout & Order
-- [ ] Checkout (/orders/checkout)
-- [ ] List my orders (/orders)
-- [ ] View order detail (/orders/:id)
-- [ ] Cancel order (/orders/:id/cancel)
-- [ ] Confirm receipt (/orders/:id/confirm-receipt)
+- [x] Checkout (/orders/checkout)
+- [x] List my orders (/orders)
+- [x] View order detail (/orders/:id)
+- [x] Cancel order (/orders/:id/cancel)
+- [x] Confirm receipt (/orders/:id/confirm-receipt)
 - [ ] Request return (/orders/:id/return)
 
 #### Payment
-- [ ] Create payment session (/payments/create-session)
-- [ ] Payment webhooks (MoMo, VNPay, ZaloPay)
+- [x] Create payment session (/payments/create-session)
+- [x] Payment webhooks (MoMo, VNPay, ZaloPay)
 
 #### Voucher
-- [ ] Validate voucher (/vouchers/validate)
+- [x] Validate voucher (/vouchers/validate)
 
 #### Review
 - [ ] Create review (/products/:id/reviews)
@@ -163,9 +163,9 @@
 - [ ] Update preferences (/notifications/preferences)
 
 #### Chat
-- [ ] Create conversation (/chat/conversations)
-- [ ] List conversations (/chat/conversations)
-- [ ] Send message (/chat/messages)
+- [x] Create conversation (/chat/conversations)
+- [x] List conversations (/chat/conversations)
+- [x] Send message (/chat/messages)
 
 ---
 

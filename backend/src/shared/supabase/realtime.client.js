@@ -140,13 +140,19 @@ function subscribeToProductReviews(productId, callback) {
  * Create a broadcast channel for custom events
  * @param {string} channelName - Channel name
  * @param {Function} callback - Callback for broadcast messages
- * @returns {string} Subscription ID
+ * @returns {string} Subscription ID (same as channelName for broadcast channels)
  */
 function createBroadcastChannel(channelName, callback) {
-  const subscriptionId = `broadcast_${channelName}_${Date.now()}`;
+  // Use channelName directly so frontend and backend use the same channel
+  const subscriptionId = channelName;
+  
+  // Check if already subscribed
+  if (subscriptions.has(subscriptionId)) {
+    return subscriptionId;
+  }
   
   const channel = supabaseClient
-    .channel(subscriptionId)
+    .channel(channelName)
     .on('broadcast', { event: '*' }, (payload) => {
       callback({
         event: payload.event,

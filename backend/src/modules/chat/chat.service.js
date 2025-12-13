@@ -232,9 +232,16 @@ async function broadcastMessage(roomId, message) {
     const subscriptionId = getOrCreateRoomChannel(roomId);
     const payload = chatDto.toRealtimeMessageDto(message);
     
+    console.log(`[Chat] Broadcasting message to channel: ${subscriptionId}`, { 
+      roomId, 
+      messageId: message.id,
+      senderId: message.sender_id 
+    });
+    
     await realtimeClient.broadcast(subscriptionId, 'new_message', payload);
+    console.log(`[Chat] Broadcast successful for room: ${roomId}`);
   } catch (error) {
-    console.error('Failed to broadcast message:', error);
+    console.error('[Chat] Failed to broadcast message:', error);
     // Don't throw error as message was already saved
   }
 }
