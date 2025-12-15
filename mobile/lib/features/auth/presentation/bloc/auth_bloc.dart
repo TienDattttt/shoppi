@@ -33,7 +33,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onLoginRequested(LoginRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
-    final result = await _loginUseCase(LoginParams(phone: event.phone, otp: event.otp));
+    final result = await _loginUseCase(LoginParams(phone: event.phone, password: event.password));
 
     result.fold(
       (failure) => emit(AuthFailure(failure.message)),

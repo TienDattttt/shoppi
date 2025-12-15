@@ -34,9 +34,9 @@ async function createShipper(req, res) {
   try {
     const userId = req.user.userId;
     shipperValidator.validateCreateShipper(req.body);
-    
+
     const shipper = await shipperService.createShipper(userId, req.body);
-    
+
     return successResponse(res, {
       message: 'Shipper profile created successfully. Pending admin approval.',
       data: shipperDto.toShipperResponse(shipper),
@@ -54,13 +54,13 @@ async function getShipperById(req, res) {
   try {
     const { id } = req.params;
     const shipper = await shipperService.getShipperById(id);
-    
+
     // Admin gets full details, others get public info
     const isAdmin = req.user.role === 'admin';
-    const response = isAdmin 
+    const response = isAdmin
       ? shipperDto.toShipperAdminResponse(shipper)
       : shipperDto.toShipperResponse(shipper);
-    
+
     return successResponse(res, { data: response });
   } catch (error) {
     return errorResponse(res, error);
@@ -75,7 +75,7 @@ async function getMyShipperProfile(req, res) {
   try {
     const userId = req.user.userId;
     const shipper = await shipperService.getShipperByUserId(userId);
-    
+
     return successResponse(res, {
       data: shipperDto.toShipperAdminResponse(shipper),
     });
@@ -92,15 +92,15 @@ async function updateShipper(req, res) {
   try {
     const { id } = req.params;
     shipperValidator.validateUpdateShipper(req.body);
-    
+
     // Verify ownership or admin
     const shipper = await shipperService.getShipperById(id);
     if (shipper.user_id !== req.user.userId && req.user.role !== 'admin') {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
-    
+
     const updated = await shipperService.updateShipper(id, req.body);
-    
+
     return successResponse(res, {
       message: 'Shipper updated successfully',
       data: shipperDto.toShipperResponse(updated),
@@ -118,7 +118,7 @@ async function getPendingShippers(req, res) {
   try {
     const pagination = shipperValidator.validatePagination(req.query);
     const result = await shipperService.getPendingShippers(pagination);
-    
+
     return successResponse(res, shipperDto.toShipperListResponse(
       result.data,
       result.count,
@@ -137,9 +137,9 @@ async function approveShipper(req, res) {
   try {
     const { id } = req.params;
     const adminId = req.user.userId;
-    
+
     const shipper = await shipperService.approveShipper(id, adminId);
-    
+
     return successResponse(res, {
       message: 'Shipper approved successfully',
       data: shipperDto.toShipperResponse(shipper),
@@ -157,9 +157,9 @@ async function suspendShipper(req, res) {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    
+
     const shipper = await shipperService.suspendShipper(id, reason);
-    
+
     return successResponse(res, {
       message: 'Shipper suspended successfully',
       data: shipperDto.toShipperResponse(shipper),
@@ -176,9 +176,9 @@ async function suspendShipper(req, res) {
 async function reactivateShipper(req, res) {
   try {
     const { id } = req.params;
-    
+
     const shipper = await shipperService.reactivateShipper(id);
-    
+
     return successResponse(res, {
       message: 'Shipper reactivated successfully',
       data: shipperDto.toShipperResponse(shipper),
@@ -200,18 +200,18 @@ async function goOnline(req, res) {
   try {
     const { id } = req.params;
     shipperValidator.validateLocation(req.body);
-    
+
     // Verify ownership
     const shipper = await shipperService.getShipperById(id);
     if (shipper.user_id !== req.user.userId) {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
-    
+
     const updated = await shipperService.goOnline(id, {
       lat: parseFloat(req.body.lat),
       lng: parseFloat(req.body.lng),
     });
-    
+
     return successResponse(res, {
       message: 'You are now online',
       data: shipperDto.toShipperResponse(updated),
@@ -228,15 +228,15 @@ async function goOnline(req, res) {
 async function goOffline(req, res) {
   try {
     const { id } = req.params;
-    
+
     // Verify ownership
     const shipper = await shipperService.getShipperById(id);
     if (shipper.user_id !== req.user.userId) {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
-    
+
     const updated = await shipperService.goOffline(id);
-    
+
     return successResponse(res, {
       message: 'You are now offline',
       data: shipperDto.toShipperResponse(updated),
@@ -258,13 +258,13 @@ async function updateLocation(req, res) {
   try {
     const { id } = req.params;
     shipperValidator.validateLocation(req.body);
-    
+
     // Verify ownership
     const shipper = await shipperService.getShipperById(id);
     if (shipper.user_id !== req.user.userId) {
       return errorResponse(res, { code: 'UNAUTHORIZED', message: 'Not authorized', status: 403 });
     }
-    
+
     const location = await locationService.updateLocation(
       id,
       parseFloat(req.body.lat),
@@ -276,7 +276,7 @@ async function updateLocation(req, res) {
         shipmentId: req.body.shipmentId,
       }
     );
-    
+
     return successResponse(res, {
       data: shipperDto.toLocationResponse(location),
     });
@@ -293,11 +293,11 @@ async function getShipperLocation(req, res) {
   try {
     const { id } = req.params;
     const location = await locationService.getCurrentLocation(id);
-    
+
     if (!location) {
       return errorResponse(res, { code: 'NOT_FOUND', message: 'Location not available', status: 404 });
     }
-    
+
     return successResponse(res, {
       data: shipperDto.toLocationResponse(location),
     });
@@ -313,14 +313,14 @@ async function getShipperLocation(req, res) {
 async function findNearbyShippers(req, res) {
   try {
     const params = shipperValidator.validateNearbySearch(req.query);
-    
+
     const shippers = await locationService.findNearbyShippersGeo(
       params.lat,
       params.lng,
       params.radiusKm,
       params.limit
     );
-    
+
     return successResponse(res, {
       data: shippers,
     });
@@ -342,7 +342,7 @@ async function getShipments(req, res) {
     const shipperId = req.query.shipperId;
     const pagination = shipperValidator.validatePagination(req.query);
     const status = req.query.status;
-    
+
     // If shipper role, only get own shipments
     if (req.user.role === 'shipper') {
       const shipper = await shipperService.getShipperByUserId(req.user.userId);
@@ -350,31 +350,31 @@ async function getShipments(req, res) {
         ...pagination,
         status,
       });
-      
+
       return successResponse(res, shipperDto.toShipmentListResponse(
         result.data,
         result.count,
         pagination
       ));
     }
-    
+
     // Admin can query by shipperId
     if (shipperId) {
       const result = await shipmentService.getShipmentsByShipper(shipperId, {
         ...pagination,
         status,
       });
-      
+
       return successResponse(res, shipperDto.toShipmentListResponse(
         result.data,
         result.count,
         pagination
       ));
     }
-    
+
     // Get pending shipments for assignment
     const result = await shipmentService.getPendingShipments(pagination);
-    
+
     return successResponse(res, shipperDto.toShipmentListResponse(
       result.data,
       result.count,
@@ -393,7 +393,7 @@ async function getActiveShipments(req, res) {
   try {
     const shipper = await shipperService.getShipperByUserId(req.user.userId);
     const shipments = await shipmentService.getActiveShipments(shipper.id);
-    
+
     return successResponse(res, {
       data: shipments.map(s => shipperDto.toShipmentShipperResponse(s)),
     });
@@ -410,7 +410,7 @@ async function getShipmentById(req, res) {
   try {
     const { id } = req.params;
     const shipment = await shipmentService.getShipmentById(id);
-    
+
     return successResponse(res, {
       data: shipperDto.toShipmentShipperResponse(shipment),
     });
@@ -427,7 +427,7 @@ async function trackShipment(req, res) {
   try {
     const { trackingNumber } = req.params;
     const shipment = await shipmentService.getByTrackingNumber(trackingNumber);
-    
+
     return successResponse(res, {
       data: shipperDto.toShipmentTrackingResponse(shipment),
     });
@@ -444,14 +444,14 @@ async function updateShipmentStatus(req, res) {
   try {
     const { id } = req.params;
     const { status, failureReason, photoUrl, signatureUrl } = req.body;
-    
+
     shipperValidator.validateStatusUpdate(req.body);
-    
+
     // Get shipper ID for verification
     const shipper = await shipperService.getShipperByUserId(req.user.userId);
-    
+
     let updatedShipment;
-    
+
     switch (status) {
       case 'picked_up':
         updatedShipment = await shipmentService.markPickedUp(id, shipper.id);
@@ -471,7 +471,7 @@ async function updateShipmentStatus(req, res) {
       default:
         return errorResponse(res, { code: 'INVALID_STATUS', message: 'Invalid status update', status: 400 });
     }
-    
+
     return successResponse(res, {
       message: `Shipment marked as ${status}`,
       data: shipperDto.toShipmentResponse(updatedShipment),
@@ -489,13 +489,13 @@ async function assignShipper(req, res) {
   try {
     const { id } = req.params;
     const { shipperId } = req.body;
-    
+
     if (!shipperId) {
       return errorResponse(res, { code: 'VALIDATION_ERROR', message: 'Shipper ID is required', status: 400 });
     }
-    
+
     const shipment = await shipmentService.assignShipper(id, shipperId);
-    
+
     return successResponse(res, {
       message: 'Shipper assigned successfully',
       data: shipperDto.toShipmentResponse(shipment),
@@ -512,9 +512,9 @@ async function assignShipper(req, res) {
 async function autoAssignShipper(req, res) {
   try {
     const { id } = req.params;
-    
+
     const shipment = await shipmentService.autoAssignShipper(id);
-    
+
     return successResponse(res, {
       message: 'Shipper auto-assigned successfully',
       data: shipperDto.toShipmentResponse(shipment),
@@ -535,16 +535,16 @@ async function rateShipment(req, res) {
   try {
     const { id } = req.params;
     const customerId = req.user.userId;
-    
+
     shipperValidator.validateRating(req.body);
-    
+
     const result = await ratingService.rateDelivery(
       id,
       customerId,
       parseInt(req.body.rating),
       req.body.comment || req.body.feedback
     );
-    
+
     return successResponse(res, {
       message: 'Đánh giá đã được gửi thành công',
       data: {
@@ -573,22 +573,22 @@ async function getShipmentLocation(req, res) {
   try {
     const { id } = req.params;
     const shipment = await shipmentService.getShipmentById(id);
-    
+
     if (!shipment.shipper_id) {
       return errorResponse(res, { code: 'SHIP_003', message: 'Chưa có shipper được phân công', status: 404 });
     }
-    
+
     const location = await locationService.getCurrentLocation(shipment.shipper_id);
-    
+
     if (!location) {
       return errorResponse(res, { code: 'LOC_001', message: 'Không có thông tin vị trí', status: 404 });
     }
-    
+
     // Calculate ETA based on shipper's current location and delivery address
     let eta = null;
     let etaRange = null;
     let distanceKm = null;
-    
+
     if (shipment.delivery_lat && shipment.delivery_lng) {
       distanceKm = locationService.calculateDistance(
         location.lat,
@@ -596,17 +596,17 @@ async function getShipmentLocation(req, res) {
         parseFloat(shipment.delivery_lat),
         parseFloat(shipment.delivery_lng)
       );
-      
+
       // Get shipper's vehicle type for more accurate ETA
       const shipper = shipment.shipper;
       const vehicleType = shipper?.vehicle_type || 'motorbike';
       const estimatedMinutes = locationService.estimateTravelTime(distanceKm, vehicleType);
-      
+
       // Calculate ETA as a time range (e.g., "14:00 - 15:00")
       const now = new Date();
       const etaStart = new Date(now.getTime() + estimatedMinutes * 60 * 1000);
       const etaEnd = new Date(etaStart.getTime() + 30 * 60 * 1000); // +30 min buffer
-      
+
       eta = etaStart.toISOString();
       etaRange = {
         start: formatTime(etaStart),
@@ -614,7 +614,7 @@ async function getShipmentLocation(req, res) {
         display: `${formatTime(etaStart)} - ${formatTime(etaEnd)}`,
       };
     }
-    
+
     return successResponse(res, {
       data: {
         shipmentId: id,
@@ -670,13 +670,13 @@ function formatTime(date) {
 async function getTrackingHistory(req, res) {
   try {
     const { id } = req.params;
-    
+
     // Get shipment info with shipper details
     const shipment = await shipmentService.getShipmentById(id);
-    
+
     // Get tracking events (already sorted by event_time DESC in trackingService)
     const events = await trackingService.getTrackingHistory(id);
-    
+
     // Build shipper info if assigned
     let shipperInfo = null;
     if (shipment.shipper) {
@@ -692,7 +692,7 @@ async function getTrackingHistory(req, res) {
         totalDeliveries: shipper.total_deliveries || 0,
       };
     }
-    
+
     return successResponse(res, {
       data: {
         shipment: {
@@ -753,11 +753,11 @@ async function getEarnings(req, res) {
   try {
     const shipper = await shipperService.getShipperByUserId(req.user.userId);
     const { period = 'today' } = req.query;
-    
+
     // Calculate date range based on period
     const now = new Date();
     let startDate, endDate = now;
-    
+
     switch (period) {
       case 'today':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -771,10 +771,10 @@ async function getEarnings(req, res) {
       default:
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
-    
+
     // Get completed shipments in date range
     const earnings = await shipmentService.getShipperEarnings(shipper.id, startDate, endDate);
-    
+
     return successResponse(res, {
       data: {
         period,
@@ -802,10 +802,10 @@ async function getEarnings(req, res) {
 async function getOrderShipments(req, res) {
   try {
     const { id } = req.params;
-    
+
     // Get all shipments for this order
     const shipments = await shipmentService.getShipmentsByOrderId(id);
-    
+
     // Transform shipments with tracking info
     const shipmentsWithTracking = await Promise.all(
       shipments.map(async (shipment) => {
@@ -816,7 +816,7 @@ async function getOrderShipments(req, res) {
         } catch (e) {
           // Ignore tracking errors
         }
-        
+
         // Build shipper info if assigned
         let shipperInfo = null;
         if (shipment.shipper) {
@@ -831,7 +831,7 @@ async function getOrderShipments(req, res) {
             rating: shipper.avg_rating || 0,
           };
         }
-        
+
         // Build shop info
         let shopInfo = null;
         if (shipment.sub_order?.shops) {
@@ -841,7 +841,7 @@ async function getOrderShipments(req, res) {
             logoUrl: shipment.sub_order.shops.logo_url,
           };
         }
-        
+
         return {
           id: shipment.id,
           trackingNumber: shipment.tracking_number,
@@ -850,32 +850,32 @@ async function getOrderShipments(req, res) {
           subOrderId: shipment.sub_order_id,
           shop: shopInfo,
           shipper: shipperInfo,
-          
+
           pickup: {
             address: shipment.pickup_address,
             contactName: shipment.pickup_contact_name,
             contactPhone: maskPhoneNumber(shipment.pickup_contact_phone),
           },
-          
+
           delivery: {
             address: shipment.delivery_address,
             contactName: shipment.delivery_contact_name,
             contactPhone: maskPhoneNumber(shipment.delivery_contact_phone),
           },
-          
+
           shippingFee: parseFloat(shipment.shipping_fee || 0),
           codAmount: parseFloat(shipment.cod_amount || 0),
-          
+
           currentLocation: shipment.current_location_name,
           estimatedDelivery: shipment.estimated_delivery,
-          
+
           latestEvent: latestEvent ? {
             status: latestEvent.status,
             statusVi: latestEvent.status_vi,
             description: latestEvent.description_vi || latestEvent.description,
             eventTime: latestEvent.event_time,
           } : null,
-          
+
           timestamps: {
             created: shipment.created_at,
             assigned: shipment.assigned_at,
@@ -885,7 +885,7 @@ async function getOrderShipments(req, res) {
         };
       })
     );
-    
+
     return successResponse(res, {
       data: {
         orderId: id,
@@ -908,7 +908,7 @@ async function getFlaggedShippers(req, res) {
   try {
     const pagination = shipperValidator.validatePagination(req.query);
     const result = await shipperService.getFlaggedShippers(pagination);
-    
+
     return successResponse(res, shipperDto.toShipperListResponse(
       result.data,
       result.count,
@@ -928,9 +928,9 @@ async function getFlaggedShippers(req, res) {
 async function clearShipperFlag(req, res) {
   try {
     const { id } = req.params;
-    
+
     const shipper = await shipperService.clearShipperFlag(id);
-    
+
     return successResponse(res, {
       message: 'Đã xóa cờ cảnh báo cho shipper',
       data: shipperDto.toShipperResponse(shipper),
@@ -950,16 +950,16 @@ async function getShipperRatings(req, res) {
   try {
     const { id } = req.params;
     const pagination = shipperValidator.validatePagination(req.query);
-    
+
     // Get shipper info
     const shipper = await shipperService.getShipperById(id);
-    
+
     // Get rating statistics
     const stats = await ratingService.getShipperRatingStats(id);
-    
+
     // Get individual ratings
     const ratings = await ratingService.getShipperRatings(id, pagination);
-    
+
     return successResponse(res, {
       data: {
         shipper: {
@@ -996,6 +996,103 @@ async function getShipperRatings(req, res) {
   }
 }
 
+// ============================================
+// DOCUMENT UPLOAD ENDPOINTS
+// ============================================
+
+const storageClient = require('../../shared/supabase/storage.client');
+
+/**
+ * Upload shipper registration documents
+ * POST /shippers/upload-documents
+ * 
+ * Uploads ID card (front/back) and driver license to Supabase Storage
+ * Returns URLs for use in registration
+ */
+async function uploadDocuments(req, res) {
+  try {
+    const files = req.files;
+
+    if (!files || Object.keys(files).length === 0) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'At least one document is required',
+        status: 400
+      });
+    }
+
+    // Generate a temporary ID for unregistered users
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const uploadResults = {
+      idCardFrontUrl: null,
+      idCardBackUrl: null,
+      driverLicenseUrl: null,
+    };
+
+    // Upload each document
+    if (files.idCardFront && files.idCardFront[0]) {
+      const file = files.idCardFront[0];
+      const result = await storageClient.uploadDocument(
+        tempId,
+        'id_card_front',
+        file.buffer,
+        file.mimetype
+      );
+      uploadResults.idCardFrontUrl = result.url;
+    }
+
+    if (files.idCardBack && files.idCardBack[0]) {
+      const file = files.idCardBack[0];
+      const result = await storageClient.uploadDocument(
+        tempId,
+        'id_card_back',
+        file.buffer,
+        file.mimetype
+      );
+      uploadResults.idCardBackUrl = result.url;
+    }
+
+    if (files.driverLicense && files.driverLicense[0]) {
+      const file = files.driverLicense[0];
+      const result = await storageClient.uploadDocument(
+        tempId,
+        'driver_license',
+        file.buffer,
+        file.mimetype
+      );
+      uploadResults.driverLicenseUrl = result.url;
+    }
+
+    return successResponse(res, {
+      message: 'Documents uploaded successfully',
+      data: uploadResults,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Reject shipper (Admin)
+ * POST /shippers/:id/reject
+ */
+async function rejectShipper(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const shipper = await shipperService.rejectShipper(id, reason);
+
+    return successResponse(res, {
+      message: 'Shipper rejected',
+      data: shipperDto.toShipperResponse(shipper),
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 module.exports = {
   // Shipper
   createShipper,
@@ -1004,18 +1101,22 @@ module.exports = {
   updateShipper,
   getPendingShippers,
   approveShipper,
+  rejectShipper,
   suspendShipper,
   reactivateShipper,
-  
+
+  // Documents
+  uploadDocuments,
+
   // Online status
   goOnline,
   goOffline,
-  
+
   // Location
   updateLocation,
   getShipperLocation,
   findNearbyShippers,
-  
+
   // Shipment
   getShipments,
   getActiveShipments,
@@ -1027,17 +1128,18 @@ module.exports = {
   rateShipment,
   getShipmentLocation,
   getOrderShipments,
-  
+
   // Earnings
   getEarnings,
-  
+
   // Tracking
   getTrackingHistory,
-  
+
   // Ratings
   getShipperRatings,
-  
+
   // Flagging (Admin)
   getFlaggedShippers,
   clearShipperFlag,
 };
+

@@ -25,9 +25,11 @@ class _RegisterPageState extends State<RegisterPage> {
   String _fullName = '';
   String _phone = '';
   String _email = '';
+  String _password = '';
+  String _idCardNumber = '';
   
   // Vehicle Info
-  String _vehicleType = 'motorcycle';
+  String _vehicleType = 'motorbike';
   String _licensePlate = '';
   String _vehicleBrand = '';
   String _vehicleModel = '';
@@ -147,10 +149,14 @@ class _RegisterPageState extends State<RegisterPage> {
           initialFullName: _fullName,
           initialPhone: _phone,
           initialEmail: _email,
-          onInfoChanged: (fullName, phone, email) {
+          initialPassword: _password,
+          initialIdCardNumber: _idCardNumber,
+          onInfoChanged: (fullName, phone, email, password, idCardNumber) {
             _fullName = fullName;
             _phone = phone;
             _email = email;
+            _password = password;
+            _idCardNumber = idCardNumber;
           },
           onNext: () => setState(() => _currentStep = 1),
         );
@@ -205,6 +211,8 @@ class _RegisterPageState extends State<RegisterPage> {
       fullName: _fullName,
       phone: _phone,
       email: _email,
+      password: _password,
+      idCardNumber: _idCardNumber,
       vehicleType: _vehicleType,
       licensePlate: _licensePlate,
       vehicleBrand: _vehicleBrand,

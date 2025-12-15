@@ -78,7 +78,7 @@ async function getShipperByUserId(userId) {
  */
 async function updateShipper(shipperId, updates) {
   const shipper = await getShipperById(shipperId);
-  
+
   const allowedUpdates = {
     vehicle_type: updates.vehicleType,
     vehicle_plate: updates.vehiclePlate,
@@ -111,7 +111,7 @@ async function updateShipper(shipperId, updates) {
  */
 async function approveShipper(shipperId, adminId) {
   const shipper = await getShipperById(shipperId);
-  
+
   if (shipper.status !== 'pending') {
     throw new AppError('INVALID_STATUS', 'Shipper is not in pending status', 400);
   }
@@ -131,10 +131,10 @@ async function approveShipper(shipperId, adminId) {
  */
 async function suspendShipper(shipperId, reason) {
   const shipper = await getShipperById(shipperId);
-  
+
   // Force offline when suspended
   await updateOnlineStatus(shipperId, false);
-  
+
   return shipperRepository.updateShipper(shipperId, {
     status: 'suspended',
   });
@@ -147,13 +147,33 @@ async function suspendShipper(shipperId, reason) {
  */
 async function reactivateShipper(shipperId) {
   const shipper = await getShipperById(shipperId);
-  
+
   if (shipper.status !== 'suspended') {
     throw new AppError('INVALID_STATUS', 'Shipper is not suspended', 400);
   }
 
   return shipperRepository.updateShipper(shipperId, {
     status: 'active',
+  });
+}
+
+/**
+ * Reject shipper application (Admin only)
+ * @param {string} shipperId
+ * @param {string} reason - Rejection reason
+ * @returns {Promise<Object>}
+ */
+async function rejectShipper(shipperId, reason) {
+  const shipper = await getShipperById(shipperId);
+
+  if (shipper.status !== 'pending') {
+    throw new AppError('INVALID_STATUS', 'Shipper is not in pending status', 400);
+  }
+
+  // Update shipper status to inactive (rejected)
+  return shipperRepository.updateShipper(shipperId, {
+    status: 'inactive',
+    rejection_reason: reason,
   });
 }
 
@@ -188,13 +208,13 @@ async function getActiveShippers(options = {}) {
  */
 async function updateOnlineStatus(shipperId, isOnline, location = null) {
   const shipper = await getShipperById(shipperId);
-  
+
   if (shipper.status !== 'active') {
     throw new AppError('SHIPPER_NOT_ACTIVE', 'Only active shippers can go online', 400);
   }
 
   const result = await shipperRepository.updateOnlineStatus(shipperId, isOnline, location);
-  
+
   // Update Redis cache for real-time location
   if (isOnline && location) {
     await cacheShipperLocation(shipperId, location.lat, location.lng);
@@ -240,14 +260,14 @@ async function goOffline(shipperId) {
  */
 async function updateLocation(shipperId, lat, lng) {
   const shipper = await getShipperById(shipperId);
-  
+
   if (!shipper.is_online) {
     throw new AppError('SHIPPER_OFFLINE', 'Shipper must be online to update location', 400);
   }
 
   // Update in database
   const result = await shipperRepository.updateLocation(shipperId, lat, lng);
-  
+
   // Update in Redis for real-time tracking
   await cacheShipperLocation(shipperId, lat, lng);
 
@@ -262,7 +282,7 @@ async function updateLocation(shipperId, lat, lng) {
 async function getShipperLocation(shipperId) {
   const cacheKey = `shipper:${shipperId}:location`;
   const cached = await redisClient.get(cacheKey);
-  
+
   if (cached) {
     return JSON.parse(cached);
   }
@@ -304,7 +324,7 @@ async function findNearbyShippers(lat, lng, radiusKm = 5, limit = 10) {
  */
 async function updateRating(shipperId, rating) {
   const shipper = await getShipperById(shipperId);
-  
+
   const totalRatings = (shipper.total_ratings || 0) + 1;
   const currentTotal = (shipper.avg_rating || 0) * (shipper.total_ratings || 0);
   const newAvgRating = (currentTotal + rating) / totalRatings;
@@ -374,26 +394,27 @@ module.exports = {
   getShipperById,
   getShipperByUserId,
   updateShipper,
-  
+
   // Admin operations
   approveShipper,
+  rejectShipper,
   suspendShipper,
   reactivateShipper,
   getPendingShippers,
   getActiveShippers,
   getFlaggedShippers,
   clearShipperFlag,
-  
+
   // Online status
   updateOnlineStatus,
   goOnline,
   goOffline,
-  
+
   // Location
   updateLocation,
   getShipperLocation,
   findNearbyShippers,
-  
+
   // Statistics
   updateRating,
   recordDelivery,

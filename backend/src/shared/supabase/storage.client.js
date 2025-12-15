@@ -146,9 +146,31 @@ async function uploadDocument(userId, docType, fileData, contentType) {
   const ext = contentType === 'application/pdf' ? 'pdf' : 'jpg';
   const path = `${userId}/${docType}_${Date.now()}.${ext}`;
   
-  return uploadFile(BUCKETS.DOCUMENTS, path, fileData, {
-    contentType,
-  });
+  const { data, error } = await supabaseAdmin.storage
+    .from(BUCKETS.DOCUMENTS)
+    .upload(path, fileData, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType,
+    });
+
+  if (error) {
+    throw new Error(`Upload failed: ${error.message}`);
+  }
+
+  // For documents bucket (private), create a long-lived signed URL
+  // This URL will be stored in database and used by admin to view documents
+  const { data: signedData, error: signedError } = await supabaseAdmin.storage
+    .from(BUCKETS.DOCUMENTS)
+    .createSignedUrl(data.path, 60 * 60 * 24 * 365); // 1 year expiry
+
+  if (signedError) {
+    // Fallback to public URL if signed URL fails
+    const publicUrl = getPublicUrl(BUCKETS.DOCUMENTS, data.path);
+    return { url: publicUrl, path: data.path };
+  }
+
+  return { url: signedData.signedUrl, path: data.path };
 }
 
 

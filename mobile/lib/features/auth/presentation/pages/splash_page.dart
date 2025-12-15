@@ -26,7 +26,24 @@ class _SplashPageState extends State<SplashPage> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is Authenticated) {
-           context.go('/home');
+          // Check shipper approval status
+          final shipper = state.shipper;
+          if (shipper.status == 'pending') {
+            // Account not yet approved by admin
+            context.go('/pending-approval');
+          } else if (shipper.status == 'suspended') {
+            // Account suspended - show message and go to login
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Your account has been suspended. Please contact support.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            context.go('/login');
+          } else {
+            // Active shipper - proceed to home
+            context.go('/home');
+          }
         } else if (state is Unauthenticated) {
            context.go('/login');
         }

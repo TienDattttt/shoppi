@@ -101,9 +101,21 @@ export const userService = {
         return response.data;
     },
 
-    // Admin: Get user orders
+    // Admin: Get user orders (for customers)
     getUserOrders: async (id: string, params?: { page?: number; limit?: number }) => {
         const response = await api.get(`/admin/users/${id}/orders`, { params });
+        return response.data;
+    },
+
+    // Admin: Get user's shop info (for partners)
+    getUserShopInfo: async (id: string) => {
+        const response = await api.get(`/admin/users/${id}/shop`);
+        return response.data;
+    },
+
+    // Admin: Get user's shipper info (for shippers)
+    getUserShipperInfo: async (id: string) => {
+        const response = await api.get(`/admin/users/${id}/shipper`);
         return response.data;
     },
 };

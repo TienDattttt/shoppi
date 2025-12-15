@@ -37,35 +37,44 @@ class _FailedDeliveryPageState extends State<FailedDeliveryPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              "Select Reason",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            ..._commonReasons.map((reason) => RadioListTile<String>(
-              title: Text(reason),
-              value: reason,
-              groupValue: _selectedReason,
-              onChanged: (value) {
-                setState(() {
-                  _selectedReason = value;
-                  if (value != "Other") {
-                    _reasonController.text = value!;
-                  } else {
-                    _reasonController.clear();
-                  }
-                });
-              },
-            )),
-            if (_selectedReason == "Other")
-              TextField(
-                controller: _reasonController,
-                decoration: const InputDecoration(
-                  labelText: "Specify reason",
-                  border: OutlineInputBorder(),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      "Select Reason",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    ..._commonReasons.map((reason) => RadioListTile<String>(
+                      title: Text(reason),
+                      value: reason,
+                      groupValue: _selectedReason,
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedReason = value;
+                          if (value != "Other") {
+                            _reasonController.text = value!;
+                          } else {
+                            _reasonController.clear();
+                          }
+                        });
+                      },
+                    )),
+                    if (_selectedReason == "Other")
+                      TextField(
+                        controller: _reasonController,
+                        decoration: const InputDecoration(
+                          labelText: "Specify reason",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            const Spacer(),
+            ),
+            const SizedBox(height: 16),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,

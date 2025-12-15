@@ -9,9 +9,9 @@ const { v4: uuidv4 } = require('uuid');
 const config = require('../../config');
 const authRepository = require('./auth.repository');
 const { serializeUser } = require('./auth.dto');
-const { 
-  ConflictError, 
-  AuthenticationError, 
+const {
+  ConflictError,
+  AuthenticationError,
   AuthorizationError,
   ValidationError,
   RateLimitError,
@@ -98,7 +98,7 @@ async function registerCustomer(data) {
   // Generate and store OTP
   const otpCode = generateOTP();
   const identifier = phone || email;
-  
+
   await authRepository.createOTP({
     identifier,
     otp_code: otpCode,
@@ -160,7 +160,7 @@ async function registerPartner(data) {
   try {
     const shopRepository = require('../shop/shop.repository');
     const slugify = (str) => str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    
+
     await shopRepository.createShop({
       partner_id: user.id,
       shop_name: businessName || fullName + "'s Shop",
@@ -196,7 +196,11 @@ async function registerPartner(data) {
  * @returns {Promise<object>}
  */
 async function registerShipper(data) {
-  const { phone, password, fullName, idCardNumber, vehicleType, vehiclePlate } = data;
+  const {
+    phone, password, fullName, idCardNumber, vehicleType, vehiclePlate,
+    vehicleBrand, vehicleModel, workingDistrict, workingCity, workingArea,
+    idCardFrontUrl, idCardBackUrl, driverLicenseUrl,
+  } = data;
 
   // Check for existing user
   const existingPhone = await authRepository.findUserByPhone(phone);
@@ -207,16 +211,33 @@ async function registerShipper(data) {
   // Hash password
   const passwordHash = await hashPassword(password);
 
-  // Create Shipper with pending status (requires admin approval)
+  // Create User with pending status (requires admin approval)
   const user = await authRepository.createUser({
     phone: authRepository.normalizePhone(phone),
     password_hash: passwordHash,
     role: 'shipper',
     status: 'pending', // Requires admin approval
     full_name: fullName,
+  });
+
+  // Create Shipper profile in shippers table
+  // workingArea from mobile can be used as workingCity if workingCity is not provided
+  // Document URLs are stored in shippers table
+  await authRepository.createShipperProfile({
+    user_id: user.id,
     id_card_number: idCardNumber,
+    driver_license: data.driverLicense,
     vehicle_type: vehicleType,
     vehicle_plate: vehiclePlate,
+    vehicle_brand: vehicleBrand,
+    vehicle_model: vehicleModel,
+    working_district: workingDistrict,
+    working_city: workingCity || workingArea, // Support both field names
+    // Document URLs
+    id_card_front_url: idCardFrontUrl || null,
+    id_card_back_url: idCardBackUrl || null,
+    driver_license_url: driverLicenseUrl || null,
+    status: 'pending', // Requires admin approval
   });
 
   return {
@@ -252,7 +273,7 @@ async function requestOTP(identifier, purpose = 'login') {
 
   // Generate and store OTP
   const otpCode = generateOTP();
-  
+
   await authRepository.createOTP({
     identifier,
     otp_code: otpCode,
@@ -303,13 +324,13 @@ async function verifyOTP(identifier, otpCode, purpose) {
   if (otp.otp_code !== otpCode) {
     // Increment attempts
     await authRepository.incrementOTPAttempts(otp.id);
-    
+
     const remainingAttempts = otp.max_attempts - otp.attempts - 1;
-    
+
     if (remainingAttempts <= 0) {
       throw new RateLimitError('OTP verification locked due to too many failed attempts.');
     }
-    
+
     throw new AuthenticationError(
       'AUTH_OTP_INVALID',
       `Invalid OTP. ${remainingAttempts} attempts remaining.`
@@ -402,7 +423,7 @@ function generateTokens(user, sessionId) {
 async function createSessionWithTokens(user, deviceInfo = {}) {
   const sessionId = uuidv4();
   const tokens = generateTokens(user, sessionId);
-  
+
   // Calculate refresh token expiry (7 days)
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -419,7 +440,7 @@ async function createSessionWithTokens(user, deviceInfo = {}) {
 
   // Store session in database
   await authRepository.createSession(sessionData);
-  
+
   // Cache session in Redis for faster lookups
   await sessionCache.cacheSession(sessionId, sessionData);
 
@@ -443,7 +464,7 @@ async function login(data, deviceInfo = {}) {
 
   // Find user
   const user = await authRepository.findUserByIdentifier(identifier);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_INVALID_CREDENTIALS', 'Invalid credentials');
   }
@@ -461,19 +482,19 @@ async function login(data, deviceInfo = {}) {
   if (user.status === 'pending') {
     throw new AuthorizationError('AUTH_ACCOUNT_PENDING', 'Account is pending approval');
   }
-  
+
   if (user.status === 'inactive') {
     throw new AuthorizationError('AUTH_ACCOUNT_INACTIVE', 'Account is inactive');
   }
 
   // Verify password
   const isValidPassword = await verifyPassword(password, user.password_hash);
-  
+
   if (!isValidPassword) {
     // Increment failed attempts
     const updatedUser = await authRepository.incrementFailedAttempts(user.id);
     const attempts = (updatedUser?.failed_login_attempts || user.failed_login_attempts || 0) + 1;
-    
+
     // Lock account if max attempts reached
     if (attempts >= config.security.maxLoginAttempts) {
       await authRepository.lockAccount(user.id, config.security.lockoutMinutes);
@@ -482,7 +503,7 @@ async function login(data, deviceInfo = {}) {
         `Account locked due to too many failed attempts. Try again in ${config.security.lockoutMinutes} minutes.`
       );
     }
-    
+
     throw new AuthenticationError(
       'AUTH_INVALID_CREDENTIALS',
       `Invalid credentials. ${config.security.maxLoginAttempts - attempts} attempts remaining.`
@@ -512,7 +533,7 @@ async function loginWithOTP(data, deviceInfo = {}) {
 
   // Find user
   const user = await authRepository.findUserByPhone(phone);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -536,11 +557,11 @@ async function trackFailedLogin(userId) {
   if (!user) return null;
 
   const attempts = (user.failed_login_attempts || 0) + 1;
-  
+
   if (attempts >= config.security.maxLoginAttempts) {
     return authRepository.lockAccount(userId, config.security.lockoutMinutes);
   }
-  
+
   return authRepository.incrementFailedAttempts(userId);
 }
 
@@ -552,13 +573,13 @@ async function trackFailedLogin(userId) {
 async function isAccountLocked(userId) {
   const user = await authRepository.findUserById(userId);
   if (!user) return false;
-  
+
   if (user.status !== 'locked') return false;
-  
+
   if (user.locked_until && new Date(user.locked_until) > new Date()) {
     return true;
   }
-  
+
   // Auto-unlock if lockout period passed
   await authRepository.unlockAccount(userId);
   return false;
@@ -586,7 +607,7 @@ async function loginWithOAuth(provider, oauthData, deviceInfo = {}) {
     if (user.status !== 'active') {
       throw new AuthorizationError('AUTH_ACCOUNT_INACTIVE', 'Account is not active');
     }
-    
+
     // Create session and return tokens
     return {
       ...await createSessionWithTokens(user, deviceInfo),
@@ -597,11 +618,11 @@ async function loginWithOAuth(provider, oauthData, deviceInfo = {}) {
   // Check if user exists with same email
   if (email) {
     user = await authRepository.findUserByEmail(email);
-    
+
     if (user) {
       // Link OAuth provider to existing account
       await authRepository.linkOAuthProvider(user.id, provider, providerId);
-      
+
       // Update avatar if not set
       if (!user.avatar_url && avatarUrl) {
         await authRepository.updateUser(user.id, { avatar_url: avatarUrl });
@@ -645,7 +666,7 @@ async function loginWithOAuth(provider, oauthData, deviceInfo = {}) {
 async function linkOAuthToAccount(userId, provider, providerId) {
   // Check if provider ID is already linked to another account
   const existingUser = await authRepository.findUserByOAuthId(provider, providerId);
-  
+
   if (existingUser && existingUser.id !== userId) {
     throw new ConflictError(
       'AUTH_OAUTH_ALREADY_LINKED',
@@ -672,7 +693,7 @@ async function linkOAuthToAccount(userId, provider, providerId) {
  */
 async function unlinkOAuthFromAccount(userId, provider) {
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -735,7 +756,7 @@ async function refreshAccessToken(refreshToken) {
 
   // Get user
   const user = await authRepository.findUserById(decoded.userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -845,7 +866,7 @@ function isTokenExpired(token) {
  */
 async function getSessions(userId) {
   const sessions = await authRepository.findSessionsByUserId(userId);
-  
+
   return sessions.map(session => ({
     id: session.id,
     deviceType: session.device_type,
@@ -866,11 +887,11 @@ async function getSessions(userId) {
 async function terminateSession(userId, sessionId) {
   // Verify session belongs to user
   const session = await authRepository.findSessionById(sessionId);
-  
+
   if (!session) {
     throw new AuthenticationError('AUTH_SESSION_NOT_FOUND', 'Session not found');
   }
-  
+
   if (session.user_id !== userId) {
     throw new AuthorizationError('AUTH_FORBIDDEN', 'Cannot terminate another user\'s session');
   }
@@ -891,7 +912,7 @@ async function terminateSession(userId, sessionId) {
  */
 async function logout(userId, sessionId) {
   await authRepository.deleteSession(sessionId);
-  
+
   // Invalidate session cache
   await sessionCache.invalidateSession(sessionId);
 
@@ -908,7 +929,7 @@ async function logout(userId, sessionId) {
  */
 async function logoutAllDevices(userId) {
   await authRepository.deleteAllUserSessions(userId);
-  
+
   // Invalidate all user sessions in cache
   await sessionCache.invalidateUserSessions(userId);
 
@@ -925,7 +946,7 @@ async function logoutAllDevices(userId) {
  */
 async function getCurrentUser(userId) {
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -941,7 +962,7 @@ async function getCurrentUser(userId) {
 async function requestPasswordReset(identifier) {
   // Find user
   const user = await authRepository.findUserByIdentifier(identifier);
-  
+
   if (!user) {
     // Don't reveal if user exists - return success anyway
     return {
@@ -958,7 +979,7 @@ async function requestPasswordReset(identifier) {
 
   // Generate OTP for password reset
   const otpCode = generateOTP();
-  
+
   await authRepository.createOTP({
     identifier,
     otp_code: otpCode,
@@ -994,7 +1015,7 @@ async function resetPassword(data) {
   // Validate password complexity
   const { validatePasswordComplexity } = require('./auth.validator');
   const passwordValidation = validatePasswordComplexity(newPassword);
-  
+
   if (!passwordValidation.isValid) {
     throw new ValidationError(
       `Password does not meet requirements: ${passwordValidation.errors.join(', ')}`
@@ -1006,7 +1027,7 @@ async function resetPassword(data) {
 
   // Find user
   const user = await authRepository.findUserByIdentifier(identifier);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -1039,14 +1060,14 @@ async function changePassword(userId, data) {
 
   // Find user
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
 
   // Verify current password
   const isValidPassword = await verifyPassword(currentPassword, user.password_hash);
-  
+
   if (!isValidPassword) {
     throw new AuthenticationError('AUTH_INVALID_CREDENTIALS', 'Current password is incorrect');
   }
@@ -1054,7 +1075,7 @@ async function changePassword(userId, data) {
   // Validate new password complexity
   const { validatePasswordComplexity } = require('./auth.validator');
   const passwordValidation = validatePasswordComplexity(newPassword);
-  
+
   if (!passwordValidation.isValid) {
     throw new ValidationError(
       `Password does not meet requirements: ${passwordValidation.errors.join(', ')}`
@@ -1087,7 +1108,7 @@ async function changePassword(userId, data) {
  */
 async function approveAccount(userId, adminId) {
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -1134,7 +1155,7 @@ async function approveAccount(userId, adminId) {
  */
 async function rejectAccount(userId, adminId, reason) {
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -1179,11 +1200,11 @@ async function rejectAccount(userId, adminId, reason) {
  */
 async function getPendingAccounts(options = {}) {
   const { role, page = 1, limit = 20 } = options;
-  
+
   // This would typically be a repository method with pagination
   // For now, we'll use a simple implementation
   const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
-  
+
   let query = supabaseAdmin
     .from('users')
     .select('*', { count: 'exact' })
@@ -1223,7 +1244,7 @@ async function getPendingAccounts(options = {}) {
  */
 async function deactivateAccount(userId, adminId, reason) {
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -1257,7 +1278,7 @@ async function deactivateAccount(userId, adminId, reason) {
  */
 async function reactivateAccount(userId, adminId) {
   const user = await authRepository.findUserById(userId);
-  
+
   if (!user) {
     throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
   }
@@ -1283,24 +1304,24 @@ module.exports = {
   registerCustomer,
   registerPartner,
   registerShipper,
-  
+
   // OTP
   requestOTP,
   verifyOTP,
   isOTPLocked,
   isOTPRateLimited,
-  
+
   // Login
   login,
   loginWithOTP,
   loginWithOAuth,
   trackFailedLogin,
   isAccountLocked,
-  
+
   // OAuth
   linkOAuthToAccount,
   unlinkOAuthFromAccount,
-  
+
   // Token Management
   generateTokens,
   createSessionWithTokens,
@@ -1310,26 +1331,26 @@ module.exports = {
   decodeToken,
   getTokenExpiration,
   isTokenExpired,
-  
+
   // Session Management
   getSessions,
   terminateSession,
   logout,
   logoutAllDevices,
   getCurrentUser,
-  
+
   // Password Reset
   requestPasswordReset,
   resetPassword,
   changePassword,
-  
+
   // Admin Functions
   approveAccount,
   rejectAccount,
   getPendingAccounts,
   deactivateAccount,
   reactivateAccount,
-  
+
   // Helpers (exported for testing)
   generateOTP,
   hashPassword,

@@ -59,16 +59,19 @@ class LoginResponseModel {
   final String? refreshToken;
   final UserModel? user;
   final ShipperModel? shipper;
+  final String? message;
 
   const LoginResponseModel({
     required this.accessToken,
     this.refreshToken,
     this.user,
     this.shipper,
+    this.message,
   });
 
   /// Parse from backend response
-  /// Backend returns: { accessToken, refreshToken, user: {...}, shipper: {...} }
+  /// Login returns: { accessToken, refreshToken, user: {...}, shipper: {...} }
+  /// Register returns: { user: {...}, message: "..." } (no token for pending approval)
   factory LoginResponseModel.fromJson(Map<String, dynamic> json) {
     // Handle nested data structure
     final data = json['data'] ?? json;
@@ -80,6 +83,7 @@ class LoginResponseModel {
     }
     
     return LoginResponseModel(
+      // Token may be empty for registration (pending approval)
       accessToken: data['accessToken'] as String? ?? 
                    data['access_token'] as String? ?? '',
       refreshToken: data['refreshToken'] as String? ?? 
@@ -88,8 +92,12 @@ class LoginResponseModel {
           ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
           : null,
       shipper: shipperModel,
+      message: data['message'] as String?,
     );
   }
+  
+  /// Check if this response has valid authentication tokens
+  bool get hasValidToken => accessToken.isNotEmpty;
 }
 
 /// User model from auth response

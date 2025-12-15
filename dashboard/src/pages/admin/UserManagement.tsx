@@ -5,7 +5,14 @@ import { userService } from "@/services/user.service";
 import type { User } from "@/services/user.service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, Ban, CheckCircle } from "lucide-react";
+import { MoreHorizontal, Ban, CheckCircle, Users, Store, Truck, Shield } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -17,28 +24,59 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DataTable } from "@/components/common/DataTable";
 
+const ROLE_OPTIONS = [
+    { value: 'all', label: 'Tất cả', icon: Users },
+    { value: 'customer', label: 'Khách hàng', icon: Users },
+    { value: 'partner', label: 'Đối tác', icon: Store },
+    { value: 'shipper', label: 'Shipper', icon: Truck },
+    { value: 'admin', label: 'Admin', icon: Shield },
+];
+
 export default function UserManagement() {
     const navigate = useNavigate();
     const [users, setUsers] = useState<User[]>([]);
+    const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    const [roleFilter, setRoleFilter] = useState<string>('all');
 
     useEffect(() => {
         loadUsers();
     }, []);
+
+    useEffect(() => {
+        if (roleFilter === 'all') {
+            setFilteredUsers(users);
+        } else {
+            setFilteredUsers(users.filter((u: any) => u.role === roleFilter));
+        }
+    }, [users, roleFilter]);
 
     const loadUsers = async () => {
         setLoading(true);
         try {
             const data = await userService.getAllUsers({});
             // API returns { users: [...], pagination: {...} }
-            setUsers(data.users || data.data?.users || data || []);
+            const userList = data.users || data.data?.users || data || [];
+            setUsers(userList);
+            setFilteredUsers(userList);
         } catch (error) {
             console.error(error);
             setUsers([]);
+            setFilteredUsers([]);
         } finally {
             setLoading(false);
         }
     };
+
+    const getRoleCounts = () => {
+        const counts: Record<string, number> = { all: users.length };
+        users.forEach((u: any) => {
+            counts[u.role] = (counts[u.role] || 0) + 1;
+        });
+        return counts;
+    };
+
+    const roleCounts = getRoleCounts();
 
     const handleStatusChange = async (id: string, newStatus: string) => {
         try {
@@ -159,20 +197,44 @@ export default function UserManagement() {
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground">User Management</h1>
-                    <p className="text-muted-foreground mt-1">Manage system users and permissions</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Quản lý người dùng</h1>
+                    <p className="text-muted-foreground mt-1">Quản lý tài khoản và phân quyền người dùng</p>
                 </div>
                 <Button className="shadow-lg hover:shadow-xl transition-all">
-                    Add User
+                    Thêm người dùng
                 </Button>
+            </div>
+
+            {/* Role Filter Tabs */}
+            <div className="flex flex-wrap gap-2">
+                {ROLE_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    const count = roleCounts[option.value] || 0;
+                    const isActive = roleFilter === option.value;
+                    return (
+                        <Button
+                            key={option.value}
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setRoleFilter(option.value)}
+                            className={`gap-2 ${isActive ? '' : 'hover:bg-primary/10'}`}
+                        >
+                            <Icon className="h-4 w-4" />
+                            {option.label}
+                            <Badge variant={isActive ? "secondary" : "outline"} className="ml-1 px-1.5 py-0 text-xs">
+                                {count}
+                            </Badge>
+                        </Button>
+                    );
+                })}
             </div>
 
             <div className="bg-card rounded-xl shadow-premium border border-border/50 overflow-hidden p-6">
                 <DataTable
-                    data={users}
+                    data={filteredUsers}
                     columns={columns}
                     searchKey="email"
-                    searchPlaceholder="Search by email..."
+                    searchPlaceholder="Tìm theo email..."
                     isLoading={loading}
                 />
             </div>
