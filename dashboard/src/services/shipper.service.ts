@@ -190,6 +190,24 @@ export const shipperService = {
         return response.data;
     },
 
+    // Get pending shippers (Admin)
+    getPendingShippers: async (params?: { page?: number; limit?: number }) => {
+        const response = await api.get("/shippers/pending", { params });
+        return response.data;
+    },
+
+    // Approve shipper (Admin)
+    approveShipper: async (id: string) => {
+        const response = await api.post(`/shippers/${id}/approve`);
+        return response.data;
+    },
+
+    // Reject shipper (Admin)
+    rejectShipper: async (id: string, reason: string) => {
+        const response = await api.post(`/shippers/${id}/reject`, { reason });
+        return response.data;
+    },
+
     // Update shipper status (Admin)
     updateShipperStatus: async (id: string, status: string) => {
         const response = await api.patch(`/shippers/${id}/status`, { status });

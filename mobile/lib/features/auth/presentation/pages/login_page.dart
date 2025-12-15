@@ -14,14 +14,14 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _phoneController = TextEditingController(text: '0901234567'); // Demo data
-  final _otpController = TextEditingController(text: '123456'); // Demo data
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   void _onLoginPressed() {
     context.read<AuthBloc>().add(
       LoginRequested(
         phone: _phoneController.text,
-        otp: _otpController.text,
+        password: _passwordController.text,
       ),
     );
   }
@@ -33,7 +33,23 @@ class _LoginPageState extends State<LoginPage> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is Authenticated) {
-            context.go('/home');
+            // Check shipper approval status
+            final shipper = state.shipper;
+            if (shipper.status == 'pending') {
+              // Account not yet approved by admin
+              context.go('/pending-approval');
+            } else if (shipper.status == 'suspended') {
+              // Account suspended
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Your account has been suspended. Please contact support.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            } else {
+              // Active shipper - proceed to home
+              context.go('/home');
+            }
           } else if (state is AuthFailure) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),
@@ -54,13 +70,13 @@ class _LoginPageState extends State<LoginPage> {
                   const Icon(Icons.local_shipping, size: 64, color: AppColors.primary),
                   const SizedBox(height: 16),
                   const Text(
-                    "Welcome Back!",
+                    "Chào mừng trở lại!",
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    "Sign in to start delivering",
+                    "Đăng nhập để bắt đầu giao hàng",
                     style: TextStyle(color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),
@@ -70,7 +86,7 @@ class _LoginPageState extends State<LoginPage> {
                   TextField(
                     controller: _phoneController,
                     decoration: const InputDecoration(
-                      labelText: "Phone Number",
+                      labelText: "Số điện thoại",
                       prefixIcon: Icon(Icons.phone),
                       border: OutlineInputBorder(),
                     ),
@@ -78,11 +94,11 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // OTP Input (Simulated as password for now)
+                  // Password Input
                   TextField(
-                    controller: _otpController,
+                    controller: _passwordController,
                     decoration: const InputDecoration(
-                      labelText: "OTP / Password",
+                      labelText: "Mật khẩu",
                       prefixIcon: Icon(Icons.lock),
                       border: OutlineInputBorder(),
                     ),
@@ -105,7 +121,27 @@ class _LoginPageState extends State<LoginPage> {
                             width: 20,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : const Text("LOGIN"),
+                        : const Text("ĐĂNG NHẬP"),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Register Link
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Chưa có tài khoản? "),
+                      TextButton(
+                        onPressed: () => context.go('/register'),
+                        child: const Text(
+                          "Đăng ký",
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

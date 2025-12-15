@@ -7,8 +7,25 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const shipperController = require('./shipper.controller');
 const { authenticate, authorize } = require('../auth/auth.middleware');
+
+// Configure multer for document uploads
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max
+    },
+    fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+        }
+    },
+});
 
 // ============================================
 // SHIPPER ROUTES
@@ -16,6 +33,17 @@ const { authenticate, authorize } = require('../auth/auth.middleware');
 
 // Public routes
 router.get('/nearby', shipperController.findNearbyShippers);
+
+// Document upload (before authentication for registration flow)
+router.post(
+    '/upload-documents',
+    upload.fields([
+        { name: 'idCardFront', maxCount: 1 },
+        { name: 'idCardBack', maxCount: 1 },
+        { name: 'driverLicense', maxCount: 1 },
+    ]),
+    shipperController.uploadDocuments
+);
 
 // Authenticated routes
 router.use(authenticate);
@@ -31,6 +59,7 @@ router.patch('/:id', shipperController.updateShipper);
 // Admin actions
 router.get('/flagged', authorize('admin'), shipperController.getFlaggedShippers);
 router.post('/:id/approve', authorize('admin'), shipperController.approveShipper);
+router.post('/:id/reject', authorize('admin'), shipperController.rejectShipper);
 router.post('/:id/suspend', authorize('admin'), shipperController.suspendShipper);
 router.post('/:id/reactivate', authorize('admin'), shipperController.reactivateShipper);
 router.post('/:id/clear-flag', authorize('admin'), shipperController.clearShipperFlag);
@@ -47,3 +76,4 @@ router.get('/:id/location', shipperController.getShipperLocation);
 router.get('/:id/ratings', shipperController.getShipperRatings);
 
 module.exports = router;
+

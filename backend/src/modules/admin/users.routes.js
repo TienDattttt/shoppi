@@ -212,7 +212,7 @@ router.get('/:id/sessions', authenticate, requireAdmin, async (req, res) => {
 
 /**
  * GET /api/admin/users/:id/orders
- * Get user's order history
+ * Get user's order history (for customers)
  */
 router.get('/:id/orders', authenticate, requireAdmin, async (req, res) => {
     try {
@@ -251,6 +251,141 @@ router.get('/:id/orders', authenticate, requireAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             error: { code: 'ORDER_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * GET /api/admin/users/:id/shop
+ * Get user's shop info (for partners)
+ */
+router.get('/:id/shop', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Get shop owned by this user
+        const { data: shop, error } = await supabaseAdmin
+            .from('shops')
+            .select('id, shop_name, description, logo_url, status, rating, total_reviews, created_at')
+            .eq('owner_id', id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        if (!shop) {
+            return res.json({
+                success: true,
+                data: { shop: null }
+            });
+        }
+
+        // Get additional stats
+        const [productsResult, ordersResult] = await Promise.all([
+            supabaseAdmin
+                .from('products')
+                .select('id', { count: 'exact', head: true })
+                .eq('shop_id', shop.id),
+            supabaseAdmin
+                .from('sub_orders')
+                .select('id, total_amount', { count: 'exact' })
+                .eq('shop_id', shop.id)
+        ]);
+
+        const totalProducts = productsResult.count || 0;
+        const totalOrders = ordersResult.count || 0;
+        const totalRevenue = (ordersResult.data || []).reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+
+        res.json({
+            success: true,
+            data: {
+                shop: {
+                    ...shop,
+                    total_products: totalProducts,
+                    total_orders: totalOrders,
+                    total_revenue: totalRevenue,
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get shop error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'SHOP_ERROR', message: error.message }
+        });
+    }
+});
+
+/**
+ * GET /api/admin/users/:id/shipper
+ * Get user's shipper info (for shippers)
+ */
+router.get('/:id/shipper', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Get shipper profile for this user
+        const { data: shipper, error } = await supabaseAdmin
+            .from('shippers')
+            .select('id, vehicle_type, vehicle_plate, vehicle_brand, vehicle_model, id_card_number, status, total_deliveries, successful_deliveries, failed_deliveries, avg_rating, total_ratings, working_city, working_district, is_online, is_available, created_at')
+            .eq('user_id', id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        // If no shipper record found, try to get info from users table (legacy data)
+        if (!shipper) {
+            const { data: user, error: userError } = await supabaseAdmin
+                .from('users')
+                .select('id, vehicle_type, vehicle_plate, id_card_number, status, created_at')
+                .eq('id', id)
+                .eq('role', 'shipper')
+                .single();
+
+            if (userError && userError.code !== 'PGRST116') throw userError;
+
+            if (user) {
+                // Return user data as shipper info (for legacy users without shipper record)
+                return res.json({
+                    success: true,
+                    data: {
+                        shipper: {
+                            id: null, // No shipper record ID
+                            user_id: user.id,
+                            vehicle_type: user.vehicle_type,
+                            vehicle_plate: user.vehicle_plate,
+                            id_card_number: user.id_card_number,
+                            status: user.status,
+                            total_deliveries: 0,
+                            successful_deliveries: 0,
+                            failed_deliveries: 0,
+                            avg_rating: 0,
+                            total_ratings: 0,
+                            working_city: null,
+                            working_district: null,
+                            is_online: false,
+                            is_available: false,
+                            created_at: user.created_at,
+                            _isLegacy: true, // Flag to indicate this is legacy data
+                        }
+                    }
+                });
+            }
+
+            return res.json({
+                success: true,
+                data: { shipper: null }
+            });
+        }
+
+        res.json({
+            success: true,
+            data: { shipper }
+        });
+    } catch (error) {
+        console.error('Get shipper error:', error);
+        res.status(500).json({
+            success: false,
+            error: { code: 'SHIPPER_ERROR', message: error.message }
         });
     }
 });

@@ -11,12 +11,12 @@ class AppStarted extends AuthEvent {}
 
 class LoginRequested extends AuthEvent {
   final String phone;
-  final String otp; // or password
+  final String password;
 
-  const LoginRequested({required this.phone, required this.otp});
+  const LoginRequested({required this.phone, required this.password});
 
   @override
-  List<Object> get props => [phone, otp];
+  List<Object> get props => [phone, password];
 }
 
 class LogoutRequested extends AuthEvent {}

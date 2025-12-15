@@ -13,14 +13,15 @@ class LoginUseCase implements UseCase<ShipperEntity, LoginParams> {
 
   @override
   Future<Either<Failure, ShipperEntity>> call(LoginParams params) async {
-    // Assuming Login via OTP verification as the primary entry point based on design
-    return await repository.verifyOtp(params.phone, params.otp); 
+    // Shipper login with phone + password (no OTP required)
+    // Admin approval is required before shipper can login
+    return await repository.login(params.phone, params.password); 
   }
 }
 
 class LoginParams {
   final String phone;
-  final String otp;
+  final String password;
 
-  LoginParams({required this.phone, required this.otp});
+  LoginParams({required this.phone, required this.password});
 }

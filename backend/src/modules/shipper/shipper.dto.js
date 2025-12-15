@@ -16,7 +16,7 @@
  */
 function toShipperResponse(shipper) {
   if (!shipper) return null;
-  
+
   return {
     id: shipper.id,
     userId: shipper.user_id,
@@ -56,12 +56,16 @@ function toShipperResponse(shipper) {
  */
 function toShipperAdminResponse(shipper) {
   if (!shipper) return null;
-  
+
   const base = toShipperResponse(shipper);
   return {
     ...base,
     idCardNumber: shipper.id_card_number,
     driverLicense: shipper.driver_license,
+    // Document URLs for admin review
+    idCardFrontUrl: shipper.id_card_front_url,
+    idCardBackUrl: shipper.id_card_back_url,
+    driverLicenseUrl: shipper.driver_license_url,
     currentLocation: shipper.current_lat && shipper.current_lng ? {
       lat: parseFloat(shipper.current_lat),
       lng: parseFloat(shipper.current_lng),
@@ -78,7 +82,7 @@ function toShipperAdminResponse(shipper) {
  */
 function toShipperTrackingResponse(shipper) {
   if (!shipper) return null;
-  
+
   return {
     id: shipper.id,
     vehicleType: shipper.vehicle_type,
@@ -122,13 +126,13 @@ function toShipperListResponse(shippers, count, pagination = {}) {
  */
 function toShipmentResponse(shipment) {
   if (!shipment) return null;
-  
+
   return {
     id: shipment.id,
     trackingNumber: shipment.tracking_number,
     subOrderId: shipment.sub_order_id,
     status: shipment.status,
-    
+
     pickup: {
       address: shipment.pickup_address,
       lat: shipment.pickup_lat ? parseFloat(shipment.pickup_lat) : null,
@@ -136,7 +140,7 @@ function toShipmentResponse(shipment) {
       contactName: shipment.pickup_contact_name,
       contactPhone: shipment.pickup_contact_phone,
     },
-    
+
     delivery: {
       address: shipment.delivery_address,
       lat: shipment.delivery_lat ? parseFloat(shipment.delivery_lat) : null,
@@ -144,26 +148,26 @@ function toShipmentResponse(shipment) {
       contactName: shipment.delivery_contact_name,
       contactPhone: shipment.delivery_contact_phone,
     },
-    
+
     distanceKm: shipment.distance_km ? parseFloat(shipment.distance_km) : null,
     estimatedDurationMinutes: shipment.estimated_duration_minutes,
     estimatedDelivery: shipment.estimated_delivery,
-    
+
     shippingFee: parseFloat(shipment.shipping_fee || 0),
     codAmount: parseFloat(shipment.cod_amount || 0),
-    
+
     deliveryNotes: shipment.delivery_notes,
     failureReason: shipment.failure_reason,
-    
+
     shipper: shipment.shipper ? toShipperTrackingResponse(shipment.shipper) : null,
-    
+
     timestamps: {
       created: shipment.created_at,
       assigned: shipment.assigned_at,
       pickedUp: shipment.picked_up_at,
       delivered: shipment.delivered_at,
     },
-    
+
     rating: shipment.customer_rating ? {
       score: shipment.customer_rating,
       feedback: shipment.customer_feedback,
@@ -178,9 +182,9 @@ function toShipmentResponse(shipment) {
  */
 function toShipmentShipperResponse(shipment) {
   if (!shipment) return null;
-  
+
   const base = toShipmentResponse(shipment);
-  
+
   return {
     ...base,
     subOrder: shipment.sub_order ? {
@@ -203,17 +207,17 @@ function toShipmentShipperResponse(shipment) {
  */
 function toShipmentTrackingResponse(shipment) {
   if (!shipment) return null;
-  
+
   return {
     trackingNumber: shipment.tracking_number,
     status: shipment.status,
     statusLabel: getStatusLabel(shipment.status),
-    
+
     delivery: {
       address: shipment.delivery_address,
       estimatedDelivery: shipment.estimated_delivery,
     },
-    
+
     shipper: shipment.shipper ? {
       name: shipment.shipper.user?.full_name,
       phone: shipment.shipper.user?.phone,
@@ -221,7 +225,7 @@ function toShipmentTrackingResponse(shipment) {
       vehiclePlate: shipment.shipper.vehicle_plate,
       rating: shipment.shipper.avg_rating,
     } : null,
-    
+
     timeline: buildTimeline(shipment),
   };
 }
@@ -256,7 +260,7 @@ function toShipmentListResponse(shipments, count, pagination = {}) {
  */
 function toLocationResponse(location) {
   if (!location) return null;
-  
+
   return {
     lat: location.lat,
     lng: location.lng,
@@ -311,7 +315,7 @@ function getStatusLabel(status) {
  */
 function buildTimeline(shipment) {
   const timeline = [];
-  
+
   if (shipment.created_at) {
     timeline.push({
       status: 'created',
@@ -319,7 +323,7 @@ function buildTimeline(shipment) {
       timestamp: shipment.created_at,
     });
   }
-  
+
   if (shipment.assigned_at) {
     timeline.push({
       status: 'assigned',
@@ -327,7 +331,7 @@ function buildTimeline(shipment) {
       timestamp: shipment.assigned_at,
     });
   }
-  
+
   if (shipment.picked_up_at) {
     timeline.push({
       status: 'picked_up',
@@ -335,7 +339,7 @@ function buildTimeline(shipment) {
       timestamp: shipment.picked_up_at,
     });
   }
-  
+
   if (shipment.delivered_at) {
     timeline.push({
       status: 'delivered',
@@ -343,7 +347,7 @@ function buildTimeline(shipment) {
       timestamp: shipment.delivered_at,
     });
   }
-  
+
   return timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
@@ -353,17 +357,17 @@ module.exports = {
   toShipperAdminResponse,
   toShipperTrackingResponse,
   toShipperListResponse,
-  
+
   // Shipment DTOs
   toShipmentResponse,
   toShipmentShipperResponse,
   toShipmentTrackingResponse,
   toShipmentListResponse,
-  
+
   // Location DTOs
   toLocationResponse,
   toLocationHistoryResponse,
-  
+
   // Helpers
   getStatusLabel,
   buildTimeline,

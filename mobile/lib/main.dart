@@ -30,12 +30,20 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase
+  // Initialize Firebase (optional - app will work without it)
   // Requirements: 13.5 - Configure Firebase push notifications
-  await Firebase.initializeApp();
-  
-  // Set up background message handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  bool firebaseInitialized = false;
+  try {
+    await Firebase.initializeApp();
+    firebaseInitialized = true;
+    debugPrint('Firebase initialized successfully');
+    
+    // Set up background message handler only if Firebase is available
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint('Firebase initialization skipped: $e');
+    debugPrint('App will continue without push notifications');
+  }
   
   // Initialize Dependency Injection
   configureDependencies();
@@ -49,11 +57,13 @@ void main() async {
   
   // Initialize notification service and register device token
   // Requirements: 13.5 - Register device token
-  try {
-    final notificationService = getIt<NotificationService>();
-    await notificationService.initialize();
-  } catch (e) {
-    debugPrint('Failed to initialize notification service: $e');
+  if (firebaseInitialized) {
+    try {
+      final notificationService = getIt<NotificationService>();
+      await notificationService.initialize();
+    } catch (e) {
+      debugPrint('Failed to initialize notification service: $e');
+    }
   }
 
   runApp(const MyApp());

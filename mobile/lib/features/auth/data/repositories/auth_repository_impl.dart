@@ -33,7 +33,7 @@ class AuthRepositoryImpl implements AuthRepository {
       phone: '0901234567',
       fullName: 'Test Shipper',
       status: 'active',
-      vehicleType: 'motorcycle',
+      vehicleType: 'motorbike',
       vehiclePlate: '59-A1 12345',
       isOnline: true,
       avgRating: 4.8,
@@ -140,19 +140,82 @@ class AuthRepositoryImpl implements AuthRepository {
     
     if (await _networkInfo.isConnected) {
       try {
-        final result = await _remoteDataSource.register(params);
-        await _localDataSource.cacheToken(result.accessToken, result.refreshToken);
+        // Step 1: Upload documents if provided (file paths)
+        RegisterParams updatedParams = params;
+        if (_hasDocumentsToUpload(params)) {
+          final uploadedUrls = await _remoteDataSource.uploadDocuments(
+            idCardFrontPath: params.idCardFront.isNotEmpty ? params.idCardFront : null,
+            idCardBackPath: params.idCardBack.isNotEmpty ? params.idCardBack : null,
+            driverLicensePath: params.licenseFront.isNotEmpty ? params.licenseFront : null,
+          );
+          
+          // Update params with uploaded URLs
+          updatedParams = params.copyWith(
+            idCardFrontUrl: uploadedUrls['idCardFrontUrl'],
+            idCardBackUrl: uploadedUrls['idCardBackUrl'],
+            driverLicenseUrl: uploadedUrls['driverLicenseUrl'],
+          );
+        }
         
-        // Get shipper profile after registration
-        final shipper = await _remoteDataSource.getCurrentShipper();
-        await _localDataSource.cacheShipper(shipper);
-        return Right(shipper);
+        // Step 2: Register with document URLs
+        final result = await _remoteDataSource.register(updatedParams);
+        
+        // Registration returns user info but NO token (shipper needs admin approval)
+        // If we have a token, cache it and get shipper profile
+        if (result.accessToken.isNotEmpty) {
+          await _localDataSource.cacheToken(result.accessToken, result.refreshToken);
+          
+          // Get shipper profile after registration
+          final shipper = await _remoteDataSource.getCurrentShipper();
+          await _localDataSource.cacheShipper(shipper);
+          return Right(shipper);
+        }
+        
+        // No token means pending approval - return shipper from registration response
+        // or create a pending shipper entity from user data
+        if (result.user != null) {
+          final pendingShipper = ShipperEntity(
+            id: '', // No shipper ID yet
+            userId: result.user!.id,
+            phone: result.user!.phone ?? params.phone,
+            fullName: result.user!.fullName ?? params.fullName,
+            status: 'pending',
+            vehicleType: params.vehicleType,
+            vehiclePlate: params.vehiclePlate,
+            isOnline: false,
+            avgRating: 0.0,
+            totalDeliveries: 0,
+          );
+          return Right(pendingShipper);
+        }
+        
+        // Fallback: create pending shipper from params
+        final pendingShipper = ShipperEntity(
+          id: '',
+          userId: '',
+          phone: params.phone,
+          fullName: params.fullName,
+          status: 'pending',
+          vehicleType: params.vehicleType,
+          vehiclePlate: params.vehiclePlate,
+          isOnline: false,
+          avgRating: 0.0,
+          totalDeliveries: 0,
+        );
+        return Right(pendingShipper);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
     } else {
       return const Left(NetworkFailure());
     }
+  }
+  
+  /// Check if there are documents to upload (file paths provided)
+  bool _hasDocumentsToUpload(RegisterParams params) {
+    return params.idCardFront.isNotEmpty || 
+           params.idCardBack.isNotEmpty || 
+           params.licenseFront.isNotEmpty;
   }
 
   @override

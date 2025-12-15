@@ -8,10 +8,10 @@ class AppConfig {
   /// For Android emulator: use 10.0.2.2 to access host machine's localhost
   /// For iOS simulator: use localhost or 127.0.0.1
   /// For real device: use your machine's IP address (e.g., 192.168.x.x)
-  static const String apiBaseUrl = 'http://10.0.2.2:3000/api';
+  static const String apiBaseUrl = 'http://192.168.1.32:3000/api';
 
   /// WebSocket URL for real-time updates
-  static const String wsBaseUrl = 'ws://10.0.2.2:3000';
+  static const String wsBaseUrl = 'ws://192.168.1.32:3000';
 
   /// Enable debug logging
   static const bool enableLogging = true;

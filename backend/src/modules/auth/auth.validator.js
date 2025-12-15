@@ -74,13 +74,23 @@ const registerShipperSchema = Joi.object({
   idCardNumber: Joi.string().min(9).max(20).required().messages({
     'any.required': 'ID card number is required',
   }),
-  vehicleType: Joi.string().valid('motorcycle', 'car', 'bicycle', 'truck').required().messages({
-    'any.only': 'Vehicle type must be one of: motorcycle, car, bicycle, truck',
+  vehicleType: Joi.string().valid('motorbike', 'car', 'bicycle', 'truck').required().messages({
+    'any.only': 'Vehicle type must be one of: motorbike, car, bicycle, truck',
     'any.required': 'Vehicle type is required',
   }),
   vehiclePlate: Joi.string().min(5).max(20).required().messages({
     'any.required': 'Vehicle plate is required',
   }),
+  vehicleBrand: Joi.string().max(50).optional(),
+  vehicleModel: Joi.string().max(50).optional(),
+  workingCity: Joi.string().max(100).optional(),
+  workingDistrict: Joi.string().max(100).optional(),
+  workingArea: Joi.string().max(200).optional(), // Alternative field name from mobile
+  driverLicense: Joi.string().max(20).optional(),
+  // Document URLs (optional - can be uploaded separately)
+  idCardFrontUrl: Joi.string().uri().allow(null, '').optional(),
+  idCardBackUrl: Joi.string().uri().allow(null, '').optional(),
+  driverLicenseUrl: Joi.string().uri().allow(null, '').optional(),
 });
 
 /**

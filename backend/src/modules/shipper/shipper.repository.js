@@ -62,6 +62,8 @@ async function findShipperById(shipperId) {
     
     data.user = userData || null;
   }
+  
+  // Document URLs are now stored in shippers table directly (id_card_front_url, id_card_back_url, driver_license_url)
 
   return data;
 }
@@ -127,11 +129,12 @@ async function findPendingShippers(options = {}) {
   }
 
   // Get user info for each shipper
+  // Document URLs are stored in shippers table directly
   const shippersWithUsers = await Promise.all((data || []).map(async (shipper) => {
     if (shipper.user_id) {
       const { data: userData } = await supabaseAdmin
         .from('users')
-        .select('id, full_name, phone, email')
+        .select('id, full_name, phone, email, avatar_url')
         .eq('id', shipper.user_id)
         .single();
       shipper.user = userData || null;

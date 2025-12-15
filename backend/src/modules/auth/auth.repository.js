@@ -30,9 +30,6 @@ async function createUser(userData) {
       avatar_url: userData.avatar_url,
       business_name: userData.business_name,
       tax_id: userData.tax_id,
-      id_card_number: userData.id_card_number,
-      vehicle_type: userData.vehicle_type,
-      vehicle_plate: userData.vehicle_plate,
       google_id: userData.google_id,
       facebook_id: userData.facebook_id,
     })
@@ -583,6 +580,41 @@ function normalizePhone(phone) {
   return normalized;
 }
 
+/**
+ * Create shipper profile in shippers table
+ * @param {object} shipperData
+ * @returns {Promise<object>}
+ */
+async function createShipperProfile(shipperData) {
+  const { data, error } = await supabaseAdmin
+    .from('shippers')
+    .insert({
+      id: uuidv4(),
+      user_id: shipperData.user_id,
+      id_card_number: shipperData.id_card_number,
+      driver_license: shipperData.driver_license,
+      vehicle_type: shipperData.vehicle_type,
+      vehicle_plate: shipperData.vehicle_plate,
+      vehicle_brand: shipperData.vehicle_brand,
+      vehicle_model: shipperData.vehicle_model,
+      working_district: shipperData.working_district,
+      working_city: shipperData.working_city,
+      // Document URLs
+      id_card_front_url: shipperData.id_card_front_url,
+      id_card_back_url: shipperData.id_card_back_url,
+      driver_license_url: shipperData.driver_license_url,
+      status: shipperData.status || 'pending',
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create shipper profile: ${error.message}`);
+  }
+
+  return data;
+}
+
 module.exports = {
   // User operations
   createUser,
@@ -598,6 +630,9 @@ module.exports = {
   resetFailedAttempts,
   updateLastLogin,
   linkOAuthProvider,
+  
+  // Shipper operations
+  createShipperProfile,
   
   // Session operations
   createSession,

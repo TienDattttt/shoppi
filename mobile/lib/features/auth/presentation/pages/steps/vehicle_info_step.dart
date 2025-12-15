@@ -37,7 +37,10 @@ class _VehicleInfoStepState extends State<VehicleInfoStep> {
   @override
   void initState() {
     super.initState();
-    _vehicleType = widget.initialVehicleType ?? 'motorcycle';
+    // Handle both null and empty string
+    _vehicleType = (widget.initialVehicleType != null && widget.initialVehicleType!.isNotEmpty) 
+        ? widget.initialVehicleType! 
+        : 'motorbike';
     _plateController = TextEditingController(text: widget.initialLicensePlate ?? '');
     _brandController = TextEditingController(text: widget.initialVehicleBrand ?? '');
     _modelController = TextEditingController(text: widget.initialVehicleModel ?? '');
@@ -60,91 +63,99 @@ class _VehicleInfoStepState extends State<VehicleInfoStep> {
       child: Form(
         key: _formKey,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              l10n.vehicleInfo,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Vehicle Type Dropdown
-            Text(
-              l10n.vehicleType,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _vehicleType,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.vehicleInfo,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Vehicle Type Dropdown
+                    Text(
+                      l10n.vehicleType,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _vehicleType,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                      items: [
+                        DropdownMenuItem(value: 'motorbike', child: Text(l10n.motorcycle)),
+                        DropdownMenuItem(value: 'car', child: Text(l10n.car)),
+                        DropdownMenuItem(value: 'bicycle', child: Text('Xe đạp')),
+                        DropdownMenuItem(value: 'truck', child: Text(l10n.truck)),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _vehicleType = v!);
+                        _notifyChanges();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // License Plate
+                    AppTextField(
+                      label: l10n.licensePlate,
+                      controller: _plateController,
+                      hint: '29A1-123.45',
+                      prefixIcon: Icons.confirmation_number,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Vui lòng nhập biển số xe';
+                        }
+                        return null;
+                      },
+                      onChanged: (_) => _notifyChanges(),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Vehicle Brand
+                    AppTextField(
+                      label: l10n.vehicleBrand,
+                      controller: _brandController,
+                      hint: 'Honda, Yamaha...',
+                      prefixIcon: Icons.business,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Vui lòng nhập hãng xe';
+                        }
+                        return null;
+                      },
+                      onChanged: (_) => _notifyChanges(),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Vehicle Model
+                    AppTextField(
+                      label: l10n.vehicleModel,
+                      controller: _modelController,
+                      hint: 'Wave Alpha, Airblade...',
+                      prefixIcon: Icons.two_wheeler,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Vui lòng nhập dòng xe';
+                        }
+                        return null;
+                      },
+                      onChanged: (_) => _notifyChanges(),
+                    ),
+                  ],
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
-              items: [
-                DropdownMenuItem(value: 'motorcycle', child: Text(l10n.motorcycle)),
-                DropdownMenuItem(value: 'car', child: Text(l10n.car)),
-                DropdownMenuItem(value: 'van', child: Text(l10n.van)),
-                DropdownMenuItem(value: 'truck', child: Text(l10n.truck)),
-              ],
-              onChanged: (v) {
-                setState(() => _vehicleType = v!);
-                _notifyChanges();
-              },
             ),
+            
             const SizedBox(height: 16),
-            
-            // License Plate
-            AppTextField(
-              label: l10n.licensePlate,
-              controller: _plateController,
-              hint: '29A1-123.45',
-              prefixIcon: Icons.confirmation_number,
-              validator: (v) {
-                if (v == null || v.isEmpty) {
-                  return 'Vui lòng nhập biển số xe';
-                }
-                return null;
-              },
-              onChanged: (_) => _notifyChanges(),
-            ),
-            const SizedBox(height: 16),
-            
-            // Vehicle Brand
-            AppTextField(
-              label: l10n.vehicleBrand,
-              controller: _brandController,
-              hint: 'Honda, Yamaha...',
-              prefixIcon: Icons.business,
-              validator: (v) {
-                if (v == null || v.isEmpty) {
-                  return 'Vui lòng nhập hãng xe';
-                }
-                return null;
-              },
-              onChanged: (_) => _notifyChanges(),
-            ),
-            const SizedBox(height: 16),
-            
-            // Vehicle Model
-            AppTextField(
-              label: l10n.vehicleModel,
-              controller: _modelController,
-              hint: 'Wave Alpha, Airblade...',
-              prefixIcon: Icons.two_wheeler,
-              validator: (v) {
-                if (v == null || v.isEmpty) {
-                  return 'Vui lòng nhập dòng xe';
-                }
-                return null;
-              },
-              onChanged: (_) => _notifyChanges(),
-            ),
-            
-            const Spacer(),
             
             // Navigation Buttons
             Row(
