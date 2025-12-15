@@ -4,14 +4,14 @@ import '../../domain/entities/location_entity.dart';
 import '../../domain/repositories/location_repository.dart';
 import '../datasources/location_data_source.dart';
 import '../../../../core/errors/failures.dart';
-import '../../../../core/network/api_client.dart';
 
+/// Location repository implementation
+/// Requirements: 13.4 - Send GPS location to backend every 30 seconds
 @LazySingleton(as: LocationRepository)
 class LocationRepositoryImpl implements LocationRepository {
   final LocationDataSource _dataSource;
-  final ApiClient _apiClient; // To update location to server
 
-  LocationRepositoryImpl(this._dataSource, this._apiClient);
+  LocationRepositoryImpl(this._dataSource);
 
   @override
   Stream<LocationEntity> getLocationStream() {
@@ -33,15 +33,10 @@ class LocationRepositoryImpl implements LocationRepository {
   }
 
   @override
-  Future<Either<Failure, void>> updateLocationToServer(LocationEntity location) async {
+  Future<Either<Failure, void>> updateLocationToServer(LocationEntity location, {String? shipmentId}) async {
     try {
-      // Mock API call to update location
-      await _apiClient.post('/shipper/location/update', data: {
-        'lat': location.lat,
-        'lng': location.lng,
-        'speed': location.speed,
-        'heading': location.heading,
-      });
+      // Requirements: 4.1, 13.4 - Update shipper location
+      await _dataSource.sendLocationUpdate(location, shipmentId: shipmentId);
       return const Right(null);
     } catch (e) {
       return Left(ServerFailure(e.toString()));
@@ -60,7 +55,7 @@ class LocationRepositoryImpl implements LocationRepository {
 
   @override
   Future<Either<Failure, bool>> checkPermission() async {
-     try {
+    try {
       final result = await _dataSource.checkPermission();
       return Right(result);
     } catch (e) {
@@ -69,9 +64,10 @@ class LocationRepositoryImpl implements LocationRepository {
   }
 
   @override
-  Future<Either<Failure, void>> startTracking() async {
+  Future<Either<Failure, void>> startTracking({String? shipmentId}) async {
     try {
-      await _dataSource.startTracking();
+      // Requirements: 13.4 - Use background location service
+      await _dataSource.startTracking(shipmentId: shipmentId);
       return const Right(null);
     } catch (e) {
       return Left(LocationFailure(e.toString()));
@@ -84,7 +80,7 @@ class LocationRepositoryImpl implements LocationRepository {
       await _dataSource.stopTracking();
       return const Right(null);
     } catch (e) {
-       return Left(LocationFailure(e.toString()));
+      return Left(LocationFailure(e.toString()));
     }
   }
 }

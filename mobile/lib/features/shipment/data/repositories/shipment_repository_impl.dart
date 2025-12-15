@@ -15,12 +15,12 @@ import '../datasources/shipment_remote_data_source.dart';
 class ShipmentRepositoryImpl implements ShipmentRepository {
   final ShipmentRemoteDataSource _remoteDataSource;
   final NetworkInfo _networkInfo;
-  final OfflineSyncService _offlineSyncService; // Add this
+  final OfflineSyncService _offlineSyncService;
 
   ShipmentRepositoryImpl(
     this._remoteDataSource, 
     this._networkInfo,
-    this._offlineSyncService, // Add this
+    this._offlineSyncService,
   );
 
   @override
@@ -33,18 +33,15 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
 
     if (await _networkInfo.isConnected) {
       try {
-        final result = await _remoteDataSource.getActiveShipments();
-        // Validation Property 5: Active shipments sorted by distance.
-        // Assuming API returns sorted, or we sort here. 
-        // Let's sort locally to guarantee Property 5.
-        // Note: Sort logic needs current location, if distanceKm is relative to current location it's fine.
+        // Requirements: 13.2 - Fetch shipments from /api/shipper/shipments
+        final result = await _remoteDataSource.getShipments(status: 'active');
+        // Sort by distance for optimal delivery route
         result.sort((a, b) => (a.distanceKm).compareTo(b.distanceKm));
         return Right(result);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
     } else {
-      // TODO: Implement local storage cache for offline viewing
       return const Left(NetworkFailure());
     }
   }
@@ -113,6 +110,11 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
 
   @override
   Future<Either<Failure, List<ShipmentEntity>>> getShipmentHistory({DateTime? fromDate, DateTime? toDate}) async {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      return const Right([]);
+    }
+    
     if (await _networkInfo.isConnected) {
       try {
         final result = await _remoteDataSource.getHistory(fromDate: fromDate, toDate: toDate);
@@ -127,7 +129,17 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
 
   @override
   Future<Either<Failure, ShipmentEntity>> getShipmentById(String id) async {
-     if (await _networkInfo.isConnected) {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      final mockShipments = _getMockShipments();
+      final shipment = mockShipments.firstWhere(
+        (s) => s.id == id,
+        orElse: () => mockShipments.first,
+      );
+      return Right(shipment);
+    }
+    
+    if (await _networkInfo.isConnected) {
       try {
         final result = await _remoteDataSource.getShipmentById(id);
         return Right(result);
@@ -141,44 +153,95 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
 
   @override
   Future<Either<Failure, ShipmentEntity>> markPickedUp(String id) async {
-     if (await _networkInfo.isConnected) {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final mockShipments = _getMockShipments();
+      return Right(mockShipments.first);
+    }
+    
+    if (await _networkInfo.isConnected) {
       try {
+        // Requirements: 13.3 - Update status via /api/shipper/shipments/:id/status
         final result = await _remoteDataSource.markPickedUp(id);
         return Right(result);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
     } else {
-      // Queue offline action
+      // Queue offline action for later sync
       await _offlineSyncService.queueAction(OfflineAction(
         id: const Uuid().v4(),
         type: 'pickup',
         payload: {'shipmentId': id},
         timestamp: DateTime.now(),
       ));
-      // In a real app we might return a local optimistic update of the entity
-      // For now we return a specific failure or just success with a note
-      // Since return type is ShipmentEntity, strict offline support requires local caching to return the entity.
-      // Assuming for now simple queuing.
       return const Left(NetworkFailure());
     }
   }
 
   @override
-  Future<Either<Failure, ShipmentEntity>> markDelivered(String id, String photoUrl, String? signatureUrl) async {
-     if (await _networkInfo.isConnected) {
+  Future<Either<Failure, ShipmentEntity>> markDelivering(String id) async {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final mockShipments = _getMockShipments();
+      return Right(mockShipments.first);
+    }
+    
+    if (await _networkInfo.isConnected) {
       try {
-        // Here photoUrl is effectively a file path for remote upload
-        final result = await _remoteDataSource.markDelivered(id, photoUrl, signatureUrl);
+        final result = await _remoteDataSource.markDelivering(id);
         return Right(result);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
     } else {
-       await _offlineSyncService.queueAction(OfflineAction(
+      await _offlineSyncService.queueAction(OfflineAction(
+        id: const Uuid().v4(),
+        type: 'delivering',
+        payload: {'shipmentId': id},
+        timestamp: DateTime.now(),
+      ));
+      return const Left(NetworkFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, ShipmentEntity>> markDelivered(
+    String id, 
+    String photoUrl, 
+    String? signatureUrl,
+    {required bool codCollected}
+  ) async {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final mockShipments = _getMockShipments();
+      return Right(mockShipments.first);
+    }
+    
+    if (await _networkInfo.isConnected) {
+      try {
+        // Requirements: 7.1 - Photo required for delivered status
+        // Requirements: 6.2 - COD collection confirmation required
+        final result = await _remoteDataSource.markDelivered(
+          id,
+          photoUrl: photoUrl,
+          signatureUrl: signatureUrl,
+          codCollected: codCollected,
+        );
+        return Right(result);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      await _offlineSyncService.queueAction(OfflineAction(
         id: const Uuid().v4(),
         type: 'deliver',
-        payload: {'shipmentId': id, 'photoPath': photoUrl, 'signaturePath': signatureUrl},
+        payload: {
+          'shipmentId': id, 
+          'photoUrl': photoUrl, 
+          'signatureUrl': signatureUrl,
+          'codCollected': codCollected,
+        },
         timestamp: DateTime.now(),
       ));
       return const Left(NetworkFailure());
@@ -187,17 +250,50 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
 
   @override
   Future<Either<Failure, ShipmentEntity>> markFailed(String id, String reason) async {
-     if (await _networkInfo.isConnected) {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final mockShipments = _getMockShipments();
+      return Right(mockShipments.first);
+    }
+    
+    if (await _networkInfo.isConnected) {
       try {
+        // Requirements: 8.1 - Reason from predefined list
         final result = await _remoteDataSource.markFailed(id, reason);
         return Right(result);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
     } else {
-       await _offlineSyncService.queueAction(OfflineAction(
+      await _offlineSyncService.queueAction(OfflineAction(
         id: const Uuid().v4(),
         type: 'fail',
+        payload: {'shipmentId': id, 'reason': reason},
+        timestamp: DateTime.now(),
+      ));
+      return const Left(NetworkFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> rejectShipment(String id, String reason) async {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      return const Right(null);
+    }
+    
+    if (await _networkInfo.isConnected) {
+      try {
+        // Requirements: 3.4 - Handle shipper rejection
+        await _remoteDataSource.rejectShipment(id, reason);
+        return const Right(null);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      await _offlineSyncService.queueAction(OfflineAction(
+        id: const Uuid().v4(),
+        type: 'reject',
         payload: {'shipmentId': id, 'reason': reason},
         timestamp: DateTime.now(),
       ));

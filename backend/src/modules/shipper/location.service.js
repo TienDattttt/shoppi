@@ -2,14 +2,22 @@
  * Location Service
  * Real-time location tracking for shippers
  * 
- * Requirements: 4 (Shipper Management), 5 (Shipment Tracking)
+ * Requirements: 4.1, 4.2, 4.5 (Real-Time Location Tracking)
+ * 
+ * Functions:
+ * - updateLocation: Store in Redis + Cassandra
+ * - getShipperLocation: Get from Redis with DB fallback
+ * - checkProximity: Calculate distance to delivery
+ * - broadcastLocation: Publish to Supabase Realtime
  */
 
 const shipperRepository = require('./shipper.repository');
 const redisClient = require('../../shared/redis/redis.client');
-const shipperLocationCache = require('../../shared/redis/shipper-location.cache');
 const shipperTrackingRepo = require('../../shared/cassandra/shipper-tracking.cassandra.repository');
-const { AppError } = require('../../shared/utils/error.util');
+const realtimeClient = require('../../shared/supabase/realtime.client');
+
+// Proximity threshold in meters for "shipper nearby" notification
+const PROXIMITY_THRESHOLD_METERS = 500;
 
 // Redis key prefixes
 const LOCATION_KEY_PREFIX = 'shipper:location:';
@@ -21,11 +29,15 @@ const LOCATION_TTL = 300; // 5 minutes
 
 /**
  * Update shipper's current location
+ * Stores in Redis + Cassandra and checks for proximity notifications
+ * 
  * @param {string} shipperId
  * @param {number} lat
  * @param {number} lng
  * @param {Object} metadata - Additional metadata
  * @returns {Promise<Object>}
+ * 
+ * Requirements: 4.1 - Update shipper location every 5 seconds
  */
 async function updateLocation(shipperId, lat, lng, metadata = {}) {
   const timestamp = new Date().toISOString();
@@ -49,6 +61,23 @@ async function updateLocation(shipperId, lat, lng, metadata = {}) {
   // Log to Cassandra for history (async, don't wait)
   logLocationHistory(shipperId, lat, lng, metadata).catch(err => {
     console.error('Failed to log location history:', err.message);
+  });
+
+  // Broadcast location update for active shipments (async, don't wait)
+  if (metadata.shipmentId) {
+    broadcastLocation(metadata.shipmentId, locationData).catch(err => {
+      console.error('Failed to broadcast location:', err.message);
+    });
+  }
+
+  // Check and trigger proximity notifications (async, don't wait)
+  // This is deferred to avoid blocking the location update response
+  setImmediate(async () => {
+    try {
+      await checkAndTriggerProximityNotifications(shipperId, locationData);
+    } catch (err) {
+      console.error('Failed to check proximity notifications:', err.message);
+    }
   });
 
   return locationData;
@@ -304,20 +333,343 @@ async function getMultipleLocations(shipperIds) {
 }
 
 /**
- * Broadcast location update (for real-time tracking)
- * @param {string} shipperId
- * @param {Object} locationData
- * @param {string[]} subscriberIds - User IDs to notify
+ * Broadcast location update via Supabase Realtime
+ * @param {string} shipmentId - Shipment ID for the channel
+ * @param {Object} locationData - Location data to broadcast
+ * @returns {Promise<boolean>}
+ * 
+ * Requirements: 4.2 - Real-time location updates via Supabase Realtime
+ */
+async function broadcastLocation(shipmentId, locationData) {
+  try {
+    // Create or get the broadcast channel for this shipment
+    const channelName = `shipment:${shipmentId}:location`;
+    
+    // Ensure channel exists
+    realtimeClient.createBroadcastChannel(channelName, () => {
+      // No-op callback for server-side - we're just broadcasting
+    });
+    
+    // Broadcast the location update
+    await realtimeClient.broadcast(channelName, 'location_update', {
+      shipmentId,
+      lat: locationData.lat,
+      lng: locationData.lng,
+      heading: locationData.heading,
+      speed: locationData.speed,
+      accuracy: locationData.accuracy,
+      timestamp: locationData.timestamp || new Date().toISOString(),
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to broadcast location via Supabase:', error.message);
+    
+    // Fallback to Redis pub/sub
+    try {
+      const channel = `shipment:${shipmentId}:location`;
+      await redisClient.publish(channel, JSON.stringify(locationData));
+    } catch (redisError) {
+      console.error('Failed to broadcast location via Redis:', redisError.message);
+    }
+    
+    return false;
+  }
+}
+
+/**
+ * Legacy broadcast function for backward compatibility
+ * @deprecated Use broadcastLocation instead
  */
 async function broadcastLocationUpdate(shipperId, locationData, subscriberIds = []) {
-  // This would integrate with Supabase Realtime or WebSocket
-  // For now, just publish to Redis pub/sub
+  // This is kept for backward compatibility
+  // For shipment-specific broadcasts, use broadcastLocation
   try {
     const channel = `shipper:${shipperId}:location`;
     await redisClient.publish(channel, JSON.stringify(locationData));
   } catch (error) {
     console.error('Failed to broadcast location:', error.message);
   }
+}
+
+// ============================================
+// PROXIMITY CHECKING
+// ============================================
+
+/**
+ * Check if shipper is within proximity of delivery address
+ * @param {string} shipperId - Shipper ID
+ * @param {number} deliveryLat - Delivery latitude
+ * @param {number} deliveryLng - Delivery longitude
+ * @returns {Promise<{isNearby: boolean, distanceMeters: number, distanceKm: number}>}
+ * 
+ * Requirements: 4.5 - Check if shipper within 500m of delivery
+ */
+async function checkProximity(shipperId, deliveryLat, deliveryLng) {
+  // Get shipper's current location
+  const location = await getShipperLocation(shipperId);
+  
+  if (!location) {
+    return {
+      isNearby: false,
+      distanceMeters: null,
+      distanceKm: null,
+      error: 'Shipper location not available',
+    };
+  }
+  
+  // Calculate distance
+  const distanceKm = calculateDistance(
+    location.lat,
+    location.lng,
+    deliveryLat,
+    deliveryLng
+  );
+  
+  const distanceMeters = distanceKm * 1000;
+  const isNearby = distanceMeters <= PROXIMITY_THRESHOLD_METERS;
+  
+  return {
+    isNearby,
+    distanceMeters: Math.round(distanceMeters),
+    distanceKm: Math.round(distanceKm * 100) / 100,
+    shipperLocation: {
+      lat: location.lat,
+      lng: location.lng,
+    },
+    deliveryLocation: {
+      lat: deliveryLat,
+      lng: deliveryLng,
+    },
+  };
+}
+
+/**
+ * Check proximity for a shipment and return detailed info
+ * @param {string} shipperId - Shipper ID
+ * @param {Object} shipment - Shipment object with delivery coordinates
+ * @returns {Promise<Object>}
+ */
+async function checkShipmentProximity(shipperId, shipment) {
+  if (!shipment.delivery_lat || !shipment.delivery_lng) {
+    return {
+      isNearby: false,
+      error: 'Delivery coordinates not available',
+    };
+  }
+  
+  const result = await checkProximity(
+    shipperId,
+    parseFloat(shipment.delivery_lat),
+    parseFloat(shipment.delivery_lng)
+  );
+  
+  return {
+    ...result,
+    shipmentId: shipment.id,
+    trackingNumber: shipment.tracking_number,
+    deliveryAddress: shipment.delivery_address,
+  };
+}
+
+// ============================================
+// PROXIMITY NOTIFICATION TRIGGER
+// ============================================
+
+// Redis key prefix for tracking sent proximity notifications
+const PROXIMITY_NOTIFICATION_PREFIX = 'proximity:notified:';
+const PROXIMITY_NOTIFICATION_TTL = 86400; // 24 hours
+
+/**
+ * Check if proximity notification was already sent for a shipment
+ * @param {string} shipmentId
+ * @returns {Promise<boolean>}
+ */
+async function wasProximityNotificationSent(shipmentId) {
+  try {
+    const key = `${PROXIMITY_NOTIFICATION_PREFIX}${shipmentId}`;
+    const result = await redisClient.get(key);
+    return result !== null;
+  } catch (error) {
+    console.error('Failed to check proximity notification status:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Mark proximity notification as sent for a shipment
+ * @param {string} shipmentId
+ * @returns {Promise<boolean>}
+ */
+async function markProximityNotificationSent(shipmentId) {
+  try {
+    const key = `${PROXIMITY_NOTIFICATION_PREFIX}${shipmentId}`;
+    await redisClient.set(key, new Date().toISOString(), 'EX', PROXIMITY_NOTIFICATION_TTL);
+    return true;
+  } catch (error) {
+    console.error('Failed to mark proximity notification as sent:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Trigger proximity notification if shipper is within 500m of delivery
+ * and notification hasn't been sent yet
+ * 
+ * @param {string} shipperId - Shipper ID
+ * @param {Object} shipment - Shipment object with delivery coordinates and customer info
+ * @param {Object} options - Additional options
+ * @returns {Promise<{triggered: boolean, reason: string}>}
+ * 
+ * Requirements: 4.5 - Send "Shipper nearby" notification when within 500m
+ */
+async function triggerProximityNotification(shipperId, shipment, options = {}) {
+  const shipmentId = shipment.id;
+  
+  // 1. Check if notification was already sent
+  const alreadySent = await wasProximityNotificationSent(shipmentId);
+  if (alreadySent) {
+    return {
+      triggered: false,
+      reason: 'Notification already sent for this shipment',
+    };
+  }
+  
+  // 2. Check proximity
+  const proximityResult = await checkShipmentProximity(shipperId, shipment);
+  
+  if (proximityResult.error) {
+    return {
+      triggered: false,
+      reason: proximityResult.error,
+    };
+  }
+  
+  if (!proximityResult.isNearby) {
+    return {
+      triggered: false,
+      reason: `Shipper is ${proximityResult.distanceMeters}m away (threshold: ${PROXIMITY_THRESHOLD_METERS}m)`,
+      distanceMeters: proximityResult.distanceMeters,
+    };
+  }
+  
+  // 3. Shipper is nearby - send notification
+  try {
+    const rabbitmqClient = require('../../shared/rabbitmq/rabbitmq.client');
+    
+    // Publish SHIPPER_NEARBY event
+    await rabbitmqClient.publishToExchange(
+      rabbitmqClient.EXCHANGES.EVENTS,
+      'SHIPPER_NEARBY',
+      {
+        event: 'SHIPPER_NEARBY',
+        data: {
+          shipmentId,
+          trackingNumber: shipment.tracking_number,
+          shipperId,
+          customerId: shipment.customer_id || options.customerId,
+          distanceMeters: proximityResult.distanceMeters,
+          shipperLocation: proximityResult.shipperLocation,
+          deliveryAddress: shipment.delivery_address,
+        },
+        timestamp: new Date().toISOString(),
+      }
+    );
+    
+    // Mark notification as sent
+    await markProximityNotificationSent(shipmentId);
+    
+    console.log(`[LocationService] Proximity notification triggered for shipment ${shipmentId}`);
+    
+    return {
+      triggered: true,
+      reason: 'Shipper nearby notification sent',
+      distanceMeters: proximityResult.distanceMeters,
+    };
+  } catch (error) {
+    console.error('Failed to trigger proximity notification:', error.message);
+    return {
+      triggered: false,
+      reason: `Failed to send notification: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * Check and trigger proximity notification for all active shipments of a shipper
+ * Called when shipper location is updated
+ * 
+ * @param {string} shipperId - Shipper ID
+ * @param {Object} locationData - Current location data
+ * @returns {Promise<Object[]>} - Array of notification results
+ */
+async function checkAndTriggerProximityNotifications(shipperId, locationData) {
+  const results = [];
+  
+  try {
+    // Get active shipments for this shipper
+    const shipmentRepository = require('./shipment.repository');
+    const activeShipments = await shipmentRepository.findActiveByShipper(shipperId);
+    
+    // Only check shipments that are "out_for_delivery" or "delivering"
+    const deliveringShipments = activeShipments.filter(
+      s => s.status === 'delivering' || s.status === 'out_for_delivery'
+    );
+    
+    for (const shipment of deliveringShipments) {
+      // Get customer ID from sub_order if available
+      const customerId = shipment.sub_order?.order?.customer_id;
+      
+      const result = await triggerProximityNotification(shipperId, shipment, { customerId });
+      results.push({
+        shipmentId: shipment.id,
+        trackingNumber: shipment.tracking_number,
+        ...result,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to check proximity notifications:', error.message);
+  }
+  
+  return results;
+}
+
+// ============================================
+// SHIPPER LOCATION (REDIS + DB FALLBACK)
+// ============================================
+
+/**
+ * Get shipper's current location with Redis + DB fallback
+ * @param {string} shipperId
+ * @returns {Promise<Object|null>}
+ * 
+ * Requirements: 4.2 - Get from Redis with DB fallback
+ */
+async function getShipperLocation(shipperId) {
+  // First try Redis cache
+  const cachedLocation = await getCurrentLocation(shipperId);
+  
+  if (cachedLocation) {
+    return cachedLocation;
+  }
+  
+  // Fallback to database
+  try {
+    const shipper = await shipperRepository.findShipperById(shipperId);
+    if (shipper && shipper.current_lat && shipper.current_lng) {
+      return {
+        shipperId,
+        lat: parseFloat(shipper.current_lat),
+        lng: parseFloat(shipper.current_lng),
+        timestamp: shipper.last_location_update,
+        source: 'database',
+      };
+    }
+  } catch (error) {
+    console.error('Failed to get shipper location from DB:', error.message);
+  }
+  
+  return null;
 }
 
 // ============================================
@@ -366,15 +718,60 @@ function estimateTravelTime(distanceKm, vehicleType = 'motorbike') {
   return Math.ceil((distanceKm / speed) * 60);
 }
 
+/**
+ * Calculate ETA with time range
+ * @param {number} distanceKm
+ * @param {string} vehicleType
+ * @returns {Object} ETA information
+ */
+function calculateETARange(distanceKm, vehicleType = 'motorbike') {
+  const estimatedMinutes = estimateTravelTime(distanceKm, vehicleType);
+  const now = new Date();
+  
+  const etaStart = new Date(now.getTime() + estimatedMinutes * 60 * 1000);
+  const etaEnd = new Date(etaStart.getTime() + 30 * 60 * 1000); // +30 min buffer
+  
+  return {
+    estimatedMinutes,
+    etaStart: etaStart.toISOString(),
+    etaEnd: etaEnd.toISOString(),
+    display: `${formatTime(etaStart)} - ${formatTime(etaEnd)}`,
+  };
+}
+
+/**
+ * Format time as HH:MM
+ * @param {Date} date
+ * @returns {string}
+ */
+function formatTime(date) {
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 module.exports = {
-  // Real-time location
+  // Real-time location (Requirements: 4.1, 4.2)
   updateLocation,
   getCurrentLocation,
+  getShipperLocation, // Alias with DB fallback
   removeCurrentLocation,
   
   // Geo queries
   findNearbyShippersGeo,
   getDistanceToPoint,
+  
+  // Proximity checking (Requirements: 4.5)
+  checkProximity,
+  checkShipmentProximity,
+  
+  // Proximity notification trigger (Requirements: 4.5)
+  triggerProximityNotification,
+  checkAndTriggerProximityNotifications,
+  wasProximityNotificationSent,
+  markProximityNotificationSent,
+  
+  // Broadcasting (Requirements: 4.2)
+  broadcastLocation,
+  broadcastLocationUpdate, // Legacy
   
   // History
   logLocationHistory,
@@ -383,9 +780,12 @@ module.exports = {
   
   // Batch operations
   getMultipleLocations,
-  broadcastLocationUpdate,
   
   // Utilities
   calculateDistance,
   estimateTravelTime,
+  calculateETARange,
+  
+  // Constants
+  PROXIMITY_THRESHOLD_METERS,
 };

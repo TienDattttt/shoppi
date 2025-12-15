@@ -344,6 +344,30 @@ async function removeShipperLocationCache(shipperId) {
   await redisClient.del(cacheKey);
 }
 
+/**
+ * Get flagged shippers for admin review
+ * Requirements: 15.4 - Flag shipper when rating falls below 3.5
+ * 
+ * @param {Object} options - Pagination options
+ * @returns {Promise<{data: Object[], count: number}>}
+ */
+async function getFlaggedShippers(options = {}) {
+  return shipperRepository.findFlaggedShippers(options);
+}
+
+/**
+ * Clear shipper flag after admin review
+ * @param {string} shipperId
+ * @returns {Promise<Object>}
+ */
+async function clearShipperFlag(shipperId) {
+  const shipper = await getShipperById(shipperId);
+  if (!shipper.is_flagged) {
+    throw new AppError('NOT_FLAGGED', 'Shipper is not flagged', 400);
+  }
+  return shipperRepository.clearShipperFlag(shipperId);
+}
+
 module.exports = {
   // Shipper management
   createShipper,
@@ -357,6 +381,8 @@ module.exports = {
   reactivateShipper,
   getPendingShippers,
   getActiveShippers,
+  getFlaggedShippers,
+  clearShipperFlag,
   
   // Online status
   updateOnlineStatus,

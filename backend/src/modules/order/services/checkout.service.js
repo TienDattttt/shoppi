@@ -1,6 +1,8 @@
 /**
  * Checkout Service
  * Business logic for order creation and checkout process
+ * 
+ * Requirements: 12.1 - Create separate shipments for each shop in multi-shop orders
  */
 
 const orderRepository = require('../order.repository');
@@ -13,6 +15,7 @@ const orderDTO = require('../order.dto');
 const { AppError } = require('../../../shared/utils/error.util');
 const rabbitmq = require('../../../shared/rabbitmq/rabbitmq.client');
 const notificationService = require('../../notification/notification.service');
+const shipmentRepository = require('../../shipper/shipment.repository');
 
 /**
  * Create order from cart items
@@ -97,6 +100,17 @@ async function createOrder(userId, checkoutData) {
     }));
     
     await orderRepository.createOrderItems(orderItems);
+    
+    // Requirements: 12.1 - Create separate shipment for each shop
+    // Create shipment for this sub-order with unique tracking number
+    try {
+      // Add order_id to subOrder for shipment creation
+      const subOrderWithOrderId = { ...subOrder, order_id: order.id };
+      await createShipmentForSubOrder(subOrderWithOrderId, shopId, shopTotal, shippingAddress, paymentMethod, shippingAddressId);
+    } catch (shipmentError) {
+      console.error(`[Checkout] Failed to create shipment for sub-order ${subOrder.id}:`, shipmentError.message);
+      // Don't throw - order is created, shipment can be created later by partner
+    }
   }
   
   // Reserve stock
@@ -362,6 +376,110 @@ async function getShippingAddress(addressId) {
     phone: '0123456789',
     fullAddress: 'Địa chỉ giao hàng',
   };
+}
+
+/**
+ * Create shipment for a sub-order
+ * Requirements: 12.1 - Create separate shipment per shop with unique tracking number
+ * 
+ * @param {Object} subOrder - Sub-order data
+ * @param {string} shopId - Shop ID
+ * @param {Object} shopTotal - Shop totals (subtotal, shippingFee, etc.)
+ * @param {Object} shippingAddress - Delivery address
+ * @param {string} paymentMethod - Payment method (for COD calculation)
+ * @param {string} shippingAddressId - Shipping address ID for coordinates lookup
+ */
+async function createShipmentForSubOrder(subOrder, shopId, shopTotal, shippingAddress, paymentMethod, shippingAddressId) {
+  const { supabaseAdmin } = require('../../../shared/supabase/supabase.client');
+  
+  // Get shop details for pickup address
+  const { data: shop, error: shopError } = await supabaseAdmin
+    .from('shops')
+    .select('id, shop_name, address, city, district, ward, lat, lng, phone')
+    .eq('id', shopId)
+    .single();
+  
+  if (shopError || !shop) {
+    console.warn(`[Checkout] Shop not found for shipment creation: ${shopId}`);
+    return null;
+  }
+  
+  // Get delivery address coordinates if available
+  let deliveryLat = null;
+  let deliveryLng = null;
+  
+  if (shippingAddressId) {
+    const { data: address } = await supabaseAdmin
+      .from('user_addresses')
+      .select('lat, lng')
+      .eq('id', shippingAddressId)
+      .single();
+    
+    if (address) {
+      deliveryLat = address.lat;
+      deliveryLng = address.lng;
+    }
+  }
+  
+  // Calculate COD amount (if payment method is COD)
+  const codAmount = paymentMethod === 'cod' ? parseFloat(shopTotal.total) : 0;
+  
+  // Build pickup address string
+  const pickupAddress = shop.address || 
+    [shop.ward, shop.district, shop.city].filter(Boolean).join(', ') ||
+    'Shop address';
+  
+  // Create shipment data
+  const shipmentData = {
+    sub_order_id: subOrder.id,
+    
+    // Pickup (Shop)
+    pickup_address: pickupAddress,
+    pickup_lat: shop.lat,
+    pickup_lng: shop.lng,
+    pickup_contact_name: shop.shop_name,
+    pickup_contact_phone: shop.phone,
+    
+    // Delivery (Customer)
+    delivery_address: shippingAddress.fullAddress,
+    delivery_lat: deliveryLat,
+    delivery_lng: deliveryLng,
+    delivery_contact_name: shippingAddress.name,
+    delivery_contact_phone: shippingAddress.phone,
+    
+    // Fees
+    shipping_fee: shopTotal.shippingFee || 0,
+    cod_amount: codAmount,
+    
+    // Status - created but waiting for partner to mark ready to ship
+    status: 'created',
+  };
+  
+  // Create shipment with unique tracking number
+  const shipment = await shipmentRepository.createShipment(shipmentData);
+  
+  console.log(`[Checkout] Created shipment ${shipment.id} with tracking ${shipment.tracking_number} for sub-order ${subOrder.id}`);
+  
+  // Publish shipment created event
+  try {
+    await rabbitmq.publishToExchange(
+      rabbitmq.EXCHANGES.EVENTS,
+      'shipment.created',
+      {
+        event: 'SHIPMENT_CREATED',
+        shipmentId: shipment.id,
+        subOrderId: subOrder.id,
+        orderId: subOrder.order_id,
+        trackingNumber: shipment.tracking_number,
+        shopId: shopId,
+        timestamp: new Date().toISOString(),
+      }
+    );
+  } catch (e) {
+    console.error('[Checkout] Failed to publish shipment event:', e.message);
+  }
+  
+  return shipment;
 }
 
 /**

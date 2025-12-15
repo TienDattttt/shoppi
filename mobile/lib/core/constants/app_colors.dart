@@ -29,6 +29,8 @@ class AppColors {
   static const Color statusPickedUp = Color(0xFFF39C12); // Orange
   static const Color statusDelivering = Color(0xFF9B59B6); // Purple
   static const Color statusFailed = Color(0xFFE74C3C); // Red
+  static const Color statusReturning = Color(0xFF8E44AD); // Purple
+  static const Color statusReturned = Color(0xFF2C3E50); // Dark Blue
   
   // Backgrounds
   static const Color background = Color(0xFFF8F9FA); // Very light grey/white

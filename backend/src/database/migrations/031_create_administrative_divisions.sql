@@ -64,7 +64,7 @@ DROP TABLE IF EXISTS districts CASCADE;
 -- ========================================
 -- CẬP NHẬT BẢNG POST_OFFICES
 -- Liên kết với wards thay vì districts
--- ========================================
+-- ============================ ============
 ALTER TABLE post_offices 
 DROP CONSTRAINT IF EXISTS post_offices_office_type_check;
 

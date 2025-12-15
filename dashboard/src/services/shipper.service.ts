@@ -22,6 +22,130 @@ export interface Shipper {
     };
 }
 
+// Tracking event interface
+export interface TrackingEvent {
+    id: string;
+    status: string;
+    statusVi: string;
+    description: string;
+    descriptionVi: string;
+    locationName?: string;
+    locationAddress?: string;
+    lat?: number;
+    lng?: number;
+    actorType: 'system' | 'shipper' | 'shop' | 'customer';
+    actorName?: string;
+    eventTime: string;
+}
+
+// Shipper info for tracking
+export interface ShipperTrackingInfo {
+    id: string;
+    name: string;
+    maskedPhone: string;
+    avatarUrl?: string;
+    vehicleType: string;
+    vehiclePlate: string;
+    rating: number;
+    totalDeliveries?: number;
+}
+
+// Tracking response
+export interface TrackingResponse {
+    shipment: {
+        id: string;
+        trackingNumber: string;
+        status: string;
+        statusLabel: string;
+        currentLocation?: string;
+        estimatedDelivery?: string;
+        deliveryAddress: string;
+        deliveryAttempts: number;
+        nextDeliveryAttempt?: string;
+        failureReason?: string;
+    };
+    shipper: ShipperTrackingInfo | null;
+    events: TrackingEvent[];
+}
+
+// Location response
+export interface ShipperLocationResponse {
+    shipmentId: string;
+    trackingNumber: string;
+    status: string;
+    shipperLocation: {
+        lat: number;
+        lng: number;
+        heading?: number;
+        speed?: number;
+        updatedAt: string;
+    };
+    deliveryLocation: {
+        lat: number | null;
+        lng: number | null;
+        address: string;
+    };
+    pickupLocation: {
+        lat: number | null;
+        lng: number | null;
+        address: string;
+    };
+    distanceKm: number | null;
+    eta: string | null;
+    etaRange: {
+        start: string;
+        end: string;
+        display: string;
+    } | null;
+}
+
+// Order shipments response
+export interface OrderShipmentsResponse {
+    orderId: string;
+    totalShipments: number;
+    shipments: OrderShipment[];
+}
+
+export interface OrderShipment {
+    id: string;
+    trackingNumber: string;
+    status: string;
+    statusLabel: string;
+    subOrderId: string;
+    shop: {
+        id: string;
+        name: string;
+        logoUrl?: string;
+    } | null;
+    shipper: ShipperTrackingInfo | null;
+    pickup: {
+        address: string;
+        contactName: string;
+        contactPhone: string;
+    };
+    delivery: {
+        address: string;
+        contactName: string;
+        contactPhone: string;
+    };
+    shippingFee: number;
+    codAmount: number;
+    currentLocation?: string;
+    estimatedDelivery?: string;
+    latestEvent: {
+        status: string;
+        statusVi: string;
+        description: string;
+        eventTime: string;
+    } | null;
+    timestamps: {
+        created: string;
+        assigned?: string;
+        pickedUp?: string;
+        delivered?: string;
+    };
+}
+
 export interface Shipment {
     id: string;
     sub_order_id: string;
@@ -137,6 +261,62 @@ export const shipperService = {
     // Update current location (Shipper - for availability)
     updateCurrentLocation: async (lat: number, lng: number) => {
         const response = await api.patch("/shippers/me/location", { lat, lng });
+        return response.data;
+    },
+
+    // ============================================
+    // TRACKING OPERATIONS (Customer)
+    // ============================================
+
+    // Get tracking history for a shipment
+    getTrackingHistory: async (shipmentId: string): Promise<TrackingResponse> => {
+        const response = await api.get(`/shipments/${shipmentId}/tracking`);
+        return response.data.data;
+    },
+
+    // Get real-time shipper location for a shipment
+    getShipmentLocation: async (shipmentId: string): Promise<ShipperLocationResponse> => {
+        const response = await api.get(`/shipments/${shipmentId}/location`);
+        return response.data.data;
+    },
+
+    // Get all shipments for an order (multi-shop orders)
+    getOrderShipments: async (orderId: string): Promise<OrderShipmentsResponse> => {
+        const response = await api.get(`/orders/${orderId}/shipments`);
+        return response.data.data;
+    },
+
+    // Rate a shipment delivery
+    rateShipment: async (shipmentId: string, rating: number, comment?: string) => {
+        const response = await api.post(`/shipments/${shipmentId}/rate`, { rating, comment });
+        return response.data;
+    },
+
+    // ============================================
+    // PARTNER SHIPPING OPERATIONS
+    // ============================================
+
+    // Mark sub-order as ready to ship (Partner)
+    markReadyToShip: async (subOrderId: string, pickupTimeSlot?: string) => {
+        const response = await api.post(`/partner/shipping/orders/${subOrderId}/ready-to-ship`, { pickupTimeSlot });
+        return response.data;
+    },
+
+    // Get partner's shipments (Partner)
+    getPartnerShipments: async (params?: { status?: string; page?: number; limit?: number }) => {
+        const response = await api.get("/partner/shipping/shipments", { params });
+        return response.data;
+    },
+
+    // Get partner shipment by ID (Partner)
+    getPartnerShipmentById: async (shipmentId: string) => {
+        const response = await api.get(`/partner/shipping/shipments/${shipmentId}`);
+        return response.data;
+    },
+
+    // Request pickup for a shipment (Partner)
+    requestPickup: async (shipmentId: string, data: { preferredTime: string; notes?: string }) => {
+        const response = await api.post(`/partner/shipping/shipments/${shipmentId}/request-pickup`, data);
         return response.data;
     },
 };

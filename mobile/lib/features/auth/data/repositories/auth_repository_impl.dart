@@ -8,6 +8,7 @@ import '../../domain/entities/shipper.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_local_data_source.dart';
 import '../datasources/auth_remote_data_source.dart';
+import '../models/auth_models.dart';
 
 @LazySingleton(as: AuthRepository)
 class AuthRepositoryImpl implements AuthRepository {
@@ -26,10 +27,10 @@ class AuthRepositoryImpl implements AuthRepository {
   
   // Helper to create mock shipper
   ShipperEntity _createMockShipper(String phone) {
-    return ShipperEntity(
+    return const ShipperEntity(
       id: 'mock-shipper-123',
       userId: 'mock-user-123',
-      phone: phone,
+      phone: '0901234567',
       fullName: 'Test Shipper',
       status: 'active',
       vehicleType: 'motorcycle',
@@ -49,12 +50,16 @@ class AuthRepositoryImpl implements AuthRepository {
       return Right(_mockShipper!);
     }
     
-    // This might be deprecated if we only use Otp but keeping for flexibility
+    // This might be deprecated if we only use OTP but keeping for flexibility
     if (await _networkInfo.isConnected) {
       try {
         final result = await _remoteDataSource.login(phone, password);
         await _localDataSource.cacheToken(result.accessToken, result.refreshToken);
-        return Right(result.shipper);
+        
+        // Get shipper profile after login
+        final shipper = await _remoteDataSource.getCurrentShipper();
+        await _localDataSource.cacheShipper(shipper);
+        return Right(shipper);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
@@ -98,13 +103,17 @@ class AuthRepositoryImpl implements AuthRepository {
     if (await _networkInfo.isConnected) {
       try {
         final result = await _remoteDataSource.verifyOtp(phone, otp);
+        // Store token securely (Requirements: 13.1)
         await _localDataSource.cacheToken(result.accessToken, result.refreshToken);
-        return Right(result.shipper);
+        
+        // Get shipper profile after OTP verification
+        final shipper = await _remoteDataSource.getCurrentShipper();
+        await _localDataSource.cacheShipper(shipper);
+        return Right(shipper);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
     } else {
-      // Validate Property 1: Token storage happens on success
       return const Left(NetworkFailure());
     }
   }
@@ -133,7 +142,11 @@ class AuthRepositoryImpl implements AuthRepository {
       try {
         final result = await _remoteDataSource.register(params);
         await _localDataSource.cacheToken(result.accessToken, result.refreshToken);
-        return Right(result.shipper);
+        
+        // Get shipper profile after registration
+        final shipper = await _remoteDataSource.getCurrentShipper();
+        await _localDataSource.cacheShipper(shipper);
+        return Right(shipper);
       } catch (e) {
         return Left(ServerFailure(e.toString()));
       }
@@ -146,7 +159,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, void>> logout() async {
     try {
       await _localDataSource.clearCache();
-      // Optionally call remote logout endpoint
+      _mockShipper = null;
       return const Right(null);
     } catch (e) {
       return Left(CacheFailure(e.toString()));
@@ -167,14 +180,29 @@ class AuthRepositoryImpl implements AuthRepository {
     if (await _networkInfo.isConnected) {
       try {
         final result = await _remoteDataSource.getCurrentShipper();
+        await _localDataSource.cacheShipper(result);
         return Right(result);
       } catch (e) {
-         // Should try to load from local cache if we implemented profile caching
-         // For now just error
+        // Try to load from local cache if network request fails
+        final cachedShipper = await _localDataSource.getCachedShipper();
+        if (cachedShipper != null) {
+          return Right(cachedShipper);
+        }
         return Left(ServerFailure(e.toString()));
       }
     } else {
+      // Try to load from local cache when offline
+      final cachedShipper = await _localDataSource.getCachedShipper();
+      if (cachedShipper != null) {
+        return Right(cachedShipper);
+      }
       return const Left(NetworkFailure());
     }
+  }
+  
+  /// Check if user is authenticated by checking for stored token
+  Future<bool> isAuthenticated() async {
+    final token = await _localDataSource.getAccessToken();
+    return token != null && token.isNotEmpty;
   }
 }

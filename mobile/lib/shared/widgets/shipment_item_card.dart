@@ -39,6 +39,16 @@ class ShipmentItemCard extends StatelessWidget {
         textColor = Colors.red.shade700;
         text = 'Failed';
         break;
+      case ShipmentStatus.returning:
+        bgColor = Colors.purple.shade100;
+        textColor = Colors.purple.shade700;
+        text = 'Returning';
+        break;
+      case ShipmentStatus.returned:
+        bgColor = Colors.indigo.shade100;
+        textColor = Colors.indigo.shade700;
+        text = 'Returned';
+        break;
     }
     
     return Container(

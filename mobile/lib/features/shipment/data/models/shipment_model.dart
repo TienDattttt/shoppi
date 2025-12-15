@@ -21,48 +21,74 @@ class ShipmentModel extends ShipmentEntity {
     super.deliveredAt,
     super.failureReason,
     super.deliveryPhotoUrl,
+    super.codCollected,
+    super.deliveryAttempts,
+    super.subOrderId,
+    super.orderId,
   });
 
   /// Parse from backend response (snake_case format)
+  /// Handles the shipper mobile API response format
   factory ShipmentModel.fromJson(Map<String, dynamic> json) {
     // Handle nested data structure
     final data = json['data'] ?? json;
     
+    // Parse pickup info from nested structure (shipper mobile API format)
+    final pickup = data['pickup'] as Map<String, dynamic>?;
+    final delivery = data['delivery'] as Map<String, dynamic>?;
+    final cod = data['cod'] as Map<String, dynamic>?;
+    final timestamps = data['timestamps'] as Map<String, dynamic>?;
+    
     return ShipmentModel(
       id: data['id'] as String,
-      trackingNumber: data['tracking_number'] as String? ?? 
-                      data['trackingNumber'] as String? ?? '',
+      trackingNumber: data['trackingNumber'] as String? ?? 
+                      data['tracking_number'] as String? ?? '',
       status: _mapStatus(data['status'] as String? ?? 'created'),
-      pickupAddress: _parsePickupAddress(data),
-      pickupContactName: data['pickup_contact_name'] as String? ?? 
-                         data['pickupContactName'] as String? ?? '',
-      pickupContactPhone: data['pickup_contact_phone'] as String? ?? 
-                          data['pickupContactPhone'] as String? ?? '',
-      deliveryAddress: _parseDeliveryAddress(data),
-      deliveryContactName: data['delivery_contact_name'] as String? ?? 
-                           data['deliveryContactName'] as String? ?? '',
-      deliveryContactPhone: data['delivery_contact_phone'] as String? ?? 
-                            data['deliveryContactPhone'] as String? ?? '',
-      shippingFee: (data['shipping_fee'] as num?)?.toDouble() ?? 
-                   (data['shippingFee'] as num?)?.toDouble() ?? 0.0,
-      codAmount: (data['cod_amount'] as num?)?.toDouble() ?? 
-                 (data['codAmount'] as num?)?.toDouble() ?? 0.0,
-      distanceKm: (data['distance_km'] as num?)?.toDouble() ?? 
-                  (data['distanceKm'] as num?)?.toDouble() ?? 0.0,
-      estimatedMinutes: data['estimated_duration_minutes'] as int? ?? 
-                        data['estimatedMinutes'] as int? ?? 30,
-      createdAt: _parseDateTime(data['created_at'] ?? data['createdAt']),
-      pickedUpAt: _parseDateTimeNullable(data['picked_up_at'] ?? data['pickedUpAt']),
-      deliveredAt: _parseDateTimeNullable(data['delivered_at'] ?? data['deliveredAt']),
-      failureReason: data['failure_reason'] as String? ?? 
-                     data['failureReason'] as String?,
-      deliveryPhotoUrl: data['delivery_photo_url'] as String? ?? 
-                        data['deliveryPhotoUrl'] as String?,
+      pickupAddress: _parsePickupAddress(data, pickup),
+      pickupContactName: pickup?['contactName'] as String? ??
+                         data['pickup_contact_name'] as String? ?? '',
+      pickupContactPhone: pickup?['contactPhone'] as String? ??
+                          data['pickup_contact_phone'] as String? ?? '',
+      deliveryAddress: _parseDeliveryAddress(data, delivery),
+      deliveryContactName: delivery?['contactName'] as String? ??
+                           data['delivery_contact_name'] as String? ?? '',
+      deliveryContactPhone: delivery?['contactPhone'] as String? ??
+                            data['delivery_contact_phone'] as String? ?? '',
+      shippingFee: (data['shippingFee'] as num?)?.toDouble() ?? 
+                   (data['shipping_fee'] as num?)?.toDouble() ?? 0.0,
+      codAmount: (cod?['amount'] as num?)?.toDouble() ??
+                 (data['cod_amount'] as num?)?.toDouble() ?? 0.0,
+      codCollected: cod?['collected'] as bool? ?? 
+                    data['cod_collected'] as bool? ?? false,
+      distanceKm: (data['distanceKm'] as num?)?.toDouble() ?? 
+                  (data['distance_km'] as num?)?.toDouble() ?? 0.0,
+      estimatedMinutes: data['estimatedDurationMinutes'] as int? ?? 
+                        data['estimated_duration_minutes'] as int? ?? 30,
+      createdAt: _parseDateTime(timestamps?['created'] ?? data['created_at']),
+      pickedUpAt: _parseDateTimeNullable(timestamps?['pickedUp'] ?? data['picked_up_at']),
+      deliveredAt: _parseDateTimeNullable(timestamps?['delivered'] ?? data['delivered_at']),
+      failureReason: data['failureReason'] as String? ?? 
+                     data['failure_reason'] as String?,
+      deliveryPhotoUrl: data['deliveryPhotoUrl'] as String? ?? 
+                        data['delivery_photo_url'] as String?,
+      deliveryAttempts: data['deliveryAttempts'] as int? ??
+                        data['delivery_attempts'] as int? ?? 0,
+      subOrderId: data['subOrderId'] as String? ?? data['sub_order_id'] as String?,
+      orderId: data['orderId'] as String? ?? data['order_id'] as String?,
     );
   }
 
   /// Parse pickup address from flat or nested structure
-  static AddressModel _parsePickupAddress(Map<String, dynamic> data) {
+  static AddressModel _parsePickupAddress(Map<String, dynamic> data, Map<String, dynamic>? pickup) {
+    // Check if nested pickup object exists (shipper mobile API format)
+    if (pickup != null) {
+      return AddressModel(
+        fullAddress: pickup['address'] as String? ?? '',
+        lat: (pickup['lat'] as num?)?.toDouble() ?? 0.0,
+        lng: (pickup['lng'] as num?)?.toDouble() ?? 0.0,
+      );
+    }
+    
     // Check if nested pickupAddress object exists
     if (data['pickupAddress'] is Map<String, dynamic>) {
       return AddressModel.fromJson(data['pickupAddress'] as Map<String, dynamic>);
@@ -77,7 +103,16 @@ class ShipmentModel extends ShipmentEntity {
   }
 
   /// Parse delivery address from flat or nested structure
-  static AddressModel _parseDeliveryAddress(Map<String, dynamic> data) {
+  static AddressModel _parseDeliveryAddress(Map<String, dynamic> data, Map<String, dynamic>? delivery) {
+    // Check if nested delivery object exists (shipper mobile API format)
+    if (delivery != null) {
+      return AddressModel(
+        fullAddress: delivery['address'] as String? ?? '',
+        lat: (delivery['lat'] as num?)?.toDouble() ?? 0.0,
+        lng: (delivery['lng'] as num?)?.toDouble() ?? 0.0,
+      );
+    }
+    
     // Check if nested deliveryAddress object exists
     if (data['deliveryAddress'] is Map<String, dynamic>) {
       return AddressModel.fromJson(data['deliveryAddress'] as Map<String, dynamic>);
@@ -100,7 +135,11 @@ class ShipmentModel extends ShipmentEntity {
   static DateTime? _parseDateTimeNullable(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
-    return DateTime.parse(value as String);
+    try {
+      return DateTime.parse(value as String);
+    } catch (e) {
+      return null;
+    }
   }
 
   static ShipmentStatus _mapStatus(String status) {
@@ -111,11 +150,16 @@ class ShipmentModel extends ShipmentEntity {
       case 'pickedUp':
         return ShipmentStatus.pickedUp;
       case 'delivering':
+      case 'out_for_delivery':
         return ShipmentStatus.delivering;
       case 'delivered':
         return ShipmentStatus.delivered;
       case 'failed':
         return ShipmentStatus.failed;
+      case 'returning':
+        return ShipmentStatus.returning;
+      case 'returned':
+        return ShipmentStatus.returned;
       case 'created':
       default:
         return ShipmentStatus.created;

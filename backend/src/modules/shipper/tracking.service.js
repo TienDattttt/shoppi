@@ -38,6 +38,18 @@ const TRACKING_STATUSES = {
     description: 'Package has been packed by shop',
     description_vi: 'Hàng đã được đóng gói, chờ shipper đến lấy',
   },
+  READY_TO_SHIP: {
+    status: 'ready_to_ship',
+    status_vi: 'Sẵn sàng giao',
+    description: 'Package is ready for pickup',
+    description_vi: 'Đơn hàng đã sẵn sàng để giao',
+  },
+  PICKUP_REQUESTED: {
+    status: 'pickup_requested',
+    status_vi: 'Yêu cầu lấy hàng',
+    description: 'Pickup has been requested',
+    description_vi: 'Shop đã yêu cầu lấy hàng',
+  },
 
   // Giai đoạn 2: Lấy hàng
   SHIPPER_ASSIGNED: {

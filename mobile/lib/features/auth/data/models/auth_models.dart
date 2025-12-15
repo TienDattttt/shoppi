@@ -58,18 +58,26 @@ class LoginResponseModel {
   final String accessToken;
   final String? refreshToken;
   final UserModel? user;
+  final ShipperModel? shipper;
 
   const LoginResponseModel({
     required this.accessToken,
     this.refreshToken,
     this.user,
+    this.shipper,
   });
 
   /// Parse from backend response
-  /// Backend returns: { accessToken, refreshToken, user: {...} }
+  /// Backend returns: { accessToken, refreshToken, user: {...}, shipper: {...} }
   factory LoginResponseModel.fromJson(Map<String, dynamic> json) {
     // Handle nested data structure
     final data = json['data'] ?? json;
+    
+    // Parse shipper data - may be nested in user or at root level
+    ShipperModel? shipperModel;
+    if (data['shipper'] != null) {
+      shipperModel = ShipperModel.fromJson(data['shipper'] as Map<String, dynamic>);
+    }
     
     return LoginResponseModel(
       accessToken: data['accessToken'] as String? ?? 
@@ -79,6 +87,7 @@ class LoginResponseModel {
       user: data['user'] != null 
           ? UserModel.fromJson(data['user'] as Map<String, dynamic>)
           : null,
+      shipper: shipperModel,
     );
   }
 }

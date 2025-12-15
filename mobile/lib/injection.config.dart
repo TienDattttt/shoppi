@@ -20,6 +20,7 @@ import 'core/network/auth_interceptor.dart' as _i8;
 import 'core/network/network_info.dart' as _i75;
 import 'core/offline/offline_sync_service.dart' as _i811;
 import 'core/services/notification_service.dart' as _i1011;
+import 'core/services/photo_upload_service.dart' as _i1012;
 import 'features/auth/data/datasources/auth_local_data_source.dart' as _i791;
 import 'features/auth/data/datasources/auth_remote_data_source.dart' as _i767;
 import 'features/auth/data/repositories/auth_repository_impl.dart' as _i111;
@@ -109,7 +110,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i511.SettingsCubit>(() => _i511.SettingsCubit());
     gh.lazySingleton<_i561.ThemeCubit>(() => _i561.ThemeCubit());
     gh.lazySingleton<_i1011.NotificationService>(
-        () => _i1011.NotificationServiceImpl());
+        () => _i1011.NotificationServiceImpl(gh<_i871.ApiClient>()));
+    gh.lazySingleton<_i1012.PhotoUploadService>(
+        () => _i1012.PhotoUploadServiceImpl(gh<_i361.Dio>()));
     gh.lazySingleton<_i851.UpdateProfileUseCase>(
         () => _i851.UpdateProfileUseCase(gh<_i626.ProfileRepository>()));
     gh.factory<_i8.AuthInterceptor>(
@@ -135,7 +138,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i55.LocationRepository>(
         () => _i1061.LocationRepositoryImpl(
               gh<_i268.LocationDataSource>(),
-              gh<_i871.ApiClient>(),
             ));
     gh.lazySingleton<_i316.NotificationRemoteDataSource>(
         () => _i316.NotificationRemoteDataSourceImpl(gh<_i871.ApiClient>()));

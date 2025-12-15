@@ -13,7 +13,12 @@ class MarkDeliveredUseCase implements UseCase<ShipmentEntity, MarkDeliveredParam
 
   @override
   Future<Either<Failure, ShipmentEntity>> call(MarkDeliveredParams params) async {
-    return await repository.markDelivered(params.id, params.photoUrl, params.signatureUrl);
+    return await repository.markDelivered(
+      params.id, 
+      params.photoUrl, 
+      params.signatureUrl,
+      codCollected: params.codCollected,
+    );
   }
 }
 
@@ -21,6 +26,12 @@ class MarkDeliveredParams {
   final String id;
   final String photoUrl;
   final String? signatureUrl;
+  final bool codCollected;
 
-  MarkDeliveredParams({required this.id, required this.photoUrl, this.signatureUrl});
+  MarkDeliveredParams({
+    required this.id, 
+    required this.photoUrl, 
+    this.signatureUrl,
+    this.codCollected = false,
+  });
 }
