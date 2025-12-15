@@ -1,0 +1,275 @@
+import { useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { cn } from "@/lib/utils";
+
+// Fix for default marker icons in Leaflet with Vite
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+// @ts-expect-error - Leaflet icon fix
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: markerIcon2x,
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+});
+
+export interface ShipperLocation {
+    lat: number;
+    lng: number;
+    heading?: number;
+    speed?: number;
+    updatedAt: string;
+}
+
+export interface LocationPoint {
+    lat: number;
+    lng: number;
+    address: string;
+}
+
+interface ShipperLocationMapProps {
+    shipmentId: string;
+    shipperLocation: ShipperLocation | null;
+    deliveryAddress: LocationPoint;
+    pickupAddress: LocationPoint;
+    estimatedArrival?: string;
+    className?: string;
+}
+
+// Custom shipper icon (blue motorcycle)
+const shipperIcon = new L.DivIcon({
+    className: "shipper-marker",
+    html: `
+        <div class="relative">
+            <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18.5" cy="17.5" r="3.5"/>
+                    <circle cx="5.5" cy="17.5" r="3.5"/>
+                    <circle cx="15" cy="5" r="1"/>
+                    <path d="M12 17.5V14l-3-3 4-3 2 3h2"/>
+                </svg>
+            </div>
+            <div class="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-8 border-l-transparent border-r-transparent border-t-blue-500"></div>
+        </div>
+    `,
+    iconSize: [40, 48],
+    iconAnchor: [20, 48],
+    popupAnchor: [0, -48],
+});
+
+// Pickup icon (orange)
+const pickupIcon = new L.DivIcon({
+    className: "pickup-marker",
+    html: `
+        <div class="relative">
+            <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
+                    <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/>
+                    <path d="M12 3v6"/>
+                </svg>
+            </div>
+            <div class="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-3 border-r-3 border-t-6 border-l-transparent border-r-transparent border-t-orange-500"></div>
+        </div>
+    `,
+    iconSize: [32, 40],
+    iconAnchor: [16, 40],
+    popupAnchor: [0, -40],
+});
+
+// Delivery icon (green)
+const deliveryIcon = new L.DivIcon({
+    className: "delivery-marker",
+    html: `
+        <div class="relative">
+            <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                </svg>
+            </div>
+            <div class="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-3 border-r-3 border-t-6 border-l-transparent border-r-transparent border-t-green-500"></div>
+        </div>
+    `,
+    iconSize: [32, 40],
+    iconAnchor: [16, 40],
+    popupAnchor: [0, -40],
+});
+
+// Component to auto-fit bounds when locations change
+function MapBoundsUpdater({
+    shipperLocation,
+    deliveryAddress,
+    pickupAddress,
+}: {
+    shipperLocation: ShipperLocation | null;
+    deliveryAddress: LocationPoint;
+    pickupAddress: LocationPoint;
+}) {
+    const map = useMap();
+    const hasSetBounds = useRef(false);
+
+    useEffect(() => {
+        const points: L.LatLngExpression[] = [
+            [deliveryAddress.lat, deliveryAddress.lng],
+            [pickupAddress.lat, pickupAddress.lng],
+        ];
+
+        if (shipperLocation) {
+            points.push([shipperLocation.lat, shipperLocation.lng]);
+        }
+
+        if (points.length >= 2 && !hasSetBounds.current) {
+            const bounds = L.latLngBounds(points);
+            map.fitBounds(bounds, { padding: [50, 50] });
+            hasSetBounds.current = true;
+        }
+    }, [map, shipperLocation, deliveryAddress, pickupAddress]);
+
+    return null;
+}
+
+export function ShipperLocationMap({
+    shipperLocation,
+    deliveryAddress,
+    pickupAddress,
+    estimatedArrival,
+    className,
+}: ShipperLocationMapProps) {
+    // Default center (Vietnam - Ho Chi Minh City)
+    const defaultCenter: L.LatLngExpression = [10.8231, 106.6297];
+
+    // Calculate center based on available locations
+    const getCenter = (): L.LatLngExpression => {
+        if (shipperLocation) {
+            return [shipperLocation.lat, shipperLocation.lng];
+        }
+        if (deliveryAddress.lat && deliveryAddress.lng) {
+            return [deliveryAddress.lat, deliveryAddress.lng];
+        }
+        return defaultCenter;
+    };
+
+    // Create route line from shipper to delivery
+    const routePositions: L.LatLngExpression[] = [];
+    if (shipperLocation) {
+        routePositions.push([shipperLocation.lat, shipperLocation.lng]);
+    }
+    if (deliveryAddress.lat && deliveryAddress.lng) {
+        routePositions.push([deliveryAddress.lat, deliveryAddress.lng]);
+    }
+
+    return (
+        <div className={cn("relative rounded-lg overflow-hidden", className)}>
+            <MapContainer
+                center={getCenter()}
+                zoom={14}
+                className="h-full w-full min-h-[300px]"
+                scrollWheelZoom={true}
+            >
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                <MapBoundsUpdater
+                    shipperLocation={shipperLocation}
+                    deliveryAddress={deliveryAddress}
+                    pickupAddress={pickupAddress}
+                />
+
+                {/* Pickup marker (orange) */}
+                {pickupAddress.lat && pickupAddress.lng && (
+                    <Marker
+                        position={[pickupAddress.lat, pickupAddress.lng]}
+                        icon={pickupIcon}
+                    >
+                        <Popup>
+                            <div className="text-sm">
+                                <div className="font-medium text-orange-600">Điểm lấy hàng</div>
+                                <div className="text-gray-600 mt-1">{pickupAddress.address}</div>
+                            </div>
+                        </Popup>
+                    </Marker>
+                )}
+
+                {/* Delivery marker (green) */}
+                {deliveryAddress.lat && deliveryAddress.lng && (
+                    <Marker
+                        position={[deliveryAddress.lat, deliveryAddress.lng]}
+                        icon={deliveryIcon}
+                    >
+                        <Popup>
+                            <div className="text-sm">
+                                <div className="font-medium text-green-600">Điểm giao hàng</div>
+                                <div className="text-gray-600 mt-1">{deliveryAddress.address}</div>
+                                {estimatedArrival && (
+                                    <div className="text-shopee-orange mt-1">
+                                        Dự kiến: {estimatedArrival}
+                                    </div>
+                                )}
+                            </div>
+                        </Popup>
+                    </Marker>
+                )}
+
+                {/* Shipper marker (blue) */}
+                {shipperLocation && (
+                    <Marker
+                        position={[shipperLocation.lat, shipperLocation.lng]}
+                        icon={shipperIcon}
+                    >
+                        <Popup>
+                            <div className="text-sm">
+                                <div className="font-medium text-blue-600">Shipper đang giao</div>
+                                {shipperLocation.speed && (
+                                    <div className="text-gray-600 mt-1">
+                                        Tốc độ: {Math.round(shipperLocation.speed)} km/h
+                                    </div>
+                                )}
+                            </div>
+                        </Popup>
+                    </Marker>
+                )}
+
+                {/* Route line from shipper to delivery */}
+                {routePositions.length >= 2 && (
+                    <Polyline
+                        positions={routePositions}
+                        pathOptions={{
+                            color: "#3b82f6",
+                            weight: 4,
+                            opacity: 0.7,
+                            dashArray: "10, 10",
+                        }}
+                    />
+                )}
+            </MapContainer>
+
+            {/* Legend */}
+            <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-md p-3 z-[1000]">
+                <div className="text-xs font-medium mb-2">Chú thích</div>
+                <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-orange-500" />
+                        <span className="text-xs">Điểm lấy hàng</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        <span className="text-xs">Điểm giao hàng</span>
+                    </div>
+                    {shipperLocation && (
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500" />
+                            <span className="text-xs">Shipper</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -29,9 +29,11 @@ router.get('/:id', shipperController.getShipperById);
 router.patch('/:id', shipperController.updateShipper);
 
 // Admin actions
+router.get('/flagged', authorize('admin'), shipperController.getFlaggedShippers);
 router.post('/:id/approve', authorize('admin'), shipperController.approveShipper);
 router.post('/:id/suspend', authorize('admin'), shipperController.suspendShipper);
 router.post('/:id/reactivate', authorize('admin'), shipperController.reactivateShipper);
+router.post('/:id/clear-flag', authorize('admin'), shipperController.clearShipperFlag);
 
 // Online status
 router.post('/:id/online', shipperController.goOnline);
@@ -40,5 +42,8 @@ router.post('/:id/offline', shipperController.goOffline);
 // Location
 router.post('/:id/location', shipperController.updateLocation);
 router.get('/:id/location', shipperController.getShipperLocation);
+
+// Ratings (Requirements: 15.3)
+router.get('/:id/ratings', shipperController.getShipperRatings);
 
 module.exports = router;

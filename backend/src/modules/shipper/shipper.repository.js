@@ -366,6 +366,135 @@ async function incrementDeliveryCount(shipperId, successful) {
   return updateShipper(shipperId, updates);
 }
 
+// ============================================
+// COD OPERATIONS (Requirements: 6.3, 6.4)
+// ============================================
+
+/**
+ * Update shipper's daily COD balance
+ * Requirements: 6.3 - Record COD collection and update shipper's daily COD balance
+ * 
+ * @param {string} shipperId
+ * @param {number} codAmount - COD amount collected
+ * @returns {Promise<Object>}
+ */
+async function updateDailyCodBalance(shipperId, codAmount) {
+  const shipper = await findShipperById(shipperId);
+  if (!shipper) {
+    throw new Error('Shipper not found');
+  }
+
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const lastCodDate = shipper.daily_cod_collected_at;
+  
+  // Reset daily COD if it's a new day
+  let currentDailyCod = parseFloat(shipper.daily_cod_collected || 0);
+  if (lastCodDate !== today) {
+    currentDailyCod = 0;
+  }
+
+  const newDailyCod = currentDailyCod + parseFloat(codAmount);
+
+  const updates = {
+    daily_cod_collected: newDailyCod,
+    daily_cod_collected_at: today,
+  };
+
+  return updateShipper(shipperId, updates);
+}
+
+/**
+ * Get shipper's daily COD balance
+ * Requirements: 6.4 - Display total COD collected for reconciliation
+ * 
+ * @param {string} shipperId
+ * @returns {Promise<{dailyCodCollected: number, date: string}>}
+ */
+async function getDailyCodBalance(shipperId) {
+  const shipper = await findShipperById(shipperId);
+  if (!shipper) {
+    throw new Error('Shipper not found');
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const lastCodDate = shipper.daily_cod_collected_at;
+  
+  // If last COD date is not today, balance is 0
+  if (lastCodDate !== today) {
+    return {
+      dailyCodCollected: 0,
+      date: today,
+    };
+  }
+
+  return {
+    dailyCodCollected: parseFloat(shipper.daily_cod_collected || 0),
+    date: lastCodDate,
+  };
+}
+
+/**
+ * Find flagged shippers for admin review
+ * Requirements: 15.4 - Flag shipper when rating falls below 3.5
+ * 
+ * @param {Object} options - Pagination options
+ * @returns {Promise<{data: Object[], count: number}>}
+ */
+async function findFlaggedShippers(options = {}) {
+  const { page = 1, limit = 20 } = options;
+  const offset = (page - 1) * limit;
+
+  const { data, error, count } = await supabaseAdmin
+    .from('shippers')
+    .select('*', { count: 'exact' })
+    .eq('is_flagged', true)
+    .order('flagged_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    throw new Error(`Failed to find flagged shippers: ${error.message}`);
+  }
+
+  // Get user info for each shipper
+  const shippersWithUsers = await Promise.all((data || []).map(async (shipper) => {
+    if (shipper.user_id) {
+      const { data: userData } = await supabaseAdmin
+        .from('users')
+        .select('id, full_name, phone, email, avatar_url')
+        .eq('id', shipper.user_id)
+        .single();
+      shipper.user = userData || null;
+    }
+    return shipper;
+  }));
+
+  return { data: shippersWithUsers, count: count || 0 };
+}
+
+/**
+ * Clear shipper flag (after admin review)
+ * @param {string} shipperId
+ * @returns {Promise<Object>}
+ */
+async function clearShipperFlag(shipperId) {
+  const { data, error } = await supabaseAdmin
+    .from('shippers')
+    .update({
+      is_flagged: false,
+      flagged_reason: null,
+      flagged_at: null,
+    })
+    .eq('id', shipperId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to clear shipper flag: ${error.message}`);
+  }
+
+  return data;
+}
+
 module.exports = {
   // CRUD
   createShipper,
@@ -384,4 +513,12 @@ module.exports = {
   // Statistics
   updateStatistics,
   incrementDeliveryCount,
+  
+  // COD
+  updateDailyCodBalance,
+  getDailyCodBalance,
+  
+  // Flagging
+  findFlaggedShippers,
+  clearShipperFlag,
 };

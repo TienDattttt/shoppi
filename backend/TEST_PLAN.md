@@ -91,8 +91,8 @@
 - [ ] Update inventory (/products/:id/inventory)
 
 #### Order Management
-- [ ] List shop orders (/partner/orders)
-- [ ] Confirm order (/partner/orders/:id/confirm)
+- [x] List shop orders (/partner/orders)
+- [x] Confirm order (/partner/orders/:id/confirm)
 - [ ] Pack order (/partner/orders/:id/pack)
 - [ ] Cancel order (/partner/orders/:id/cancel)
 
@@ -105,9 +105,9 @@
 - [x] Reply to review (/reviews/:id/reply)
 
 #### Chat
-- [ ] List conversations (/chat/conversations)
-- [ ] Get messages (/chat/messages?conversationId=...)
-- [ ] Send message (/chat/messages)
+- [x] List conversations (/chat/conversations)
+- [x] Get messages (/chat/messages?conversationId=...)
+- [x] Send message (/chat/messages)
 
 ---
 

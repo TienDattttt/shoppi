@@ -69,6 +69,7 @@ class OfflineSyncService {
           action.payload['shipmentId'], 
           action.payload['photoPath'],
           action.payload['signaturePath'], // Ensure we store this in OfflineAction
+          codCollected: action.payload['codCollected'] ?? true,
         );
         return result.isRight();
       case 'fail':

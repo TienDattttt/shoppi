@@ -26,6 +26,8 @@ orderRouter.use(authenticate);
 orderRouter.post('/checkout', authorize('customer'), orderController.checkout);
 orderRouter.get('/', authorize('customer'), orderController.getOrders);
 orderRouter.get('/:id', authorize('customer'), orderController.getOrderById);
+orderRouter.get('/:id/shipments', authorize('customer'), orderController.getOrderShipments);
+orderRouter.get('/:id/completion-status', authorize('customer'), orderController.getOrderCompletionStatus);
 orderRouter.post('/:id/cancel', authorize('customer'), orderController.cancelOrder);
 orderRouter.post('/:id/confirm-receipt', authorize('customer'), orderController.confirmReceipt);
 orderRouter.post('/:id/return', authorize('customer'), orderController.requestReturn);

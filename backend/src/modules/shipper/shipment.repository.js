@@ -330,6 +330,60 @@ function generateTrackingNumber() {
   return `${prefix}${timestamp}${random}`;
 }
 
+/**
+ * Find shipments by order ID (for multi-shop orders)
+ * @param {string} orderId
+ * @returns {Promise<Object[]>}
+ */
+async function findByOrderId(orderId) {
+  // First get all sub-orders for this order
+  const { data: subOrders, error: subOrderError } = await supabaseAdmin
+    .from('sub_orders')
+    .select('id')
+    .eq('order_id', orderId);
+
+  if (subOrderError) {
+    throw new Error(`Failed to find sub-orders: ${subOrderError.message}`);
+  }
+
+  if (!subOrders || subOrders.length === 0) {
+    return [];
+  }
+
+  const subOrderIds = subOrders.map(so => so.id);
+
+  // Get all shipments for these sub-orders
+  const { data, error } = await supabaseAdmin
+    .from('shipments')
+    .select(`
+      *,
+      shipper:shippers(
+        id,
+        vehicle_type,
+        vehicle_plate,
+        avg_rating,
+        total_deliveries,
+        user:users(id, full_name, phone, avatar_url)
+      ),
+      sub_order:sub_orders(
+        id,
+        order_id,
+        shop_id,
+        total_amount,
+        status,
+        shops:shops(id, shop_name, logo_url)
+      )
+    `)
+    .in('sub_order_id', subOrderIds)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to find shipments: ${error.message}`);
+  }
+
+  return data || [];
+}
+
 module.exports = {
   // CRUD
   createShipment,
@@ -343,6 +397,7 @@ module.exports = {
   findByStatus,
   findPendingShipments,
   findActiveByShipper,
+  findByOrderId,
   
   // Status
   assignShipper,

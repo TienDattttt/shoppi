@@ -196,10 +196,102 @@ async function getPartnerOrders(partnerId, filters = {}) {
     limit: parseInt(limit),
   });
   
+  // Enrich sub-orders with shipment data (Requirements: 2.1)
+  const enrichedOrders = await Promise.all(result.orders.map(async (subOrder) => {
+    const serialized = orderDTO.serializeSubOrder(subOrder);
+    
+    // Get shipment data for this sub-order
+    try {
+      const { data: shipment } = await supabaseAdmin
+        .from('shipments')
+        .select(`
+          id,
+          tracking_number,
+          status,
+          estimated_pickup,
+          estimated_delivery,
+          assigned_at,
+          picked_up_at,
+          delivered_at,
+          shipper:shippers(
+            id,
+            vehicle_type,
+            vehicle_plate,
+            user:users(id, full_name, phone, avatar_url)
+          )
+        `)
+        .eq('sub_order_id', subOrder.id)
+        .single();
+      
+      if (shipment) {
+        serialized.shipment = {
+          id: shipment.id,
+          trackingNumber: shipment.tracking_number,
+          status: shipment.status,
+          statusVi: getShipmentStatusVietnamese(shipment.status),
+          estimatedPickup: shipment.estimated_pickup,
+          estimatedDelivery: shipment.estimated_delivery,
+          assignedAt: shipment.assigned_at,
+          pickedUpAt: shipment.picked_up_at,
+          deliveredAt: shipment.delivered_at,
+          shipper: shipment.shipper ? {
+            id: shipment.shipper.id,
+            name: shipment.shipper.user?.full_name,
+            phone: maskPhoneNumber(shipment.shipper.user?.phone),
+            avatarUrl: shipment.shipper.user?.avatar_url,
+            vehicleType: shipment.shipper.vehicle_type,
+            vehiclePlate: shipment.shipper.vehicle_plate,
+          } : null,
+        };
+      }
+    } catch (e) {
+      // No shipment found, that's okay
+    }
+    
+    return serialized;
+  }));
+  
   return {
-    orders: result.orders.map(orderDTO.serializeSubOrder),
+    orders: enrichedOrders,
     pagination: result.pagination,
   };
+}
+
+/**
+ * Get Vietnamese status text for shipment
+ * @param {string} status
+ * @returns {string}
+ */
+function getShipmentStatusVietnamese(status) {
+  const statusMap = {
+    created: 'Đã tạo',
+    assigned: 'Đã phân công',
+    picked_up: 'Đã lấy hàng',
+    in_transit: 'Đang vận chuyển',
+    out_for_delivery: 'Đang giao hàng',
+    delivering: 'Đang giao hàng',
+    delivered: 'Đã giao hàng',
+    failed: 'Giao hàng thất bại',
+    returning: 'Đang hoàn trả',
+    returned: 'Đã hoàn trả',
+    cancelled: 'Đã hủy',
+  };
+  return statusMap[status] || status;
+}
+
+/**
+ * Mask phone number for privacy
+ * @param {string} phone
+ * @returns {string}
+ */
+function maskPhoneNumber(phone) {
+  if (!phone) return null;
+  if (phone.length < 7) return phone;
+  
+  // Format: 090****123
+  const prefix = phone.slice(0, 3);
+  const suffix = phone.slice(-3);
+  return `${prefix}****${suffix}`;
 }
 
 /**
@@ -297,6 +389,7 @@ async function processRefundForCancelledOrder(order) {
 
 /**
  * Confirm receipt (Customer)
+ * Requirements: 12.4 - Check all shipments delivered before completing order
  */
 async function confirmReceipt(orderId, userId) {
   const order = await orderRepository.findOrderById(orderId);
@@ -324,13 +417,27 @@ async function confirmReceipt(orderId, userId) {
     }
   }
   
-  // Check if all sub-orders are completed
-  const allCompleted = subOrders.every(so => 
+  // Requirements: 12.4 - Check if all sub-orders are completed (multi-shop order handling)
+  // Re-fetch sub-orders to get updated statuses
+  const updatedSubOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+  const allCompleted = updatedSubOrders.every(so => 
     so.status === SUB_ORDER_STATUS.COMPLETED || so.status === SUB_ORDER_STATUS.CANCELLED
   );
   
   if (allCompleted) {
     await orderRepository.updateOrderStatus(orderId, ORDER_STATUS.COMPLETED);
+    
+    // Publish ORDER_COMPLETED event
+    try {
+      await rabbitmq.publishOrderEvent('completed', {
+        orderId,
+        userId,
+        completedAt: new Date().toISOString(),
+        subOrderCount: updatedSubOrders.length,
+      });
+    } catch (e) {
+      console.error('[OrderService] Failed to publish ORDER_COMPLETED event:', e.message);
+    }
   }
   
   return orderDTO.serializeOrder(await orderRepository.findOrderById(orderId));
@@ -640,6 +747,97 @@ async function storePaymentTransaction(orderId, transactionData) {
   }
 }
 
+/**
+ * Check if all shipments for an order are delivered and complete the order
+ * Requirements: 12.4 - When all shipments are delivered, mark order as fully completed
+ * 
+ * @param {string} orderId - Order ID
+ * @returns {Promise<boolean>} - True if order was completed
+ */
+async function checkAndCompleteOrder(orderId) {
+  try {
+    // Get all sub-orders for this order
+    const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+    
+    if (!subOrders || subOrders.length === 0) {
+      console.warn(`[OrderService] No sub-orders found for order ${orderId}`);
+      return false;
+    }
+    
+    // Check if all sub-orders are delivered or completed
+    const allDelivered = subOrders.every(so => 
+      ['delivered', 'completed'].includes(so.status)
+    );
+    
+    if (allDelivered) {
+      await orderRepository.updateOrderStatus(orderId, ORDER_STATUS.COMPLETED);
+      console.log(`[OrderService] Order ${orderId} marked as completed (all shipments delivered)`);
+      
+      // Publish ORDER_COMPLETED event
+      try {
+        await rabbitmq.publishOrderEvent('completed', {
+          orderId,
+          completedAt: new Date().toISOString(),
+          subOrderCount: subOrders.length,
+        });
+      } catch (e) {
+        console.error('[OrderService] Failed to publish ORDER_COMPLETED event:', e.message);
+      }
+      
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`[OrderService] Failed to check and complete order ${orderId}:`, error.message);
+    return false;
+  }
+}
+
+/**
+ * Get order completion status for multi-shop orders
+ * Requirements: 12.4 - Check all shipments delivered status
+ * 
+ * @param {string} orderId - Order ID
+ * @returns {Promise<Object>} - Completion status details
+ */
+async function getOrderCompletionStatus(orderId) {
+  try {
+    const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+    
+    if (!subOrders || subOrders.length === 0) {
+      return {
+        totalShipments: 0,
+        deliveredShipments: 0,
+        pendingShipments: 0,
+        isComplete: false,
+      };
+    }
+    
+    const deliveredCount = subOrders.filter(so => 
+      ['delivered', 'completed'].includes(so.status)
+    ).length;
+    
+    const pendingCount = subOrders.length - deliveredCount;
+    
+    return {
+      totalShipments: subOrders.length,
+      deliveredShipments: deliveredCount,
+      pendingShipments: pendingCount,
+      isComplete: pendingCount === 0,
+      subOrders: subOrders.map(so => ({
+        id: so.id,
+        shopId: so.shop_id,
+        status: so.status,
+        isDelivered: ['delivered', 'completed'].includes(so.status),
+      })),
+    };
+  } catch (error) {
+    console.error(`[OrderService] Failed to get completion status for order ${orderId}:`, error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   // Constants
   ORDER_STATUS,
@@ -659,6 +857,10 @@ module.exports = {
   pickupOrder,
   deliverOrder,
   failDelivery,
+  
+  // Order completion (Requirements: 12.4)
+  checkAndCompleteOrder,
+  getOrderCompletionStatus,
   
   // Payment handling (for webhooks)
   handlePaymentSuccess,

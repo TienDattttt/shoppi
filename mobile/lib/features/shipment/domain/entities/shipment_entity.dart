@@ -8,6 +8,8 @@ enum ShipmentStatus {
   delivering,
   delivered,
   failed,
+  returning,
+  returned,
 }
 
 class ShipmentEntity extends Equatable {
@@ -28,6 +30,7 @@ class ShipmentEntity extends Equatable {
   // Fees
   final double shippingFee;
   final double codAmount;
+  final bool codCollected;
   
   // Distance & Time
   final double distanceKm;
@@ -40,6 +43,11 @@ class ShipmentEntity extends Equatable {
   // Failure / Proof
   final String? failureReason;
   final String? deliveryPhotoUrl;
+  final int deliveryAttempts;
+  
+  // Order info
+  final String? subOrderId;
+  final String? orderId;
 
   const ShipmentEntity({
     required this.id,
@@ -53,6 +61,7 @@ class ShipmentEntity extends Equatable {
     required this.deliveryContactPhone,
     required this.shippingFee,
     required this.codAmount,
+    this.codCollected = false,
     required this.distanceKm,
     required this.estimatedMinutes,
     required this.createdAt,
@@ -60,14 +69,24 @@ class ShipmentEntity extends Equatable {
     this.deliveredAt,
     this.failureReason,
     this.deliveryPhotoUrl,
+    this.deliveryAttempts = 0,
+    this.subOrderId,
+    this.orderId,
   });
+
+  /// Check if this is a COD order
+  bool get isCod => codAmount > 0;
+  
+  /// Check if COD needs to be collected
+  bool get needsCodCollection => isCod && !codCollected;
 
   @override
   List<Object?> get props => [
     id, trackingNumber, status, 
     pickupAddress, pickupContactName, pickupContactPhone,
     deliveryAddress, deliveryContactName, deliveryContactPhone,
-    shippingFee, codAmount, distanceKm, estimatedMinutes,
-    createdAt, pickedUpAt, deliveredAt, failureReason, deliveryPhotoUrl
+    shippingFee, codAmount, codCollected, distanceKm, estimatedMinutes,
+    createdAt, pickedUpAt, deliveredAt, failureReason, deliveryPhotoUrl,
+    deliveryAttempts, subOrderId, orderId,
   ];
 }

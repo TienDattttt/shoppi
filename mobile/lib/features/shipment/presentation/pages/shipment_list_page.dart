@@ -164,7 +164,14 @@ class _ShipmentListPageState extends State<ShipmentListPage> {
         color = Colors.red;
         text = "Failed";
         break;
-      // Removed cancelled case
+      case ShipmentStatus.returning:
+        color = Colors.purple;
+        text = "Returning";
+        break;
+      case ShipmentStatus.returned:
+        color = Colors.indigo;
+        text = "Returned";
+        break;
     }
     
     return Container(

@@ -37,6 +37,14 @@ class StatusBadge extends StatelessWidget {
         color = AppColors.statusFailed;
         label = "Failed";
         break;
+      case ShipmentStatus.returning:
+        color = AppColors.statusReturning;
+        label = "Returning";
+        break;
+      case ShipmentStatus.returned:
+        color = AppColors.statusReturned;
+        label = "Returned";
+        break;
     }
 
     return Container(

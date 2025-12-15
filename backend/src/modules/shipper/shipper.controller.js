@@ -9,6 +9,7 @@ const shipperService = require('./shipper.service');
 const shipmentService = require('./shipment.service');
 const locationService = require('./location.service');
 const trackingService = require('./tracking.service');
+const ratingService = require('./rating.service');
 const shipperValidator = require('./shipper.validator');
 const shipperDto = require('./shipper.dto');
 const { sendSuccess: successResponse, sendError } = require('../../shared/utils/response.util');
@@ -526,21 +527,35 @@ async function autoAssignShipper(req, res) {
 /**
  * Rate shipment delivery
  * POST /shipments/:id/rate
+ * 
+ * Requirements: 15.1 - Prompt customer to rate delivery (1-5 stars)
+ * Requirements: 15.2 - Update shipper's average rating
  */
 async function rateShipment(req, res) {
   try {
     const { id } = req.params;
+    const customerId = req.user.userId;
+    
     shipperValidator.validateRating(req.body);
     
-    const shipment = await shipmentService.rateDelivery(
+    const result = await ratingService.rateDelivery(
       id,
+      customerId,
       parseInt(req.body.rating),
-      req.body.feedback
+      req.body.comment || req.body.feedback
     );
     
     return successResponse(res, {
-      message: 'Rating submitted successfully',
-      data: shipperDto.toShipmentResponse(shipment),
+      message: 'Đánh giá đã được gửi thành công',
+      data: {
+        rating: {
+          id: result.rating.id,
+          rating: result.rating.rating,
+          comment: result.rating.comment,
+          createdAt: result.rating.created_at,
+        },
+        shipment: shipperDto.toShipmentResponse(result.shipment),
+      },
     });
   } catch (error) {
     return errorResponse(res, error);
@@ -550,6 +565,9 @@ async function rateShipment(req, res) {
 /**
  * Get shipment location (real-time shipper location)
  * GET /shipments/:id/location
+ * 
+ * Requirements: 1.3, 4.2 - Return shipper's current location from Redis
+ * Calculate and return ETA
  */
 async function getShipmentLocation(req, res) {
   try {
@@ -557,13 +575,44 @@ async function getShipmentLocation(req, res) {
     const shipment = await shipmentService.getShipmentById(id);
     
     if (!shipment.shipper_id) {
-      return errorResponse(res, { code: 'NOT_FOUND', message: 'No shipper assigned', status: 404 });
+      return errorResponse(res, { code: 'SHIP_003', message: 'Chưa có shipper được phân công', status: 404 });
     }
     
     const location = await locationService.getCurrentLocation(shipment.shipper_id);
     
     if (!location) {
-      return errorResponse(res, { code: 'NOT_FOUND', message: 'Location not available', status: 404 });
+      return errorResponse(res, { code: 'LOC_001', message: 'Không có thông tin vị trí', status: 404 });
+    }
+    
+    // Calculate ETA based on shipper's current location and delivery address
+    let eta = null;
+    let etaRange = null;
+    let distanceKm = null;
+    
+    if (shipment.delivery_lat && shipment.delivery_lng) {
+      distanceKm = locationService.calculateDistance(
+        location.lat,
+        location.lng,
+        parseFloat(shipment.delivery_lat),
+        parseFloat(shipment.delivery_lng)
+      );
+      
+      // Get shipper's vehicle type for more accurate ETA
+      const shipper = shipment.shipper;
+      const vehicleType = shipper?.vehicle_type || 'motorbike';
+      const estimatedMinutes = locationService.estimateTravelTime(distanceKm, vehicleType);
+      
+      // Calculate ETA as a time range (e.g., "14:00 - 15:00")
+      const now = new Date();
+      const etaStart = new Date(now.getTime() + estimatedMinutes * 60 * 1000);
+      const etaEnd = new Date(etaStart.getTime() + 30 * 60 * 1000); // +30 min buffer
+      
+      eta = etaStart.toISOString();
+      etaRange = {
+        start: formatTime(etaStart),
+        end: formatTime(etaEnd),
+        display: `${formatTime(etaStart)} - ${formatTime(etaEnd)}`,
+      };
     }
     
     return successResponse(res, {
@@ -571,12 +620,40 @@ async function getShipmentLocation(req, res) {
         shipmentId: id,
         trackingNumber: shipment.tracking_number,
         status: shipment.status,
-        shipperLocation: shipperDto.toLocationResponse(location),
+        shipperLocation: {
+          lat: location.lat,
+          lng: location.lng,
+          heading: location.heading,
+          speed: location.speed,
+          updatedAt: location.timestamp,
+        },
+        deliveryLocation: {
+          lat: shipment.delivery_lat ? parseFloat(shipment.delivery_lat) : null,
+          lng: shipment.delivery_lng ? parseFloat(shipment.delivery_lng) : null,
+          address: shipment.delivery_address,
+        },
+        pickupLocation: {
+          lat: shipment.pickup_lat ? parseFloat(shipment.pickup_lat) : null,
+          lng: shipment.pickup_lng ? parseFloat(shipment.pickup_lng) : null,
+          address: shipment.pickup_address,
+        },
+        distanceKm: distanceKm ? Math.round(distanceKm * 10) / 10 : null,
+        eta,
+        etaRange,
       },
     });
   } catch (error) {
     return errorResponse(res, error);
   }
+}
+
+/**
+ * Format time as HH:MM
+ * @param {Date} date
+ * @returns {string}
+ */
+function formatTime(date) {
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 // ============================================
@@ -586,16 +663,35 @@ async function getShipmentLocation(req, res) {
 /**
  * Get shipment tracking history
  * GET /shipments/:id/tracking
+ * 
+ * Requirements: 1.1, 1.4 - Return tracking events sorted by event_time DESC
+ * Include current status and shipper info
  */
 async function getTrackingHistory(req, res) {
   try {
     const { id } = req.params;
     
-    // Get shipment info
+    // Get shipment info with shipper details
     const shipment = await shipmentService.getShipmentById(id);
     
-    // Get tracking events
+    // Get tracking events (already sorted by event_time DESC in trackingService)
     const events = await trackingService.getTrackingHistory(id);
+    
+    // Build shipper info if assigned
+    let shipperInfo = null;
+    if (shipment.shipper) {
+      const shipper = shipment.shipper;
+      shipperInfo = {
+        id: shipper.id,
+        name: shipper.user?.full_name || 'Shipper',
+        maskedPhone: maskPhoneNumber(shipper.user?.phone),
+        avatarUrl: shipper.user?.avatar_url,
+        vehicleType: shipper.vehicle_type,
+        vehiclePlate: shipper.vehicle_plate,
+        rating: shipper.avg_rating || 0,
+        totalDeliveries: shipper.total_deliveries || 0,
+      };
+    }
     
     return successResponse(res, {
       data: {
@@ -603,9 +699,15 @@ async function getTrackingHistory(req, res) {
           id: shipment.id,
           trackingNumber: shipment.tracking_number,
           status: shipment.status,
+          statusLabel: shipperDto.getStatusLabel(shipment.status),
           currentLocation: shipment.current_location_name,
           estimatedDelivery: shipment.estimated_delivery,
+          deliveryAddress: shipment.delivery_address,
+          deliveryAttempts: shipment.delivery_attempts || 0,
+          nextDeliveryAttempt: shipment.next_delivery_attempt,
+          failureReason: shipment.failure_reason,
         },
+        shipper: shipperInfo,
         events: events.map(e => ({
           id: e.id,
           status: e.status,
@@ -614,8 +716,9 @@ async function getTrackingHistory(req, res) {
           descriptionVi: e.description_vi,
           locationName: e.location_name,
           locationAddress: e.location_address,
-          lat: e.location_lat,
-          lng: e.location_lng,
+          lat: e.location_lat ? parseFloat(e.location_lat) : null,
+          lng: e.location_lng ? parseFloat(e.location_lng) : null,
+          actorType: e.actor_type,
           actorName: e.actor_name,
           eventTime: e.event_time,
         })),
@@ -624,6 +727,18 @@ async function getTrackingHistory(req, res) {
   } catch (error) {
     return errorResponse(res, error);
   }
+}
+
+/**
+ * Mask phone number for privacy
+ * @param {string} phone - Phone number to mask
+ * @returns {string} - Masked phone number (e.g., 090****123)
+ */
+function maskPhoneNumber(phone) {
+  if (!phone || phone.length < 7) return phone;
+  const start = phone.slice(0, 3);
+  const end = phone.slice(-3);
+  return `${start}****${end}`;
 }
 
 // ============================================
@@ -677,6 +792,210 @@ async function getEarnings(req, res) {
   }
 }
 
+/**
+ * Get all shipments for an order (multi-shop orders)
+ * GET /orders/:id/shipments
+ * 
+ * Requirements: 12.1, 12.2 - Return all shipments for multi-shop order
+ * Include tracking status for each
+ */
+async function getOrderShipments(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // Get all shipments for this order
+    const shipments = await shipmentService.getShipmentsByOrderId(id);
+    
+    // Transform shipments with tracking info
+    const shipmentsWithTracking = await Promise.all(
+      shipments.map(async (shipment) => {
+        // Get latest tracking event for each shipment
+        let latestEvent = null;
+        try {
+          latestEvent = await trackingService.getLatestTrackingEvent(shipment.id);
+        } catch (e) {
+          // Ignore tracking errors
+        }
+        
+        // Build shipper info if assigned
+        let shipperInfo = null;
+        if (shipment.shipper) {
+          const shipper = shipment.shipper;
+          shipperInfo = {
+            id: shipper.id,
+            name: shipper.user?.full_name || 'Shipper',
+            maskedPhone: maskPhoneNumber(shipper.user?.phone),
+            avatarUrl: shipper.user?.avatar_url,
+            vehicleType: shipper.vehicle_type,
+            vehiclePlate: shipper.vehicle_plate,
+            rating: shipper.avg_rating || 0,
+          };
+        }
+        
+        // Build shop info
+        let shopInfo = null;
+        if (shipment.sub_order?.shops) {
+          shopInfo = {
+            id: shipment.sub_order.shops.id,
+            name: shipment.sub_order.shops.shop_name,
+            logoUrl: shipment.sub_order.shops.logo_url,
+          };
+        }
+        
+        return {
+          id: shipment.id,
+          trackingNumber: shipment.tracking_number,
+          status: shipment.status,
+          statusLabel: shipperDto.getStatusLabel(shipment.status),
+          subOrderId: shipment.sub_order_id,
+          shop: shopInfo,
+          shipper: shipperInfo,
+          
+          pickup: {
+            address: shipment.pickup_address,
+            contactName: shipment.pickup_contact_name,
+            contactPhone: maskPhoneNumber(shipment.pickup_contact_phone),
+          },
+          
+          delivery: {
+            address: shipment.delivery_address,
+            contactName: shipment.delivery_contact_name,
+            contactPhone: maskPhoneNumber(shipment.delivery_contact_phone),
+          },
+          
+          shippingFee: parseFloat(shipment.shipping_fee || 0),
+          codAmount: parseFloat(shipment.cod_amount || 0),
+          
+          currentLocation: shipment.current_location_name,
+          estimatedDelivery: shipment.estimated_delivery,
+          
+          latestEvent: latestEvent ? {
+            status: latestEvent.status,
+            statusVi: latestEvent.status_vi,
+            description: latestEvent.description_vi || latestEvent.description,
+            eventTime: latestEvent.event_time,
+          } : null,
+          
+          timestamps: {
+            created: shipment.created_at,
+            assigned: shipment.assigned_at,
+            pickedUp: shipment.picked_up_at,
+            delivered: shipment.delivered_at,
+          },
+        };
+      })
+    );
+    
+    return successResponse(res, {
+      data: {
+        orderId: id,
+        totalShipments: shipmentsWithTracking.length,
+        shipments: shipmentsWithTracking,
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get flagged shippers (Admin)
+ * GET /shippers/flagged
+ * 
+ * Requirements: 15.4 - Flag shipper when rating falls below 3.5
+ */
+async function getFlaggedShippers(req, res) {
+  try {
+    const pagination = shipperValidator.validatePagination(req.query);
+    const result = await shipperService.getFlaggedShippers(pagination);
+    
+    return successResponse(res, shipperDto.toShipperListResponse(
+      result.data,
+      result.count,
+      pagination
+    ));
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Clear shipper flag (Admin)
+ * POST /shippers/:id/clear-flag
+ * 
+ * Requirements: 15.4 - Admin can clear flag after review
+ */
+async function clearShipperFlag(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const shipper = await shipperService.clearShipperFlag(id);
+    
+    return successResponse(res, {
+      message: 'Đã xóa cờ cảnh báo cho shipper',
+      data: shipperDto.toShipperResponse(shipper),
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get shipper ratings
+ * GET /shippers/:id/ratings
+ * 
+ * Requirements: 15.3 - Display average rating and total ratings count
+ */
+async function getShipperRatings(req, res) {
+  try {
+    const { id } = req.params;
+    const pagination = shipperValidator.validatePagination(req.query);
+    
+    // Get shipper info
+    const shipper = await shipperService.getShipperById(id);
+    
+    // Get rating statistics
+    const stats = await ratingService.getShipperRatingStats(id);
+    
+    // Get individual ratings
+    const ratings = await ratingService.getShipperRatings(id, pagination);
+    
+    return successResponse(res, {
+      data: {
+        shipper: {
+          id: shipper.id,
+          name: shipper.user?.full_name || 'Shipper',
+          avatarUrl: shipper.user?.avatar_url,
+        },
+        statistics: {
+          avgRating: stats.avgRating,
+          totalRatings: stats.totalRatings,
+          distribution: stats.distribution,
+        },
+        ratings: ratings.data.map(r => ({
+          id: r.id,
+          rating: r.rating,
+          comment: r.comment,
+          customer: r.customer ? {
+            id: r.customer.id,
+            name: r.customer.full_name,
+            avatarUrl: r.customer.avatar_url,
+          } : null,
+          createdAt: r.created_at,
+        })),
+        pagination: {
+          total: ratings.count,
+          page: pagination.page,
+          limit: pagination.limit,
+          totalPages: Math.ceil(ratings.count / pagination.limit),
+        },
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 module.exports = {
   // Shipper
   createShipper,
@@ -707,10 +1026,18 @@ module.exports = {
   autoAssignShipper,
   rateShipment,
   getShipmentLocation,
+  getOrderShipments,
   
   // Earnings
   getEarnings,
   
   // Tracking
   getTrackingHistory,
+  
+  // Ratings
+  getShipperRatings,
+  
+  // Flagging (Admin)
+  getFlaggedShippers,
+  clearShipperFlag,
 };

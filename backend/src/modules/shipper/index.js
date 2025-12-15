@@ -9,10 +9,13 @@
 const shipperService = require('./shipper.service');
 const shipmentService = require('./shipment.service');
 const locationService = require('./location.service');
+const ratingService = require('./rating.service');
+const shippingFeeService = require('./shipping-fee.service');
 
 // Routes
 const shipperRoutes = require('./shipper.routes');
 const shipmentRoutes = require('./shipment.routes');
+const shippingFeeRoutes = require('./shipping-fee.routes');
 
 // Module initialization
 const shipperModule = require('./shipper.module');
@@ -25,10 +28,13 @@ module.exports = {
   shipperService,
   shipmentService,
   locationService,
+  ratingService,
+  shippingFeeService,
   
   // Routes
   routes: shipperRoutes,
   shipmentRoutes,
+  shippingFeeRoutes,
   
   // Module
   initialize: shipperModule.initializeModule,

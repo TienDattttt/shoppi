@@ -1,9 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { orderService, type Order } from "@/services/order.service";
+import { 
+    shipperService, 
+    type TrackingResponse, 
+    type ShipperLocationResponse,
+    type OrderShipment 
+} from "@/services/shipper.service";
 import { toast } from "sonner";
 import {
     Dialog,
@@ -15,6 +22,13 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ReviewModal } from "@/components/customer/review/ReviewModal";
+import { TrackingTimeline } from "@/components/customer/order/TrackingTimeline";
+import { ShipperLocationMap, type ShipperLocation, type LocationPoint } from "@/components/customer/order/ShipperLocationMap";
+import { ShipperInfo, type ShipperInfoData } from "@/components/customer/order/ShipperInfo";
+import { ETADisplay } from "@/components/customer/order/ETADisplay";
+import { ShipperRatingModal, type ShipmentRatingInfo } from "@/components/customer/order/ShipperRatingModal";
+import { supabase, isRealtimeAvailable } from "@/lib/supabase";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 // Map status to Vietnamese
 function getStatusText(status: string): string {
@@ -47,6 +61,16 @@ function getPaymentMethodText(method: string): string {
     return methodMap[method] || method;
 }
 
+// Check if shipment is in delivering status
+function isDelivering(status: string): boolean {
+    return ['out_for_delivery', 'delivering', 'shipping'].includes(status);
+}
+
+// Check if shipper is assigned
+function hasShipperAssigned(status: string): boolean {
+    return ['assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'delivering', 'shipping', 'delivered'].includes(status);
+}
+
 export default function OrderDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -57,12 +81,63 @@ export default function OrderDetailPage() {
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
     const [showReviewModal, setShowReviewModal] = useState(false);
+    const [showShipperRatingModal, setShowShipperRatingModal] = useState(false);
+    
+    // Tracking state
+    const [orderShipments, setOrderShipments] = useState<OrderShipment[]>([]);
+    const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+    const [trackingData, setTrackingData] = useState<TrackingResponse | null>(null);
+    const [shipperLocation, setShipperLocation] = useState<ShipperLocationResponse | null>(null);
+    const [trackingLoading, setTrackingLoading] = useState(false);
+    const [locationChannel, setLocationChannel] = useState<RealtimeChannel | null>(null);
 
     useEffect(() => {
         if (id) {
             fetchOrder();
+            fetchOrderShipments();
         }
+        
+        return () => {
+            // Cleanup realtime subscription
+            if (locationChannel) {
+                locationChannel.unsubscribe();
+            }
+        };
     }, [id]);
+
+    // Fetch tracking data when selected shipment changes
+    useEffect(() => {
+        if (selectedShipmentId) {
+            fetchTrackingData(selectedShipmentId);
+        }
+    }, [selectedShipmentId]);
+
+    // Auto-show shipper rating modal when order is delivered
+    // Requirements: 15.1 - Prompt customer to rate delivery after completion
+    useEffect(() => {
+        // Check if there are delivered shipments with shippers that can be rated
+        const deliveredWithShipper = orderShipments.filter(
+            s => s.status === 'delivered' && s.shipper
+        );
+        
+        // Only auto-show if:
+        // 1. There are delivered shipments with shippers
+        // 2. The order was recently delivered (check URL param or localStorage)
+        if (deliveredWithShipper.length > 0) {
+            const ratingPromptKey = `shipper_rating_prompted_${id}`;
+            const alreadyPrompted = localStorage.getItem(ratingPromptKey);
+            
+            if (!alreadyPrompted) {
+                // Show rating modal after a short delay
+                const timer = setTimeout(() => {
+                    setShowShipperRatingModal(true);
+                    localStorage.setItem(ratingPromptKey, 'true');
+                }, 1000);
+                
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [orderShipments, id]);
 
     const fetchOrder = async () => {
         setLoading(true);
@@ -76,6 +151,102 @@ export default function OrderDetailPage() {
             setLoading(false);
         }
     };
+
+    const fetchOrderShipments = async () => {
+        try {
+            const response = await shipperService.getOrderShipments(id!);
+            setOrderShipments(response.shipments);
+            
+            // Auto-select first shipment if available
+            if (response.shipments.length > 0 && !selectedShipmentId) {
+                setSelectedShipmentId(response.shipments[0].id);
+            }
+        } catch (error) {
+            console.error("Failed to fetch shipments:", error);
+            // Don't show error toast - shipments might not exist yet
+        }
+    };
+
+    const fetchTrackingData = async (shipmentId: string) => {
+        setTrackingLoading(true);
+        try {
+            const tracking = await shipperService.getTrackingHistory(shipmentId);
+            setTrackingData(tracking);
+            
+            // If shipment is being delivered, fetch location and subscribe to updates
+            if (tracking.shipment && isDelivering(tracking.shipment.status)) {
+                await fetchShipperLocation(shipmentId);
+                subscribeToLocationUpdates(shipmentId);
+            } else {
+                setShipperLocation(null);
+                // Unsubscribe from previous channel
+                if (locationChannel) {
+                    locationChannel.unsubscribe();
+                    setLocationChannel(null);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch tracking:", error);
+            setTrackingData(null);
+        } finally {
+            setTrackingLoading(false);
+        }
+    };
+
+    const fetchShipperLocation = async (shipmentId: string) => {
+        try {
+            const location = await shipperService.getShipmentLocation(shipmentId);
+            setShipperLocation(location);
+        } catch (error) {
+            console.error("Failed to fetch shipper location:", error);
+            // Don't clear location - might be temporary error
+        }
+    };
+
+    // Subscribe to real-time location updates via Supabase Realtime
+    const subscribeToLocationUpdates = useCallback((shipmentId: string) => {
+        if (!isRealtimeAvailable() || !supabase) {
+            console.log("Realtime not available");
+            return;
+        }
+
+        // Unsubscribe from previous channel
+        if (locationChannel) {
+            locationChannel.unsubscribe();
+        }
+
+        const channel = supabase
+            .channel(`shipment-location-${shipmentId}`)
+            .on(
+                'broadcast',
+                { event: 'location_update' },
+                (payload) => {
+                    const { lat, lng, heading, speed, timestamp } = payload.payload;
+                    setShipperLocation(prev => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            shipperLocation: {
+                                lat,
+                                lng,
+                                heading,
+                                speed,
+                                updatedAt: timestamp,
+                            },
+                        };
+                    });
+                }
+            )
+            .subscribe();
+
+        setLocationChannel(channel);
+    }, [locationChannel]);
+
+    const handleRefreshLocation = useCallback(() => {
+        if (selectedShipmentId) {
+            fetchShipperLocation(selectedShipmentId);
+        }
+    }, [selectedShipmentId]);
 
     const handleCancelOrder = async () => {
         if (!cancelReason.trim()) {
@@ -130,6 +301,20 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleCallShipper = () => {
+        if (trackingData?.shipper?.maskedPhone) {
+            // In a real app, this would initiate a masked call
+            toast.info(`Đang kết nối với shipper: ${trackingData.shipper.maskedPhone}`);
+        }
+    };
+
+    const handleChatShipper = () => {
+        if (trackingData?.shipper?.id) {
+            // Navigate to chat with shipper
+            navigate(`/user/chat?shipperId=${trackingData.shipper.id}`);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20">
@@ -172,6 +357,62 @@ export default function OrderDetailPage() {
         imageUrl: item.imageUrl,
     }));
 
+    // Check if can rate shipper (delivered shipments with shipper assigned)
+    // Requirements: 15.1 - Prompt customer to rate delivery after completion
+    const deliveredShipments = orderShipments.filter(s => s.status === 'delivered' && s.shipper);
+    const canRateShipper = deliveredShipments.length > 0;
+    
+    // Prepare shipments for rating modal
+    const shipperRatingShipments: ShipmentRatingInfo[] = deliveredShipments.map(s => ({
+        id: s.id,
+        trackingNumber: s.trackingNumber,
+        shipper: s.shipper ? {
+            id: s.shipper.id,
+            name: s.shipper.name,
+            avatarUrl: s.shipper.avatarUrl,
+            vehicleType: s.shipper.vehicleType,
+            vehiclePlate: s.shipper.vehiclePlate,
+        } : null,
+    }));
+
+    // Get selected shipment data
+    const selectedShipment = orderShipments.find(s => s.id === selectedShipmentId);
+    const showTracking = orderShipments.length > 0;
+    const showMap = selectedShipment && isDelivering(selectedShipment.status) && shipperLocation;
+
+    // Prepare shipper info for component
+    const shipperInfoData: ShipperInfoData | null = trackingData?.shipper ? {
+        id: trackingData.shipper.id,
+        name: trackingData.shipper.name,
+        phone: trackingData.shipper.maskedPhone,
+        avatarUrl: trackingData.shipper.avatarUrl,
+        rating: trackingData.shipper.rating,
+        totalRatings: trackingData.shipper.totalDeliveries,
+        vehicleType: trackingData.shipper.vehicleType,
+        vehiclePlate: trackingData.shipper.vehiclePlate,
+    } : null;
+
+    // Prepare location data for map
+    const shipperLocationData: ShipperLocation | null = shipperLocation?.shipperLocation ? {
+        lat: shipperLocation.shipperLocation.lat,
+        lng: shipperLocation.shipperLocation.lng,
+        heading: shipperLocation.shipperLocation.heading,
+        speed: shipperLocation.shipperLocation.speed,
+        updatedAt: shipperLocation.shipperLocation.updatedAt,
+    } : null;
+
+    const deliveryAddress: LocationPoint = {
+        lat: shipperLocation?.deliveryLocation?.lat || 0,
+        lng: shipperLocation?.deliveryLocation?.lng || 0,
+        address: shipperLocation?.deliveryLocation?.address || order.shippingAddress,
+    };
+
+    const pickupAddress: LocationPoint = {
+        lat: shipperLocation?.pickupLocation?.lat || 0,
+        lng: shipperLocation?.pickupLocation?.lng || 0,
+        address: shipperLocation?.pickupLocation?.address || '',
+    };
+
     return (
         <div className="space-y-6">
             <div className="bg-white p-4 flex justify-between items-center rounded-sm shadow-sm">
@@ -202,27 +443,56 @@ export default function OrderDetailPage() {
                         </div>
                     </div>
                 </div>
-
-                {order.subOrders?.map(subOrder => (
-                    subOrder.trackingNumber && (
-                        <div key={subOrder.id} className="flex gap-4 items-start pl-7 pt-2">
-                            <Truck className="h-5 w-5 text-gray-500 mt-1" />
-                            <div className="flex-1">
-                                <div className="font-medium">Thông tin vận chuyển</div>
-                                <div className="text-sm text-gray-600 space-y-1 mt-1">
-                                    <div>Mã vận đơn: {subOrder.trackingNumber}</div>
-                                    <div className="text-green-600">{getStatusText(subOrder.status)}</div>
-                                    {subOrder.shippedAt && (
-                                        <div className="text-xs text-gray-400">
-                                            Giao hàng: {new Date(subOrder.shippedAt).toLocaleString('vi-VN')}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )
-                ))}
             </div>
+
+            {/* Tracking Section - Requirements 1.1, 1.3, 12.2 */}
+            {showTracking && (
+                <div className="bg-white p-6 rounded-sm shadow-sm space-y-4">
+                    <div className="flex items-center gap-2 text-xl font-medium border-b pb-4">
+                        <Truck className="h-5 w-5 text-shopee-orange" /> Theo dõi đơn hàng
+                    </div>
+
+                    {/* Multi-shipment tabs - Requirements 12.2, 12.5 */}
+                    {orderShipments.length > 1 ? (
+                        <Tabs 
+                            value={selectedShipmentId || undefined} 
+                            onValueChange={setSelectedShipmentId}
+                            className="w-full"
+                        >
+                            <TabsList className="w-full justify-start overflow-x-auto">
+                                {orderShipments.map((shipment, index) => (
+                                    <TabsTrigger 
+                                        key={shipment.id} 
+                                        value={shipment.id}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Package className="h-4 w-4" />
+                                        <span>
+                                            {shipment.shop?.name || `Gói hàng ${index + 1}`}
+                                        </span>
+                                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                            shipment.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                            isDelivering(shipment.status) ? 'bg-blue-100 text-blue-700' :
+                                            'bg-gray-100 text-gray-600'
+                                        }`}>
+                                            {getStatusText(shipment.status)}
+                                        </span>
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+
+                            {orderShipments.map((shipment) => (
+                                <TabsContent key={shipment.id} value={shipment.id} className="mt-4">
+                                    {renderTrackingContent(shipment)}
+                                </TabsContent>
+                            ))}
+                        </Tabs>
+                    ) : (
+                        // Single shipment - no tabs needed
+                        selectedShipment && renderTrackingContent(selectedShipment)
+                    )}
+                </div>
+            )}
 
             {/* Products */}
             <div className="bg-white p-6 rounded-sm shadow-sm space-y-4">
@@ -344,7 +614,18 @@ export default function OrderDetailPage() {
                         onClick={() => setShowReviewModal(true)}
                     >
                         <Star className="h-4 w-4" />
-                        Đánh giá
+                        Đánh giá sản phẩm
+                    </Button>
+                )}
+                
+                {canRateShipper && (
+                    <Button 
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setShowShipperRatingModal(true)}
+                    >
+                        <Truck className="h-4 w-4" />
+                        Đánh giá shipper
                     </Button>
                 )}
                 
@@ -391,6 +672,112 @@ export default function OrderDetailPage() {
                 items={reviewItems}
                 onSuccess={() => toast.success("Cảm ơn bạn đã đánh giá!")}
             />
+
+            {/* Shipper Rating Modal - Requirements 15.1 */}
+            <ShipperRatingModal
+                open={showShipperRatingModal}
+                onOpenChange={setShowShipperRatingModal}
+                shipments={shipperRatingShipments}
+                onSuccess={() => {
+                    toast.success("Cảm ơn bạn đã đánh giá shipper!");
+                    // Refresh shipments to update rating status
+                    fetchOrderShipments();
+                }}
+            />
         </div>
     );
+
+    // Helper function to render tracking content for a shipment
+    function renderTrackingContent(shipment: OrderShipment) {
+        const isCurrentlyDelivering = isDelivering(shipment.status);
+        const hasShipper = hasShipperAssigned(shipment.status);
+
+        return (
+            <div className="space-y-6">
+                {/* Tracking number and status */}
+                <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                    <div>
+                        <div className="text-sm text-gray-500">Mã vận đơn</div>
+                        <div className="font-mono font-medium">{shipment.trackingNumber}</div>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-sm text-gray-500">Trạng thái</div>
+                        <div className={`font-medium ${
+                            shipment.status === 'delivered' ? 'text-green-600' :
+                            isCurrentlyDelivering ? 'text-blue-600' :
+                            'text-gray-700'
+                        }`}>
+                            {shipment.statusLabel || getStatusText(shipment.status)}
+                        </div>
+                    </div>
+                </div>
+
+                {/* ETA Display - when delivering */}
+                {isCurrentlyDelivering && shipperLocation?.etaRange && (
+                    <ETADisplay
+                        etaStart={shipperLocation.etaRange.start}
+                        etaEnd={shipperLocation.etaRange.end}
+                        distanceKm={shipperLocation.distanceKm || undefined}
+                        lastUpdated={shipperLocation.shipperLocation?.updatedAt}
+                        isDelivering={true}
+                        onLocationUpdate={handleRefreshLocation}
+                    />
+                )}
+
+                {/* Shipper Info - Requirements 10.1 */}
+                {hasShipper && shipperInfoData && (
+                    <ShipperInfo
+                        shipper={shipperInfoData}
+                        canContact={isCurrentlyDelivering}
+                        onCall={handleCallShipper}
+                        onChat={handleChatShipper}
+                    />
+                )}
+
+                {/* Map - Requirements 1.3, 4.2 */}
+                {showMap && shipperLocationData && (
+                    <ShipperLocationMap
+                        shipmentId={shipment.id}
+                        shipperLocation={shipperLocationData}
+                        deliveryAddress={deliveryAddress}
+                        pickupAddress={pickupAddress}
+                        estimatedArrival={shipperLocation?.etaRange?.display}
+                        className="h-[350px]"
+                    />
+                )}
+
+                {/* Tracking Timeline - Requirements 1.1, 1.4 */}
+                {trackingLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-shopee-orange" />
+                    </div>
+                ) : trackingData?.events && trackingData.events.length > 0 ? (
+                    <TrackingTimeline
+                        shipmentId={shipment.id}
+                        events={trackingData.events}
+                        currentStatus={trackingData.shipment?.status || shipment.status}
+                    />
+                ) : (
+                    <div className="text-center py-8 text-gray-500">
+                        Chưa có thông tin theo dõi
+                    </div>
+                )}
+
+                {/* Failed delivery info */}
+                {shipment.status === 'failed' && trackingData?.shipment?.failureReason && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="text-red-700 font-medium">Giao hàng thất bại</div>
+                        <div className="text-red-600 text-sm mt-1">
+                            Lý do: {trackingData.shipment.failureReason}
+                        </div>
+                        {trackingData.shipment.nextDeliveryAttempt && (
+                            <div className="text-red-600 text-sm mt-1">
+                                Giao lại: {new Date(trackingData.shipment.nextDeliveryAttempt).toLocaleString('vi-VN')}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    }
 }

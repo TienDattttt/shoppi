@@ -395,6 +395,56 @@ async function getMyVouchers(req, res) {
   }
 }
 
+// ==================== SHIPMENT OPERATIONS ====================
+
+/**
+ * Get all shipments for an order (multi-shop orders)
+ * GET /orders/:id/shipments
+ * 
+ * Requirements: 12.1, 12.2 - Return all shipments for multi-shop order
+ */
+async function getOrderShipments(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // Import shipper controller to use the getOrderShipments function
+    const shipperController = require('../shipper/shipper.controller');
+    
+    // Delegate to shipper controller
+    return shipperController.getOrderShipments(req, res);
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get order completion status for multi-shop orders
+ * GET /orders/:id/completion-status
+ * 
+ * Requirements: 12.4 - Check all shipments delivered status
+ */
+async function getOrderCompletionStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    
+    // Verify order ownership
+    const order = await orderService.getOrderById(id, userId);
+    if (!order) {
+      return errorResponse(res, { code: 'ORDER_NOT_FOUND', message: 'Order not found', statusCode: 404 });
+    }
+    
+    const completionStatus = await orderService.getOrderCompletionStatus(id);
+    
+    return successResponse(res, {
+      orderId: id,
+      ...completionStatus,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 module.exports = {
   // Cart
   getCart,
@@ -409,6 +459,8 @@ module.exports = {
   cancelOrder,
   confirmReceipt,
   requestReturn,
+  getOrderShipments,
+  getOrderCompletionStatus,
   
   // Partner
   getPartnerOrders,

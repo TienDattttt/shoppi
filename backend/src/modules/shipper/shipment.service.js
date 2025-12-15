@@ -300,9 +300,15 @@ async function markDelivering(shipmentId, shipperId) {
 
 /**
  * Mark shipment as delivered
+ * Requirements: 6.2 - Require COD collection confirmation for COD orders
+ * Requirements: 6.3 - Record COD collection and update shipper's daily COD balance
+ * 
  * @param {string} shipmentId
  * @param {string} shipperId
  * @param {Object} proofData - Delivery proof
+ * @param {string} proofData.photoUrl - Photo proof URL
+ * @param {string} proofData.signatureUrl - Signature URL (optional)
+ * @param {boolean} proofData.codCollected - COD collection confirmation (required for COD orders)
  * @returns {Promise<Object>}
  */
 async function markDelivered(shipmentId, shipperId, proofData = {}) {
@@ -312,10 +318,29 @@ async function markDelivered(shipmentId, shipperId, proofData = {}) {
     throw new AppError('UNAUTHORIZED', 'You are not assigned to this shipment', 403);
   }
 
-  return updateStatus(shipmentId, 'delivered', {
+  // Requirements 6.2: Require COD collection confirmation for COD orders
+  const codAmount = parseFloat(shipment.cod_amount || 0);
+  if (codAmount > 0) {
+    if (proofData.codCollected !== true) {
+      throw new AppError('SHIP_006', 'COD collection confirmation is required for COD orders', 400);
+    }
+  }
+
+  const updateData = {
     delivery_photo_url: proofData.photoUrl,
     recipient_signature_url: proofData.signatureUrl,
-  });
+  };
+
+  // Requirements 6.3: Record COD collection
+  if (codAmount > 0 && proofData.codCollected) {
+    updateData.cod_collected = true;
+    updateData.cod_collected_at = new Date().toISOString();
+    
+    // Update shipper's daily COD balance
+    await shipperRepository.updateDailyCodBalance(shipperId, codAmount);
+  }
+
+  return updateStatus(shipmentId, 'delivered', updateData);
 }
 
 /**
@@ -492,6 +517,15 @@ async function getShipperEarnings(shipperId, startDate, endDate) {
   };
 }
 
+/**
+ * Get all shipments for an order (multi-shop orders)
+ * @param {string} orderId
+ * @returns {Promise<Object[]>}
+ */
+async function getShipmentsByOrderId(orderId) {
+  return shipmentRepository.findByOrderId(orderId);
+}
+
 module.exports = {
   // Creation
   createShipment,
@@ -502,6 +536,7 @@ module.exports = {
   getShipmentsByShipper,
   getActiveShipments,
   getPendingShipments,
+  getShipmentsByOrderId,
   
   // Assignment
   assignShipper,
