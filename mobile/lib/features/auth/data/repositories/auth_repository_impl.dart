@@ -263,9 +263,44 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
   
-  /// Check if user is authenticated by checking for stored token
   Future<bool> isAuthenticated() async {
     final token = await _localDataSource.getAccessToken();
     return token != null && token.isNotEmpty;
+  }
+
+  @override
+  Future<Either<Failure, List<dynamic>>> getProvinces() async {
+    if (AppConfig.useMockData) {
+      // Return mock provinces if needed
+      return const Right([]);
+    }
+    try {
+      final result = await _remoteDataSource.getProvinces();
+      return Right(result);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<dynamic>>> getWards(String provinceCode) async {
+    if (AppConfig.useMockData) return const Right([]);
+    try {
+      final result = await _remoteDataSource.getWards(provinceCode);
+      return Right(result);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<dynamic>>> getPostOffices(String wardCode) async {
+    if (AppConfig.useMockData) return const Right([]);
+    try {
+      final result = await _remoteDataSource.getPostOffices(wardCode);
+      return Right(result);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
   }
 }

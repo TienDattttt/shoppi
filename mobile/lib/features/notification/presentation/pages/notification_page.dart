@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile/core/constants/app_colors.dart';
 import 'package:mobile/features/notification/domain/entities/notification_entity.dart';
@@ -14,24 +15,24 @@ class NotificationPage extends StatelessWidget {
     final notifications = [
       NotificationEntity(
         id: '1',
-        title: 'New Shipment Assigned',
-        body: 'You have been assigned shipment #GH123456',
+        title: 'Đơn hàng mới',
+        body: 'Bạn được giao đơn hàng #GH123456',
         timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
         type: NotificationType.shipment,
         relatedId: '123',
       ),
       NotificationEntity(
         id: '2',
-        title: 'Payment Received',
-        body: 'You received 50.000d for split payment.',
+        title: 'Thanh toán thành công',
+        body: 'Bạn nhận được 50.000đ tiền chia.',
         timestamp: DateTime.now().subtract(const Duration(hours: 2)),
         type: NotificationType.payment,
         isRead: true,
       ),
       NotificationEntity(
         id: '3',
-        title: 'System Maintenance',
-        body: 'System will be down for maintenance at 2AM.',
+        title: 'Bảo trì hệ thống',
+        body: 'Hệ thống sẽ bảo trì lúc 2 giờ sáng.',
         timestamp: DateTime.now().subtract(const Duration(days: 1)),
         type: NotificationType.system,
         isRead: true,
@@ -39,51 +40,86 @@ class NotificationPage extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Notifications"),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: notifications.isEmpty
-          ? const EmptyStateWidget(
-              message: "No notifications yet",
-              icon: Icons.notifications_off_outlined,
-            )
-          : ListView.separated(
-              itemCount: notifications.length,
-              separatorBuilder: (context, index) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final notification = notifications[index];
-                return ListTile(
-                  leading: _buildIcon(notification.type),
-                  title: Text(
-                    notification.title,
-                    style: TextStyle(
-                      fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text(notification.body, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(
-                        DateFormat('dd/MM/yyyy HH:mm').format(notification.timestamp),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                  tileColor: notification.isRead ? null : AppColors.primary.withOpacity(0.05),
-                  onTap: () {
-                    // Navigate if shipment
-                    if (notification.type == NotificationType.shipment && notification.relatedId != null) {
-                      context.push('/shipment/${notification.relatedId}');
-                    }
-                  },
-                );
-              },
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          // Orange Header
+          Container(
+            decoration: const BoxDecoration(
+              gradient: AppColors.headerGradient,
             ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Thông báo',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 48), // Balance for back button
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Content
+          Expanded(
+            child: notifications.isEmpty
+                ? const EmptyStateWidget(
+                    message: 'Chưa có thông báo',
+                    icon: Icons.notifications_off_outlined,
+                  )
+                : ListView.separated(
+                    itemCount: notifications.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final notification = notifications[index];
+                      return ListTile(
+                        leading: _buildIcon(notification.type),
+                        title: Text(
+                          notification.title,
+                          style: TextStyle(
+                            fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Text(notification.body, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat('dd/MM/yyyy HH:mm').format(notification.timestamp),
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                        tileColor: notification.isRead ? null : AppColors.primarySoft,
+                        onTap: () {
+                          // Navigate if shipment
+                          if (notification.type == NotificationType.shipment && notification.relatedId != null) {
+                            context.push('/shipment/${notification.relatedId}');
+                          }
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -98,7 +134,7 @@ class NotificationPage extends StatelessWidget {
         break;
       case NotificationType.payment:
         icon = Icons.attach_money;
-        color = Colors.green;
+        color = AppColors.success;
         break;
       case NotificationType.system:
         icon = Icons.info;
@@ -107,17 +143,18 @@ class NotificationPage extends StatelessWidget {
       case NotificationType.info:
       default:
         icon = Icons.notifications;
-        color = Colors.grey;
+        color = AppColors.textSecondary;
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(icon, color: color, size: 24),
+      child: Icon(icon, color: color, size: 22),
     );
   }
 }
+

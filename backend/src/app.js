@@ -84,6 +84,15 @@ initShipperModule(app);
 const addressRoutes = require('./modules/user/address.routes');
 app.use('/api/addresses', addressRoutes);
 
+// Public Location Routes (for shipper registration - no auth required)
+const locationRoutes = require('./modules/location/location.routes');
+app.use('/api/public', locationRoutes);
+app.use('/api/auth/locations', locationRoutes); // Alias for backward compatibility
+
+// Address API Routes (Goong.io autocomplete)
+const addressApiRoutes = require('./modules/address/address.routes');
+app.use('/api/address', addressApiRoutes);
+
 // Admin Routes
 const adminSettingsRoutes = require('./modules/admin/settings.routes');
 const adminUsersRoutes = require('./modules/admin/users.routes');
@@ -119,7 +128,7 @@ app.use((req, res, next) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  
+
   // Handle known errors
   if (err.isOperational) {
     return res.status(err.statusCode || 400).json({
@@ -131,14 +140,14 @@ app.use((err, req, res, next) => {
       },
     });
   }
-  
+
   // Handle unknown errors
   res.status(500).json({
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: process.env.NODE_ENV === 'production' 
-        ? 'Internal server error' 
+      message: process.env.NODE_ENV === 'production'
+        ? 'Internal server error'
         : err.message,
     },
   });

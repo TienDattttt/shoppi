@@ -194,18 +194,68 @@ async function zalopayWebhook(req, res) {
 /**
  * ZaloPay return URL handler
  * GET /payments/callback/zalopay
+ * Note: ZaloPay may redirect directly to frontend via embed_data.redirecturl
+ * This handler is for cases where ZaloPay uses callback_url
  */
 async function zalopayReturn(req, res) {
   try {
     const { status, apptransid } = req.query;
-    const orderId = apptransid ? apptransid.split('_')[1] : null;
+    
+    console.log('[Payment] ZaloPay return:', { status, apptransid, query: req.query });
+    
+    // Extract order ID - ZaloPay app_trans_id format: yyMMdd_timestamp+random
+    // We need to get orderId from database using app_trans_id
+    let orderId = null;
+    
+    if (apptransid) {
+      // Find order by payment_provider_order_id
+      const order = await orderRepository.findOrderByProviderOrderId(apptransid);
+      if (order) {
+        orderId = order.id;
+      }
+    }
     
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const redirectUrl = status === '1'
-      ? `${frontendUrl}/payment/success?orderId=${orderId}`
-      : `${frontendUrl}/payment/failed?orderId=${orderId}`;
     
-    return res.redirect(redirectUrl);
+    // status === '1' means success in ZaloPay
+    if (status === '1' && orderId) {
+      // Query ZaloPay to confirm and update payment status
+      try {
+        const provider = providers[PAYMENT_PROVIDERS.ZALOPAY];
+        const queryResult = await provider.getStatus(orderId, apptransid);
+        
+        console.log('[Payment] ZaloPay query result:', queryResult);
+        
+        if (queryResult.success || queryResult.status === 'paid') {
+          await orderRepository.updatePaymentStatus(orderId, 'paid');
+          await orderRepository.updateOrderStatus(orderId, 'processing');
+          
+          // Update sub-orders to pending
+          const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+          for (const subOrder of subOrders) {
+            await orderRepository.updateSubOrderStatus(subOrder.id, 'pending');
+          }
+          
+          console.log('[Payment] ZaloPay payment success, updated order:', orderId);
+        }
+      } catch (queryError) {
+        console.error('[Payment] ZaloPay query error:', queryError.message);
+      }
+      
+      return res.redirect(`${frontendUrl}/payment/success?orderId=${orderId}`);
+    } else {
+      // Payment failed
+      if (orderId) {
+        try {
+          await orderRepository.updatePaymentStatus(orderId, 'failed');
+          await orderRepository.updateOrderStatus(orderId, 'payment_failed');
+        } catch (updateError) {
+          console.error('[Payment] Failed to update failed status:', updateError.message);
+        }
+      }
+      
+      return res.redirect(`${frontendUrl}/payment/failed?orderId=${orderId || ''}`);
+    }
   } catch (error) {
     console.error('[Payment] ZaloPay return error:', error);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -221,11 +271,20 @@ async function zalopayReturn(req, res) {
 async function confirmPayment(req, res) {
   try {
     const { orderId } = req.params;
+    console.log('[Payment] confirmPayment called for order:', orderId);
     
     const order = await orderRepository.findOrderById(orderId);
     if (!order) {
+      console.log('[Payment] Order not found:', orderId);
       return sendBadRequest(res, 'Order not found');
     }
+    
+    console.log('[Payment] Order found:', {
+      id: order.id,
+      payment_status: order.payment_status,
+      payment_method: order.payment_method,
+      payment_provider_order_id: order.payment_provider_order_id,
+    });
     
     // Already paid, no need to confirm
     if (order.payment_status === 'paid') {
@@ -238,25 +297,32 @@ async function confirmPayment(req, res) {
     
     // Check if we have provider order ID to query
     if (!order.payment_provider_order_id || !order.payment_method) {
+      console.log('[Payment] No payment session found for order:', orderId);
       return sendBadRequest(res, 'No payment session found for this order');
     }
     
     const provider = providers[order.payment_method];
     if (!provider) {
+      console.log('[Payment] Provider not supported:', order.payment_method);
       return sendBadRequest(res, 'Payment provider not supported');
     }
     
     // Query payment status from provider
     try {
+      console.log('[Payment] Querying provider for order:', orderId, 'provider_order_id:', order.payment_provider_order_id);
       const status = await provider.getStatus(orderId, order.payment_provider_order_id);
-      console.log('[Payment] Provider status:', status);
+      console.log('[Payment] Provider status result:', status);
       
       if (status.success || status.status === 'paid') {
         // Update payment status in database
         await orderRepository.updatePaymentStatus(orderId, 'paid');
         
+        // Also update order status to processing
+        await orderRepository.updateOrderStatus(orderId, 'processing');
+        
         // Update sub-orders to pending
         const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+        console.log('[Payment] Updating', subOrders.length, 'sub-orders to pending');
         for (const subOrder of subOrders) {
           await orderRepository.updateSubOrderStatus(subOrder.id, 'pending');
         }
@@ -277,6 +343,7 @@ async function confirmPayment(req, res) {
         });
       } else {
         // Payment failed
+        console.log('[Payment] Payment failed:', status.errorMessage);
         await orderRepository.updatePaymentStatus(orderId, 'failed');
         await orderRepository.updateOrderStatus(orderId, 'payment_failed');
         
@@ -287,7 +354,7 @@ async function confirmPayment(req, res) {
         });
       }
     } catch (providerError) {
-      console.error('[Payment] Provider query error:', providerError.message);
+      console.error('[Payment] Provider query error:', providerError.message, providerError.stack);
       // Return current status from database
       return sendSuccess(res, {
         orderId,

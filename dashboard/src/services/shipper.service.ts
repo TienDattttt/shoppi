@@ -337,4 +337,10 @@ export const shipperService = {
         const response = await api.post(`/partner/shipping/shipments/${shipmentId}/request-pickup`, data);
         return response.data;
     },
+
+    // Get shipping label for printing (Partner)
+    getShippingLabel: async (shipmentId: string) => {
+        const response = await api.get(`/partner/shipping/shipments/${shipmentId}/label`);
+        return response.data;
+    },
 };

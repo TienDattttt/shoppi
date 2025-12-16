@@ -16,6 +16,11 @@ abstract class AuthRemoteDataSource {
   });
   Future<LoginResponseModel> register(RegisterParams params);
   Future<ShipperModel> getCurrentShipper();
+  
+  // Location APIs for registration
+  Future<List<ProvinceModel>> getProvinces();
+  Future<List<WardModel>> getWards(String provinceCode);
+  Future<List<PostOfficeModel>> getPostOffices(String wardCode);
 }
 
 @LazySingleton(as: AuthRemoteDataSource)
@@ -100,6 +105,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       'vehicleBrand': params.vehicleBrand,
       'vehicleModel': params.vehicleModel,
       'workingArea': params.workingArea,
+      'postOfficeId': params.postOfficeId,
       // Document URLs from upload
       'idCardFrontUrl': params.idCardFrontUrl,
       'idCardBackUrl': params.idCardBackUrl,
@@ -112,6 +118,113 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<ShipperModel> getCurrentShipper() async {
     final response = await _client.get('/shippers/me');
     return ShipperModel.fromJson(response);
+  }
+
+  // ============================================
+  // Location APIs for registration
+  // ============================================
+
+  @override
+  Future<List<ProvinceModel>> getProvinces() async {
+    final response = await _client.get('/public/provinces');
+    // Response after interceptor unwrap is the array directly
+    final provinces = response as List<dynamic>? ?? [];
+    return provinces.map((p) => ProvinceModel.fromJson(p as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<WardModel>> getWards(String provinceCode) async {
+    final response = await _client.get('/public/wards?province_code=$provinceCode');
+    // Response after interceptor unwrap is the array directly
+    final wards = response as List<dynamic>? ?? [];
+    return wards.map((w) => WardModel.fromJson(w as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<PostOfficeModel>> getPostOffices(String wardCode) async {
+    final response = await _client.get('/public/post-offices?ward_code=$wardCode');
+    // Response after interceptor unwrap is the array directly
+    final offices = response as List<dynamic>? ?? [];
+    return offices.map((o) => PostOfficeModel.fromJson(o as Map<String, dynamic>)).toList();
+  }
+}
+
+// Location Models
+class ProvinceModel {
+  final String code;
+  final String name;
+  final String? fullName;
+  final String? region;
+
+  ProvinceModel({
+    required this.code,
+    required this.name,
+    this.fullName,
+    this.region,
+  });
+
+  factory ProvinceModel.fromJson(Map<String, dynamic> json) {
+    return ProvinceModel(
+      code: json['code']?.toString() ?? '',
+      name: json['name'] ?? '',
+      fullName: json['full_name'],
+      region: json['region'],
+    );
+  }
+}
+
+class WardModel {
+  final String code;
+  final String name;
+  final String provinceCode;
+  final String? wardType;
+
+  WardModel({
+    required this.code,
+    required this.name,
+    required this.provinceCode,
+    this.wardType,
+  });
+
+  factory WardModel.fromJson(Map<String, dynamic> json) {
+    return WardModel(
+      code: json['code']?.toString() ?? '',
+      name: json['name'] ?? '',
+      provinceCode: json['province_code']?.toString() ?? '',
+      wardType: json['ward_type'],
+    );
+  }
+}
+
+class PostOfficeModel {
+  final String id;
+  final String code;
+  final String? name;
+  final String nameVi;
+  final String? address;
+  final String? district;
+  final String? city;
+
+  PostOfficeModel({
+    required this.id,
+    required this.code,
+    this.name,
+    required this.nameVi,
+    this.address,
+    this.district,
+    this.city,
+  });
+
+  factory PostOfficeModel.fromJson(Map<String, dynamic> json) {
+    return PostOfficeModel(
+      id: json['id'] ?? '',
+      code: json['code'] ?? '',
+      name: json['name'],
+      nameVi: json['name_vi'] ?? json['name'] ?? '',
+      address: json['address'],
+      district: json['district'],
+      city: json['city'],
+    );
   }
 }
 

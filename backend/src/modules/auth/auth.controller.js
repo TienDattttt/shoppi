@@ -298,6 +298,105 @@ async function rejectAccount(req, res) {
   }
 }
 
+// ============================================
+// PUBLIC LOCATION DATA (for shipper registration)
+// ============================================
+
+const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
+
+/**
+ * Get provinces list
+ * GET /api/auth/locations/provinces
+ */
+async function getProvinces(req, res) {
+  try {
+    const { region } = req.query;
+    
+    let query = supabaseAdmin
+      .from('provinces')
+      .select('code, name, full_name, region')
+      .order('name');
+    
+    if (region) {
+      query = query.eq('region', region);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    return sendSuccess(res, { provinces: data });
+  } catch (error) {
+    return sendError(res, 'QUERY_ERROR', error.message, 500);
+  }
+}
+
+/**
+ * Get wards by province
+ * GET /api/auth/locations/wards?province_code=79
+ */
+async function getWards(req, res) {
+  try {
+    const { province_code } = req.query;
+    
+    if (!province_code) {
+      return sendError(res, 'VALIDATION_ERROR', 'province_code is required', 400);
+    }
+    
+    const { data, error } = await supabaseAdmin
+      .from('wards')
+      .select('code, name, province_code, ward_type')
+      .eq('province_code', province_code)
+      .order('name');
+    
+    if (error) throw error;
+    
+    return sendSuccess(res, { wards: data });
+  } catch (error) {
+    return sendError(res, 'QUERY_ERROR', error.message, 500);
+  }
+}
+
+/**
+ * Get post offices by ward
+ * GET /api/auth/locations/post-offices?ward_code=26734
+ */
+async function getPostOfficesByWard(req, res) {
+  try {
+    const { ward_code, province_code } = req.query;
+    
+    let query = supabaseAdmin
+      .from('post_offices')
+      .select('id, code, name, name_vi, address, district, city')
+      .eq('is_active', true)
+      .eq('office_type', 'post_office')
+      .order('name_vi');
+    
+    if (ward_code) {
+      query = query.eq('ward_code', ward_code);
+    } else if (province_code) {
+      // Fallback: get all post offices in province
+      const { data: province } = await supabaseAdmin
+        .from('provinces')
+        .select('name')
+        .eq('code', province_code)
+        .single();
+      
+      if (province) {
+        query = query.eq('city', province.name);
+      }
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    return sendSuccess(res, { postOffices: data });
+  } catch (error) {
+    return sendError(res, 'QUERY_ERROR', error.message, 500);
+  }
+}
+
 module.exports = {
   // Registration
   registerCustomer,
@@ -330,4 +429,9 @@ module.exports = {
   // Admin
   approveAccount,
   rejectAccount,
+  
+  // Public Location Data
+  getProvinces,
+  getWards,
+  getPostOfficesByWard,
 };

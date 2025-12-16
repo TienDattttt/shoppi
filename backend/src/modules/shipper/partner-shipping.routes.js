@@ -46,4 +46,11 @@ router.get('/shipments/:id', partnerShippingController.getShipmentById);
  */
 router.post('/shipments/:id/request-pickup', partnerShippingController.requestPickup);
 
+/**
+ * GET /api/partner/shipping/shipments/:id/label
+ * Get shipping label data for printing (includes barcode)
+ * Returns: tracking number, barcode data, addresses, etc.
+ */
+router.get('/shipments/:id/label', partnerShippingController.getShippingLabel);
+
 module.exports = router;

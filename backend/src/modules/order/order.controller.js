@@ -196,6 +196,20 @@ async function getPartnerOrders(req, res) {
 }
 
 /**
+ * Get partner's sub-order by ID
+ */
+async function getPartnerOrderById(req, res) {
+  try {
+    const partnerId = req.user.userId;
+    const { id } = req.params;
+    const order = await orderService.getPartnerOrderById(id, partnerId);
+    return successResponse(res, order, 'Order retrieved successfully');
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
  * Confirm order (Partner)
  */
 async function confirmOrder(req, res) {
@@ -464,6 +478,7 @@ module.exports = {
   
   // Partner
   getPartnerOrders,
+  getPartnerOrderById,
   confirmOrder,
   packOrder,
   cancelByPartner,

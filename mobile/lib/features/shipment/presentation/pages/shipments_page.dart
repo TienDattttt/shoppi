@@ -36,7 +36,7 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(
-          "My Shipments",
+          'Đơn hàng của tôi',
           style: GoogleFonts.plusJakartaSans(
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
@@ -52,25 +52,26 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
           indicatorWeight: 3,
           labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
           tabs: const [
-            Tab(text: "All"),
-            Tab(text: "Active"),
-            Tab(text: "Completed"), // Assuming 'DELIVERED' or 'CANCELLED'
+            Tab(text: 'Tất cả'),
+            Tab(text: 'Đang giao'),
+            Tab(text: 'Hoàn thành'),
           ],
         ),
       ),
       body: BlocBuilder<ShipmentListCubit, ShipmentListState>(
         builder: (context, state) {
            if (state is ShipmentListLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           } else if (state is ShipmentListError) {
              return Center(child: Column(
                mainAxisAlignment: MainAxisAlignment.center,
                children: [
-                 Text(state.message),
+                 Text(state.message, style: TextStyle(color: AppColors.textSecondary)),
                  const SizedBox(height: 16),
                  ElevatedButton(
                    onPressed: () => context.read<ShipmentListCubit>().fetchShipments(),
-                   child: const Text("Retry"),
+                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                   child: const Text('Thử lại', style: TextStyle(color: Colors.white)),
                  )
                ],
              ));
@@ -102,12 +103,13 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
           children: [
             Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textHint),
              const SizedBox(height: 16),
-             Text("No shipments found", style: TextStyle(color: AppColors.textSecondary)),
+             Text('Chưa có đơn hàng', style: TextStyle(color: AppColors.textSecondary)),
           ],
         ),
       );
     }
     return RefreshIndicator(
+      color: AppColors.primary,
       onRefresh: () async {
          context.read<ShipmentListCubit>().fetchShipments();
       },
@@ -125,3 +127,4 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
     );
   }
 }
+

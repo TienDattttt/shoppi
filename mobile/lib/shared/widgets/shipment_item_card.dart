@@ -12,42 +12,42 @@ class ShipmentItemCard extends StatelessWidget {
       case ShipmentStatus.created:
         bgColor = Colors.grey.shade100;
         textColor = Colors.grey.shade700;
-        text = 'Created';
+        text = 'Mới tạo';
         break;
       case ShipmentStatus.assigned:
         bgColor = Colors.blue.shade100;
         textColor = Colors.blue.shade700;
-        text = 'Assigned';
+        text = 'Đã nhận đơn';
         break;
       case ShipmentStatus.pickedUp:
         bgColor = Colors.orange.shade100;
         textColor = Colors.orange.shade700;
-        text = 'Picked Up';
+        text = 'Đã lấy hàng';
         break;
       case ShipmentStatus.delivering:
         bgColor = Colors.purple.shade100;
         textColor = Colors.purple.shade700;
-        text = 'Delivering';
+        text = 'Đang giao';
         break;
       case ShipmentStatus.delivered:
         bgColor = Colors.green.shade100;
         textColor = Colors.green.shade700;
-        text = 'Delivered';
+        text = 'Hoàn thành';
         break;
       case ShipmentStatus.failed:
         bgColor = Colors.red.shade100;
         textColor = Colors.red.shade700;
-        text = 'Failed';
+        text = 'Giao thất bại';
         break;
       case ShipmentStatus.returning:
-        bgColor = Colors.purple.shade100;
-        textColor = Colors.purple.shade700;
-        text = 'Returning';
+        bgColor = Colors.orange.shade100;
+        textColor = Colors.orange.shade700;
+        text = 'Đang trả hàng';
         break;
       case ShipmentStatus.returned:
         bgColor = Colors.indigo.shade100;
         textColor = Colors.indigo.shade700;
-        text = 'Returned';
+        text = 'Đã trả hàng';
         break;
     }
     

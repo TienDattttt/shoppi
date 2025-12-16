@@ -105,6 +105,64 @@ export default function OrderDetailPage() {
         };
     }, [id]);
 
+    // Auto-confirm payment when viewing order with pending_payment status and non-COD payment
+    // This handles the case where user navigates directly to order detail instead of going through /payment/success
+    // Only trigger if order was created more than 30 seconds ago (to avoid calling before user completes payment)
+    useEffect(() => {
+        let retryCount = 0;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        
+        const confirmPendingPayment = async () => {
+            if (!order || !id) return;
+            
+            // Check if order was created recently (within 30 seconds)
+            // If so, don't auto-confirm - user might still be on payment page
+            const orderCreatedAt = new Date(order.createdAt).getTime();
+            const now = Date.now();
+            const orderAgeSeconds = (now - orderCreatedAt) / 1000;
+            
+            if (orderAgeSeconds < 30) {
+                console.log('[OrderDetailPage] Order too new, skipping auto-confirm. Age:', orderAgeSeconds, 'seconds');
+                return;
+            }
+            
+            // Only confirm if:
+            // 1. Order status is pending_payment
+            // 2. Payment method is not COD (online payment)
+            // 3. Payment status is not already paid
+            if (
+                order.status === 'pending_payment' && 
+                order.paymentMethod !== 'cod' &&
+                order.paymentStatus !== 'paid'
+            ) {
+                console.log('[OrderDetailPage] Auto-confirming payment for order:', id, 'attempt:', retryCount + 1);
+                try {
+                    const result = await orderService.confirmPayment(id);
+                    console.log('[OrderDetailPage] Payment confirmation result:', result);
+                    
+                    if (result.paymentStatus === 'paid') {
+                        toast.success('Thanh toán đã được xác nhận thành công!');
+                        // Refresh order to get updated status
+                        fetchOrder();
+                    } else if (result.paymentStatus === 'pending' && retryCount < 3) {
+                        // Retry after delay for ZaloPay sandbox
+                        retryCount++;
+                        timeoutId = setTimeout(confirmPendingPayment, 3000);
+                    }
+                } catch (error) {
+                    console.error('[OrderDetailPage] Failed to confirm payment:', error);
+                    // Don't show error toast - payment might not be completed yet
+                }
+            }
+        };
+
+        confirmPendingPayment();
+        
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, [order?.id, order?.status, order?.paymentMethod, order?.paymentStatus]);
+
     // Fetch tracking data when selected shipment changes
     useEffect(() => {
         if (selectedShipmentId) {

@@ -16,44 +16,76 @@ class NotificationPage extends StatelessWidget {
       create: (context) => getIt<NotificationCubit>()..fetchNotifications(),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: Text("Notifications", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.transparent,
-          foregroundColor: AppColors.textPrimary,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        body: BlocBuilder<NotificationCubit, NotificationState>(
-          builder: (context, state) {
-            if (state is NotificationLoading) {
-              return const Center(child: CircularProgressIndicator());
-            } else if (state is NotificationError) {
-              return Center(child: Text(state.message));
-            } else if (state is NotificationLoaded) {
-              if (state.notifications.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+        body: Column(
+          children: [
+            // Header Gradient
+            Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.headerGradient,
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
                     children: [
-                      Icon(Icons.notifications_none, size: 64, color: AppColors.textHint),
-                      const SizedBox(height: 16),
-                      Text("No notifications", style: TextStyle(color: AppColors.textSecondary)),
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      Expanded(
+                        child: Text(
+                          "Thông báo",
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(width: 48), // Balance for back button
                     ],
                   ),
-                );
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: state.notifications.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final notification = state.notifications[index];
-                  return _buildNotificationItem(notification);
+                ),
+              ),
+            ),
+            // Content
+            Expanded(
+              child: BlocBuilder<NotificationCubit, NotificationState>(
+                builder: (context, state) {
+                  if (state is NotificationLoading) {
+                    return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                  } else if (state is NotificationError) {
+                    return Center(child: Text(state.message, style: const TextStyle(color: AppColors.error)));
+                  } else if (state is NotificationLoaded) {
+                    if (state.notifications.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_none, size: 64, color: AppColors.textHint),
+                            const SizedBox(height: 16),
+                            Text("Chưa có thông báo", style: TextStyle(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: state.notifications.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final notification = state.notifications[index];
+                        return _buildNotificationItem(notification);
+                      },
+                    );
+                  }
+                  return const SizedBox.shrink();
                 },
-              );
-            }
-            return const SizedBox.shrink();
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -62,7 +94,7 @@ class NotificationPage extends StatelessWidget {
   Widget _buildNotificationItem(NotificationEntity notification) {
     return Container(
       decoration: BoxDecoration(
-        color: notification.isRead ? Colors.white : Colors.white,
+        color: notification.isRead ? Colors.white : AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -82,7 +114,7 @@ class NotificationPage extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Icon(
-            Icons.notifications,
+            Icons.notifications_active,
             color: notification.isRead ? Colors.grey : AppColors.primary,
             size: 24,
           ),
@@ -108,9 +140,10 @@ class NotificationPage extends StatelessWidget {
           ],
         ),
         onTap: () {
-          // TODO: Mark as read and Navigate based on type
+          // TODO: Mark as read
         },
       ),
     );
   }
 }
+

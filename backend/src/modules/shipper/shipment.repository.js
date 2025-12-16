@@ -43,22 +43,17 @@ async function createShipment(data) {
  * @returns {Promise<Object|null>}
  */
 async function findShipmentById(shipmentId) {
+  // Avoid shipper join due to multiple relationships (shipper_id, pickup_shipper_id, delivery_shipper_id)
+  // Also avoid nested user join to prevent multiple relationship errors
   const { data, error } = await supabaseAdmin
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        vehicle_type,
-        vehicle_plate,
-        user:users(id, full_name, phone, avatar_url)
-      ),
       sub_order:sub_orders(
         id,
         order_id,
         shop_id,
-        total_amount,
-        order:orders(id, customer_id, customer:users(id, full_name, phone))
+        total
       )
     `)
     .eq('id', shipmentId)
@@ -68,7 +63,24 @@ async function findShipmentById(shipmentId) {
     throw new Error(`Failed to find shipment: ${error.message}`);
   }
 
-  return data || null;
+  if (!data) return null;
+
+  // Get shipper info separately if needed
+  if (data.shipper_id) {
+    const { data: shipper } = await supabaseAdmin
+      .from('shippers')
+      .select(`
+        id,
+        vehicle_type,
+        vehicle_plate,
+        user:users(id, full_name, phone, avatar_url)
+      `)
+      .eq('id', data.shipper_id)
+      .single();
+    data.shipper = shipper;
+  }
+
+  return data;
 }
 
 /**
@@ -79,15 +91,7 @@ async function findShipmentById(shipmentId) {
 async function findByTrackingNumber(trackingNumber) {
   const { data, error } = await supabaseAdmin
     .from('shipments')
-    .select(`
-      *,
-      shipper:shippers(
-        id,
-        vehicle_type,
-        vehicle_plate,
-        user:users(id, full_name, phone, avatar_url)
-      )
-    `)
+    .select('*')
     .eq('tracking_number', trackingNumber)
     .single();
 
@@ -95,7 +99,24 @@ async function findByTrackingNumber(trackingNumber) {
     throw new Error(`Failed to find shipment: ${error.message}`);
   }
 
-  return data || null;
+  if (!data) return null;
+
+  // Get shipper info separately if needed
+  if (data.shipper_id) {
+    const { data: shipper } = await supabaseAdmin
+      .from('shippers')
+      .select(`
+        id,
+        vehicle_type,
+        vehicle_plate,
+        user:users(id, full_name, phone, avatar_url)
+      `)
+      .eq('id', data.shipper_id)
+      .single();
+    data.shipper = shipper;
+  }
+
+  return data;
 }
 
 /**
@@ -160,7 +181,7 @@ async function findByShipperId(shipperId, options = {}) {
         id,
         order_id,
         shop_id,
-        total_amount
+        total
       )
     `, { count: 'exact' })
     .eq('shipper_id', shipperId);
@@ -194,10 +215,6 @@ async function findByStatus(status, options = {}) {
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        user:users(id, full_name, phone)
-      ),
       sub_order:sub_orders(
         id,
         order_id,
@@ -212,7 +229,20 @@ async function findByStatus(status, options = {}) {
     throw new Error(`Failed to find shipments: ${error.message}`);
   }
 
-  return { data: data || [], count: count || 0 };
+  // Get shipper info separately for each shipment
+  const enrichedData = await Promise.all((data || []).map(async (shipment) => {
+    if (shipment.shipper_id) {
+      const { data: shipper } = await supabaseAdmin
+        .from('shippers')
+        .select('id, user:users(id, full_name, phone)')
+        .eq('id', shipment.shipper_id)
+        .single();
+      shipment.shipper = shipper;
+    }
+    return shipment;
+  }));
+
+  return { data: enrichedData, count: count || 0 };
 }
 
 /**
@@ -238,8 +268,8 @@ async function findActiveByShipper(shipperId) {
         id,
         order_id,
         shop_id,
-        total_amount,
-        order:orders(id, customer_id, customer:users(id, full_name, phone))
+        total,
+        order:orders(id, user_id, customer:users(id, full_name, phone))
       )
     `)
     .eq('shipper_id', shipperId)
@@ -352,26 +382,17 @@ async function findByOrderId(orderId) {
 
   const subOrderIds = subOrders.map(so => so.id);
 
-  // Get all shipments for these sub-orders
+  // Get all shipments for these sub-orders (query separately to avoid multiple relationship error)
   const { data, error } = await supabaseAdmin
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        vehicle_type,
-        vehicle_plate,
-        avg_rating,
-        total_deliveries,
-        user:users(id, full_name, phone, avatar_url)
-      ),
       sub_order:sub_orders(
         id,
         order_id,
         shop_id,
-        total_amount,
-        status,
-        shops:shops(id, shop_name, logo_url)
+        total,
+        status
       )
     `)
     .in('sub_order_id', subOrderIds)
@@ -381,7 +402,43 @@ async function findByOrderId(orderId) {
     throw new Error(`Failed to find shipments: ${error.message}`);
   }
 
-  return data || [];
+  // Enrich with shop and shipper info separately to avoid multiple relationship errors
+  const enrichedData = await Promise.all((data || []).map(async (shipment) => {
+    // Get shop info separately
+    if (shipment.sub_order?.shop_id) {
+      const { data: shop } = await supabaseAdmin
+        .from('shops')
+        .select('id, shop_name, logo_url')
+        .eq('id', shipment.sub_order.shop_id)
+        .single();
+      if (shop) {
+        shipment.sub_order.shops = shop;
+      }
+    }
+    
+    // Get shipper info separately
+    if (shipment.shipper_id) {
+      const { data: shipper } = await supabaseAdmin
+        .from('shippers')
+        .select('id, user_id, vehicle_type, vehicle_plate, avg_rating, total_deliveries')
+        .eq('id', shipment.shipper_id)
+        .single();
+      
+      if (shipper) {
+        // Get user info for shipper separately (user_id is FK to users table)
+        const { data: user } = await supabaseAdmin
+          .from('users')
+          .select('id, full_name, phone, avatar_url')
+          .eq('id', shipper.user_id)
+          .single();
+        shipper.user = user;
+        shipment.shipper = shipper;
+      }
+    }
+    return shipment;
+  }));
+
+  return enrichedData;
 }
 
 module.exports = {

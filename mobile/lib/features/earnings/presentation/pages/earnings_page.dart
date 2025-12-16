@@ -16,17 +16,10 @@ class EarningsPage extends StatelessWidget {
       create: (context) => getIt<EarningsCubit>()..fetchEarnings(),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: Text("Earnings", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.transparent,
-          foregroundColor: AppColors.textPrimary,
-          elevation: 0,
-          centerTitle: true,
-        ),
         body: BlocBuilder<EarningsCubit, EarningsState>(
           builder: (context, state) {
             if (state is EarningsLoading) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
             } else if (state is EarningsError) {
               return Center(child: Text(state.message));
             } else if (state is EarningsLoaded) {
@@ -40,140 +33,179 @@ class EarningsPage extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context, EarningsEntity earnings) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Total Earnings Card
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4838D1), Color(0xFF2980B9)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF4838D1).withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    return CustomScrollView(
+      slivers: [
+        // Orange Header with earnings
+        SliverToBoxAdapter(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: AppColors.headerGradient,
             ),
-            child: Column(
-              children: [
-                const Text("Total Balance", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                const SizedBox(height: 8),
-                Text(
-                  "\$${earnings.totalEarnings.toStringAsFixed(2)}",
-                  style: GoogleFonts.plusJakartaSans(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                   children: [
-                    _buildBalanceItem("Withdrawable", "\$${earnings.paidBalance}", Colors.white),
-                    Container(height: 40, width: 1, color: Colors.white24),
-                    _buildBalanceItem("Pending (COD)", "\$${earnings.pendingBalance}", Colors.orangeAccent),
+                    Text(
+                      'Thu nhập của tôi',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Total Balance
+                    Text(
+                      'Tổng thu nhập',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${earnings.totalEarnings.toStringAsFixed(0)}đ',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Balance Row
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildBalanceItem('Có thể rút', '${earnings.paidBalance.toStringAsFixed(0)}đ', Icons.account_balance_wallet),
+                          Container(height: 40, width: 1, color: Colors.white30),
+                          _buildBalanceItem('Đang chờ', '${earnings.pendingBalance.toStringAsFixed(0)}đ', Icons.hourglass_empty),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
-                )
+                ),
+              ),
+            ),
+          ),
+        ),
+        
+        // Stats Cards
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverToBoxAdapter(
+            child: Row(
+              children: [
+                Expanded(child: _buildStatCard('Số chuyến', '${earnings.totalTrips}', Icons.local_shipping, AppColors.primary)),
+                const SizedBox(width: 12),
+                Expanded(child: _buildStatCard('Tỷ lệ thành công', '${(earnings.successRate * 100).toStringAsFixed(1)}%', Icons.check_circle, AppColors.success)),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          
-          // Stats Row
-          Row(
-            children: [
-              Expanded(child: _buildStatCard("Trips", "${earnings.totalTrips}", Icons.local_shipping, const Color(0xFF2980B9))),
-              const SizedBox(width: 16),
-              Expanded(child: _buildStatCard("Success Rate", "${(earnings.successRate * 100).toStringAsFixed(1)}%", Icons.check_circle, AppColors.success)),
-            ],
-          ),
-          
-          const SizedBox(height: 32),
-          Text("Weekly Overview", style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          
-          // Chart
-          Container(
-            height: 220,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: _getMaxY(earnings.weeklyChartData),
-                barGroups: earnings.weeklyChartData.asMap().entries.map((e) {
-                  return BarChartGroupData(
-                    x: e.key,
-                    barRods: [
-                      BarChartRodData(
-                        toY: e.value.amount,
-                        color: AppColors.primary,
-                        width: 12,
-                        borderRadius: BorderRadius.circular(4),
-                        backDrawRodData: BackgroundBarChartRodData(
-                          show: true,
-                          toY: _getMaxY(earnings.weeklyChartData),
-                          color: AppColors.background,
-                        ),
+        ),
+        
+        // Weekly Chart
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Thu nhập tuần này', style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                Container(
+                  height: 220,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
                     ],
-                  );
-                }).toList(),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        if (value.toInt() >= 0 && value.toInt() < earnings.weeklyChartData.length) {
-                           final date = earnings.weeklyChartData[value.toInt()].date;
-                           return Padding(
-                             padding: const EdgeInsets.only(top: 8.0),
-                             child: Text(
-                               "${date.day}/${date.month}",
-                               style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                             ),
-                           );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                      reservedSize: 30,
+                  ),
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: _getMaxY(earnings.weeklyChartData),
+                      barGroups: earnings.weeklyChartData.asMap().entries.map((e) {
+                        return BarChartGroupData(
+                          x: e.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: e.value.amount,
+                              color: AppColors.primary,
+                              width: 16,
+                              borderRadius: BorderRadius.circular(6),
+                              backDrawRodData: BackgroundBarChartRodData(
+                                show: true,
+                                toY: _getMaxY(earnings.weeklyChartData),
+                                color: AppColors.primarySoft,
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              if (value.toInt() >= 0 && value.toInt() < earnings.weeklyChartData.length) {
+                                final date = earnings.weeklyChartData[value.toInt()].date;
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text(
+                                    "${date.day}/${date.month}",
+                                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                            reservedSize: 30,
+                          ),
+                        ),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      gridData: const FlGridData(show: false),
                     ),
                   ),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
-                borderData: FlBorderData(show: false),
-                gridData: const FlGridData(show: false),
-              ),
+              ],
             ),
           ),
-          const SizedBox(height: 40),
-        ],
-      ),
+        ),
+        
+        // Bottom padding
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
     );
   }
 
-  Widget _buildBalanceItem(String label, String value, Color color) {
+  Widget _buildBalanceItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Text(value, style: GoogleFonts.plusJakartaSans(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
+        Icon(icon, color: Colors.white70, size: 20),
+        const SizedBox(height: 8),
+        Text(value, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
       ],
     );
   }
@@ -183,9 +215,9 @@ class EarningsPage extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -193,7 +225,7 @@ class EarningsPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 24),
@@ -211,3 +243,4 @@ class EarningsPage extends StatelessWidget {
     return data.map((e) => e.amount).reduce((a, b) => a > b ? a : b) * 1.2;
   }
 }
+

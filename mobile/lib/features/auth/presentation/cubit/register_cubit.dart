@@ -3,12 +3,94 @@ import 'package:injectable/injectable.dart';
 import '../../domain/entities/register_params.dart';
 import '../../domain/usecases/register_usecase.dart';
 import 'register_state.dart';
+import '../../domain/repositories/auth_repository.dart';
 
 @injectable
 class RegisterCubit extends Cubit<RegisterState> {
   final RegisterUseCase _registerUseCase;
+  final AuthRepository _authRepository;
 
-  RegisterCubit(this._registerUseCase) : super(RegisterInitial());
+  RegisterCubit(this._registerUseCase, this._authRepository) : super(RegisterInitial());
+
+  // ... existing code ...
+
+  Future<void> fetchProvinces() async {
+     RegisterStepUpdate currentState;
+     if (state is RegisterInitial) {
+       currentState = RegisterStepUpdate(currentStepIndex: _currentStep, params: _params);
+       emit(currentState);
+     } else if (state is RegisterStepUpdate) {
+       currentState = state as RegisterStepUpdate;
+     } else {
+       return;
+     }
+     
+     emit(currentState.copyWith(isLoadingProvinces: true));
+     
+     final result = await _authRepository.getProvinces();
+     
+     if (state is! RegisterStepUpdate) return;
+     
+     result.fold(
+       (failure) => emit((state as RegisterStepUpdate).copyWith(isLoadingProvinces: false)),
+       (provinces) => emit((state as RegisterStepUpdate).copyWith(
+         isLoadingProvinces: false, 
+         provinces: provinces,
+       )),
+     );
+  }
+
+  Future<void> fetchWards(String provinceCode) async {
+     RegisterStepUpdate currentState;
+     if (state is RegisterInitial) {
+       currentState = RegisterStepUpdate(currentStepIndex: _currentStep, params: _params);
+       emit(currentState);
+     } else if (state is RegisterStepUpdate) {
+       currentState = state as RegisterStepUpdate;
+     } else {
+       return;
+     }
+     
+     emit(currentState.copyWith(isLoadingWards: true, wards: [], postOffices: [])); 
+     
+     final result = await _authRepository.getWards(provinceCode);
+     
+     if (state is! RegisterStepUpdate) return;
+     
+     result.fold(
+       (failure) => emit((state as RegisterStepUpdate).copyWith(isLoadingWards: false)),
+       (wards) => emit((state as RegisterStepUpdate).copyWith(
+         isLoadingWards: false, 
+         wards: wards,
+       )),
+     );
+  }
+
+  Future<void> fetchPostOffices(String wardCode) async {
+     RegisterStepUpdate currentState;
+     if (state is RegisterInitial) {
+       currentState = RegisterStepUpdate(currentStepIndex: _currentStep, params: _params);
+       emit(currentState);
+     } else if (state is RegisterStepUpdate) {
+       currentState = state as RegisterStepUpdate;
+     } else {
+       return;
+     }
+     
+     emit(currentState.copyWith(isLoadingPostOffices: true, postOffices: []));
+     
+     final result = await _authRepository.getPostOffices(wardCode);
+     
+     if (state is! RegisterStepUpdate) return;
+     
+     result.fold(
+       (failure) => emit((state as RegisterStepUpdate).copyWith(isLoadingPostOffices: false)),
+       (postOffices) => emit((state as RegisterStepUpdate).copyWith(
+         isLoadingPostOffices: false, 
+         postOffices: postOffices,
+       )),
+     );
+  }
 
   int _currentStep = 0;
   RegisterParams _params = const RegisterParams(
@@ -106,6 +188,9 @@ class RegisterCubit extends Cubit<RegisterState> {
     required String city,
     required List<String> districts,
     required int maxDistance,
+    String? postOfficeId,
+    String? provinceCode,
+    String? wardCode,
   }) async {
     emit(RegisterSubmitting());
     
@@ -126,6 +211,9 @@ class RegisterCubit extends Cubit<RegisterState> {
       districts: districts,
       maxDistance: maxDistance.toDouble(),
       workingArea: city,
+      postOfficeId: postOfficeId,
+      provinceCode: provinceCode,
+      wardCode: wardCode,
     );
     
     final result = await _registerUseCase(params);

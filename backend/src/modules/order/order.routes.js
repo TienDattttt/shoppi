@@ -39,6 +39,7 @@ partnerOrderRouter.use(authenticate);
 partnerOrderRouter.use(authorize('partner'));
 
 partnerOrderRouter.get('/', orderController.getPartnerOrders);
+partnerOrderRouter.get('/:id', orderController.getPartnerOrderById);
 partnerOrderRouter.post('/:id/confirm', orderController.confirmOrder);
 partnerOrderRouter.post('/:id/pack', orderController.packOrder);
 partnerOrderRouter.post('/:id/cancel', orderController.cancelByPartner);

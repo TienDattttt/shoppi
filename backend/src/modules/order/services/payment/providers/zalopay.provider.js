@@ -238,6 +238,9 @@ class ZaloPayProvider extends BasePaymentProvider {
       mac,
     };
 
+    console.log('[ZaloPay] Query status for:', { paymentId, providerOrderId });
+    console.log('[ZaloPay] Query request:', requestBody);
+
     try {
       const response = await this.makeRequest(`${this.baseUrl}/query`, {
         method: 'POST',
@@ -247,12 +250,16 @@ class ZaloPayProvider extends BasePaymentProvider {
         body: new URLSearchParams(requestBody).toString(),
       });
 
+      console.log('[ZaloPay] Query response:', response);
+
       const isSuccess = response.return_code === ZALOPAY_RETURN_CODES.SUCCESS;
       const isPending = response.return_code === ZALOPAY_RETURN_CODES.PROCESSING;
 
       let status = PAYMENT_STATUS.FAILED;
       if (isSuccess) status = PAYMENT_STATUS.PAID;
       else if (isPending) status = PAYMENT_STATUS.PENDING;
+
+      console.log('[ZaloPay] Parsed status:', { isSuccess, isPending, status });
 
       return {
         success: isSuccess,
@@ -265,6 +272,7 @@ class ZaloPayProvider extends BasePaymentProvider {
         errorMessage: isSuccess ? null : response.return_message,
       };
     } catch (error) {
+      console.error('[ZaloPay] Query error:', error.message);
       this.logEvent('getStatus:error', { error: error.message });
       throw error;
     }

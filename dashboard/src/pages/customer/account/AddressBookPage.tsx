@@ -1,16 +1,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Plus, Loader2, Trash2, Edit2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { addressService, type Address, type CreateAddressData } from "@/services/address.service";
+import { addressService } from "@/services/address.service";
+import type { Address } from "@/services/address.service";
+import { AddressFormModal } from "@/components/common/AddressFormModal";
 import { toast } from "sonner";
 
 export default function AddressBookPage() {
@@ -18,18 +12,7 @@ export default function AddressBookPage() {
     const [loading, setLoading] = useState(true);
     const [showDialog, setShowDialog] = useState(false);
     const [editingAddress, setEditingAddress] = useState<Address | null>(null);
-    const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
-    
-    const [formData, setFormData] = useState<CreateAddressData>({
-        name: "",
-        phone: "",
-        addressLine: "",
-        province: "",
-        district: "",
-        ward: "",
-        isDefault: false,
-    });
 
     const fetchAddresses = async () => {
         try {
@@ -48,75 +31,19 @@ export default function AddressBookPage() {
         fetchAddresses();
     }, []);
 
-    const resetForm = () => {
-        setFormData({
-            name: "",
-            phone: "",
-            addressLine: "",
-            province: "",
-            district: "",
-            ward: "",
-            isDefault: false,
-        });
-        setEditingAddress(null);
-    };
-
     const handleOpenAdd = () => {
-        resetForm();
+        setEditingAddress(null);
         setShowDialog(true);
     };
 
     const handleOpenEdit = (address: Address) => {
         setEditingAddress(address);
-        setFormData({
-            name: address.name,
-            phone: address.phone,
-            addressLine: address.addressLine,
-            province: address.province || "",
-            district: address.district || "",
-            ward: address.ward || "",
-            isDefault: address.isDefault,
-        });
         setShowDialog(true);
     };
 
-    const handleSave = async () => {
-        if (!formData.name || !formData.phone || !formData.addressLine) {
-            toast.error("Vui lòng điền đầy đủ thông tin");
-            return;
-        }
-
-        try {
-            setSaving(true);
-            const fullAddress = [
-                formData.addressLine,
-                formData.ward,
-                formData.district,
-                formData.province
-            ].filter(Boolean).join(", ");
-
-            if (editingAddress) {
-                await addressService.updateAddress(editingAddress.id, {
-                    ...formData,
-                    fullAddress,
-                });
-                toast.success("Cập nhật địa chỉ thành công");
-            } else {
-                await addressService.createAddress({
-                    ...formData,
-                    fullAddress,
-                });
-                toast.success("Thêm địa chỉ thành công");
-            }
-            
-            setShowDialog(false);
-            resetForm();
-            fetchAddresses();
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Không thể lưu địa chỉ");
-        } finally {
-            setSaving(false);
-        }
+    const handleAddressSuccess = async () => {
+        await fetchAddresses();
+        setEditingAddress(null);
     };
 
     const handleDelete = async (id: string) => {
@@ -226,93 +153,17 @@ export default function AddressBookPage() {
                 </div>
             )}
 
-            {/* Add/Edit Dialog */}
-            <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>{editingAddress ? "Sửa địa chỉ" : "Thêm địa chỉ mới"}</DialogTitle>
-                    </DialogHeader>
-                    
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label>Họ tên</Label>
-                                <Input
-                                    placeholder="Nguyễn Văn A"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <Label>Số điện thoại</Label>
-                                <Input
-                                    placeholder="0912345678"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <Label>Tỉnh/Thành phố</Label>
-                                <Input
-                                    placeholder="Hà Nội"
-                                    value={formData.province}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, province: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <Label>Quận/Huyện</Label>
-                                <Input
-                                    placeholder="Hai Bà Trưng"
-                                    value={formData.district}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, district: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <Label>Phường/Xã</Label>
-                                <Input
-                                    placeholder="Bách Khoa"
-                                    value={formData.ward}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, ward: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <Label>Địa chỉ cụ thể</Label>
-                            <Input
-                                placeholder="Số 1, Đại Cồ Việt"
-                                value={formData.addressLine}
-                                onChange={(e) => setFormData(prev => ({ ...prev, addressLine: e.target.value }))}
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="isDefault"
-                                checked={formData.isDefault}
-                                onChange={(e) => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
-                            />
-                            <Label htmlFor="isDefault" className="cursor-pointer">Đặt làm địa chỉ mặc định</Label>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 mt-4">
-                        <Button variant="outline" onClick={() => setShowDialog(false)}>Hủy</Button>
-                        <Button 
-                            className="bg-shopee-orange hover:bg-shopee-orange-hover text-white" 
-                            onClick={handleSave}
-                            disabled={saving}
-                        >
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            {editingAddress ? "Cập nhật" : "Thêm địa chỉ"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* Add/Edit Address Modal with Goong Autocomplete */}
+            <AddressFormModal
+                open={showDialog}
+                onOpenChange={(open) => {
+                    setShowDialog(open);
+                    if (!open) setEditingAddress(null);
+                }}
+                onSuccess={handleAddressSuccess}
+                editAddress={editingAddress}
+                title="Thêm địa chỉ mới"
+            />
         </div>
     );
 }

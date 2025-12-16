@@ -212,4 +212,18 @@ export const orderService = {
         const response = await api.post(`/partner/orders/${subOrderId}/cancel`, { reason });
         return response.data;
     },
+
+    // Get partner's sub-order by ID
+    getPartnerOrderById: async (subOrderId: string): Promise<SubOrder> => {
+        const response = await api.get(`/partner/orders/${subOrderId}`);
+        return response.data;
+    },
+
+    // ==================== ADMIN ORDER FUNCTIONS ====================
+
+    // Get admin order by ID
+    getAdminOrderById: async (orderId: string): Promise<any> => {
+        const response = await api.get(`/admin/orders/${orderId}`);
+        return response.data;
+    },
 };
