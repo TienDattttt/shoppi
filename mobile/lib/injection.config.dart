@@ -20,7 +20,7 @@ import 'core/network/auth_interceptor.dart' as _i8;
 import 'core/network/network_info.dart' as _i75;
 import 'core/offline/offline_sync_service.dart' as _i811;
 import 'core/services/notification_service.dart' as _i1011;
-import 'core/services/photo_upload_service.dart' as _i1012;
+import 'core/services/photo_upload_service.dart' as _i388;
 import 'features/auth/data/datasources/auth_local_data_source.dart' as _i791;
 import 'features/auth/data/datasources/auth_remote_data_source.dart' as _i767;
 import 'features/auth/data/repositories/auth_repository_impl.dart' as _i111;
@@ -109,12 +109,8 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i831.LocaleCubit>(() => _i831.LocaleCubit());
     gh.lazySingleton<_i511.SettingsCubit>(() => _i511.SettingsCubit());
     gh.lazySingleton<_i561.ThemeCubit>(() => _i561.ThemeCubit());
-    gh.lazySingleton<_i1011.NotificationService>(
-        () => _i1011.NotificationServiceImpl(gh<_i871.ApiClient>()));
-    gh.lazySingleton<_i1012.PhotoUploadService>(
-        () => _i1012.PhotoUploadServiceImpl(gh<_i361.Dio>()));
-    gh.lazySingleton<_i851.UpdateProfileUseCase>(
-        () => _i851.UpdateProfileUseCase(gh<_i626.ProfileRepository>()));
+    gh.lazySingleton<_i388.PhotoUploadService>(
+        () => _i388.PhotoUploadServiceImpl(gh<_i361.Dio>()));
     gh.factory<_i8.AuthInterceptor>(
         () => _i8.AuthInterceptor(gh<_i558.FlutterSecureStorage>()));
     gh.lazySingleton<_i791.AuthLocalDataSource>(
@@ -135,12 +131,10 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i151.EarningsRemoteDataSourceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i767.AuthRemoteDataSource>(
         () => _i767.AuthRemoteDataSourceImpl(gh<_i871.ApiClient>()));
-    gh.lazySingleton<_i55.LocationRepository>(
-        () => _i1061.LocationRepositoryImpl(
-              gh<_i268.LocationDataSource>(),
-            ));
     gh.lazySingleton<_i316.NotificationRemoteDataSource>(
         () => _i316.NotificationRemoteDataSourceImpl(gh<_i871.ApiClient>()));
+    gh.lazySingleton<_i1011.NotificationService>(
+        () => _i1011.NotificationServiceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i828.ShipmentRemoteDataSource>(
         () => _i828.ShipmentRemoteDataSourceImpl(gh<_i871.ApiClient>()));
     gh.lazySingleton<_i337.DashboardRepository>(
@@ -150,10 +144,10 @@ extension GetItInjectableX on _i174.GetIt {
             ));
     gh.lazySingleton<_i509.GetDashboardStatsUseCase>(
         () => _i509.GetDashboardStatsUseCase(gh<_i337.DashboardRepository>()));
-    gh.factory<_i793.LocationCubit>(
-        () => _i793.LocationCubit(gh<_i55.LocationRepository>()));
     gh.lazySingleton<_i336.ProfileRemoteDataSource>(
         () => _i336.ProfileRemoteDataSourceImpl(gh<_i871.ApiClient>()));
+    gh.lazySingleton<_i55.LocationRepository>(
+        () => _i1061.LocationRepositoryImpl(gh<_i268.LocationDataSource>()));
     gh.lazySingleton<_i620.NotificationRepository>(
         () => _i940.NotificationRepositoryImpl(
               gh<_i316.NotificationRemoteDataSource>(),
@@ -191,21 +185,20 @@ extension GetItInjectableX on _i174.GetIt {
           gh<_i823.MarkDeliveredUseCase>(),
           gh<_i527.MarkFailedUseCase>(),
         ));
-    gh.factory<_i336.OnlineStatusCubit>(() => _i336.OnlineStatusCubit(
-          gh<_i871.ApiClient>(),
-          gh<_i793.LocationCubit>(),
-        ));
     gh.factory<_i980.ShipmentListCubit>(
         () => _i980.ShipmentListCubit(gh<_i930.GetActiveShipmentsUseCase>()));
-    gh.lazySingleton<_i277.ProfileRepositoryImpl>(
-        () => _i277.ProfileRepositoryImpl(
-              gh<_i336.ProfileRemoteDataSource>(),
-              gh<_i75.NetworkInfo>(),
-            ));
+    gh.lazySingleton<_i626.ProfileRepository>(() => _i277.ProfileRepositoryImpl(
+          gh<_i336.ProfileRemoteDataSource>(),
+          gh<_i75.NetworkInfo>(),
+        ));
+    gh.factory<_i793.LocationCubit>(
+        () => _i793.LocationCubit(gh<_i55.LocationRepository>()));
     gh.lazySingleton<_i65.GetNotificationsUseCase>(
         () => _i65.GetNotificationsUseCase(gh<_i620.NotificationRepository>()));
     gh.lazySingleton<_i645.RegisterDeviceTokenUseCase>(() =>
         _i645.RegisterDeviceTokenUseCase(gh<_i620.NotificationRepository>()));
+    gh.lazySingleton<_i851.UpdateProfileUseCase>(
+        () => _i851.UpdateProfileUseCase(gh<_i626.ProfileRepository>()));
     gh.lazySingleton<_i807.GetEarningsStatsUseCase>(
         () => _i807.GetEarningsStatsUseCase(gh<_i756.EarningsRepository>()));
     gh.lazySingleton<_i250.GetCurrentShipperUseCase>(
@@ -222,12 +215,18 @@ extension GetItInjectableX on _i174.GetIt {
         ));
     gh.factory<_i823.EarningsCubit>(
         () => _i823.EarningsCubit(gh<_i807.GetEarningsStatsUseCase>()));
+    gh.factory<_i336.OnlineStatusCubit>(() => _i336.OnlineStatusCubit(
+          gh<_i871.ApiClient>(),
+          gh<_i793.LocationCubit>(),
+        ));
     gh.factory<_i363.AuthBloc>(() => _i363.AuthBloc(
           gh<_i206.LoginUseCase>(),
           gh<_i250.GetCurrentShipperUseCase>(),
         ));
-    gh.factory<_i622.RegisterCubit>(
-        () => _i622.RegisterCubit(gh<_i693.RegisterUseCase>()));
+    gh.factory<_i622.RegisterCubit>(() => _i622.RegisterCubit(
+          gh<_i693.RegisterUseCase>(),
+          gh<_i1015.AuthRepository>(),
+        ));
     return this;
   }
 }

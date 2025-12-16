@@ -15,8 +15,9 @@ export default function OrderDetail() {
     const [order, setOrder] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    // Check if we're in admin context
+    // Check context based on URL path
     const isAdmin = location.pathname.startsWith('/admin');
+    const isPartner = location.pathname.startsWith('/partner');
 
     useEffect(() => {
         if (id) loadOrder(id);
@@ -25,10 +26,17 @@ export default function OrderDetail() {
     const loadOrder = async (orderId: string) => {
         setLoading(true);
         try {
-            // Use admin endpoint if in admin context
-            const response = isAdmin 
-                ? await orderService.getAdminOrderById(orderId)
-                : await orderService.getOrderById(orderId);
+            let response;
+            
+            // Use appropriate endpoint based on context
+            if (isAdmin) {
+                response = await orderService.getAdminOrderById(orderId);
+            } else if (isPartner) {
+                response = await orderService.getPartnerOrderById(orderId);
+            } else {
+                response = await orderService.getOrderById(orderId);
+            }
+            
             const data = response?.data || response;
             
             // Transform admin response to match expected format
@@ -57,9 +65,35 @@ export default function OrderDetail() {
                 data.createdAt = new Date(data.created_at).toLocaleDateString('vi-VN');
             }
             
+            // Transform partner response to match expected format
+            if (data && isPartner) {
+                // Partner gets sub-order data, transform to expected format
+                data.order_products = (data.items || []).map((item: any) => ({
+                    product_name: item.productName,
+                    product_thumb: item.imageUrl || '',
+                    product_price: item.unitPrice,
+                    product_quantity: item.quantity
+                }));
+                data.order_status = data.status;
+                data.order_checkout = { 
+                    totalPrice: data.total || data.subtotal,
+                    shippingFee: data.shippingFee || 0
+                };
+                data.order_shipping = {
+                    fullName: data.order?.shippingName,
+                    phone: data.order?.shippingPhone,
+                    address: data.order?.shippingAddress
+                };
+                data.userName = data.order?.shippingName;
+                data.userPhone = data.order?.shippingPhone;
+                data.payment_method = data.order?.paymentMethod;
+                data.grand_total = data.total + (data.shippingFee || 0);
+                data.createdAt = data.createdAt ? new Date(data.createdAt).toLocaleDateString('vi-VN') : '';
+            }
+            
             setOrder(data);
         } catch (error) {
-            toast.error("Failed to load order");
+            toast.error("Không thể tải thông tin đơn hàng");
         } finally {
             setLoading(false);
         }

@@ -33,9 +33,9 @@ class _SplashPageState extends State<SplashPage> {
             context.go('/pending-approval');
           } else if (shipper.status == 'suspended') {
             // Account suspended - show message and go to login
-            ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Your account has been suspended. Please contact support.'),
+                content: Text('Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ hỗ trợ.'),
                 backgroundColor: Colors.red,
               ),
             );

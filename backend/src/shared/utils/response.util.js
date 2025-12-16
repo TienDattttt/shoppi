@@ -94,6 +94,15 @@ function sendNotFound(res, message = 'Resource not found') {
 }
 
 /**
+ * Send bad request response
+ * @param {import('express').Response} res
+ * @param {string} message
+ */
+function sendBadRequest(res, message = 'Bad request') {
+  return sendError(res, 'BAD_REQUEST', message, 400);
+}
+
+/**
  * Send conflict response
  * @param {import('express').Response} res
  * @param {string} code
@@ -121,6 +130,7 @@ module.exports = {
   sendUnauthorized,
   sendForbidden,
   sendNotFound,
+  sendBadRequest,
   sendConflict,
   sendRateLimited,
 };

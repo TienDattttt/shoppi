@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { MapPin, Plus, Loader2 } from "lucide-react";
+import { MapPin, Plus, Loader2, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
     Dialog,
@@ -10,8 +9,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { addressService, type Address, type CreateAddressData } from "@/services/address.service";
-import { toast } from "sonner";
+import { addressService } from "@/services/address.service";
+import type { Address } from "@/services/address.service";
+import { AddressFormModal } from "@/components/common/AddressFormModal";
 
 interface AddressSectionProps {
     selectedAddressId?: string;
@@ -24,18 +24,7 @@ export function AddressSection({ selectedAddressId, onAddressChange }: AddressSe
     const [showDialog, setShowDialog] = useState(false);
     const [showAddDialog, setShowAddDialog] = useState(false);
     const [tempSelected, setTempSelected] = useState(selectedAddressId || "");
-    const [saving, setSaving] = useState(false);
-    
-    // New address form
-    const [newAddress, setNewAddress] = useState<CreateAddressData>({
-        name: "",
-        phone: "",
-        addressLine: "",
-        province: "",
-        district: "",
-        ward: "",
-        isDefault: false,
-    });
+    const [editingAddress, setEditingAddress] = useState<Address | null>(null);
 
     const fetchAddresses = async () => {
         try {
@@ -68,46 +57,10 @@ export function AddressSection({ selectedAddressId, onAddressChange }: AddressSe
         setShowDialog(false);
     };
 
-    const handleAddAddress = async () => {
-        if (!newAddress.name || !newAddress.phone || !newAddress.addressLine) {
-            toast.error("Vui lòng điền đầy đủ thông tin");
-            return;
-        }
-
-        try {
-            setSaving(true);
-            const fullAddress = [
-                newAddress.addressLine,
-                newAddress.ward,
-                newAddress.district,
-                newAddress.province
-            ].filter(Boolean).join(", ");
-
-            const created = await addressService.createAddress({
-                ...newAddress,
-                fullAddress,
-            });
-            
-            toast.success("Thêm địa chỉ thành công");
-            setShowAddDialog(false);
-            setNewAddress({
-                name: "",
-                phone: "",
-                addressLine: "",
-                province: "",
-                district: "",
-                ward: "",
-                isDefault: false,
-            });
-            
-            // Refresh and select new address
-            await fetchAddresses();
-            onAddressChange?.(created.id);
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Không thể thêm địa chỉ");
-        } finally {
-            setSaving(false);
-        }
+    const handleAddressSuccess = async (address: Address) => {
+        await fetchAddresses();
+        onAddressChange?.(address.id);
+        setEditingAddress(null);
     };
 
     if (loading) {
@@ -185,6 +138,19 @@ export function AddressSection({ selectedAddressId, onAddressChange }: AddressSe
                                             )}
                                         </Label>
                                     </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-blue-500 hover:text-blue-600"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingAddress(addr);
+                                            setShowDialog(false);
+                                            setShowAddDialog(true);
+                                        }}
+                                    >
+                                        <Edit2 className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
                         ))}
@@ -210,93 +176,17 @@ export function AddressSection({ selectedAddressId, onAddressChange }: AddressSe
                 </DialogContent>
             </Dialog>
 
-            {/* Add Address Dialog */}
-            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Thêm địa chỉ mới</DialogTitle>
-                    </DialogHeader>
-                    
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label>Họ tên</Label>
-                                <Input
-                                    placeholder="Nguyễn Văn A"
-                                    value={newAddress.name}
-                                    onChange={(e) => setNewAddress(prev => ({ ...prev, name: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <Label>Số điện thoại</Label>
-                                <Input
-                                    placeholder="0912345678"
-                                    value={newAddress.phone}
-                                    onChange={(e) => setNewAddress(prev => ({ ...prev, phone: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <Label>Tỉnh/Thành phố</Label>
-                                <Input
-                                    placeholder="Hà Nội"
-                                    value={newAddress.province}
-                                    onChange={(e) => setNewAddress(prev => ({ ...prev, province: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <Label>Quận/Huyện</Label>
-                                <Input
-                                    placeholder="Hai Bà Trưng"
-                                    value={newAddress.district}
-                                    onChange={(e) => setNewAddress(prev => ({ ...prev, district: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <Label>Phường/Xã</Label>
-                                <Input
-                                    placeholder="Bách Khoa"
-                                    value={newAddress.ward}
-                                    onChange={(e) => setNewAddress(prev => ({ ...prev, ward: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <Label>Địa chỉ cụ thể</Label>
-                            <Input
-                                placeholder="Số 1, Đại Cồ Việt"
-                                value={newAddress.addressLine}
-                                onChange={(e) => setNewAddress(prev => ({ ...prev, addressLine: e.target.value }))}
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="isDefault"
-                                checked={newAddress.isDefault}
-                                onChange={(e) => setNewAddress(prev => ({ ...prev, isDefault: e.target.checked }))}
-                            />
-                            <Label htmlFor="isDefault" className="cursor-pointer">Đặt làm địa chỉ mặc định</Label>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 mt-4">
-                        <Button variant="outline" onClick={() => setShowAddDialog(false)}>Hủy</Button>
-                        <Button 
-                            className="bg-shopee-orange hover:bg-shopee-orange-hover text-white" 
-                            onClick={handleAddAddress}
-                            disabled={saving}
-                        >
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Thêm địa chỉ
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* Add/Edit Address Modal with Goong Autocomplete */}
+            <AddressFormModal
+                open={showAddDialog}
+                onOpenChange={(open) => {
+                    setShowAddDialog(open);
+                    if (!open) setEditingAddress(null);
+                }}
+                onSuccess={handleAddressSuccess}
+                editAddress={editingAddress}
+                title="Thêm địa chỉ mới"
+            />
         </div>
     );
 }

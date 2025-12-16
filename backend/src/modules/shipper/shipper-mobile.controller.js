@@ -872,7 +872,418 @@ module.exports = {
   getDashboard,
   getStatistics,
   
+  // Barcode scan endpoints
+  scanPickup,
+  scanDelivery,
+  validateBarcode,
+  batchScanPickup,
+  
   // Export for testing
   FAILURE_REASONS,
   SHIPPER_STATUS_TRANSITIONS,
 };
+
+
+// ============================================
+// BARCODE SCAN ENDPOINTS (Pickup & Delivery)
+// ============================================
+
+/**
+ * Scan barcode to pickup shipment
+ * POST /api/shipper/shipments/scan/pickup
+ * 
+ * Body:
+ * - trackingNumber: string (required) - Scanned barcode/tracking number
+ * - location: { lat, lng } (optional)
+ * 
+ * Flow:
+ * 1. Shipper scans barcode on package at shop
+ * 2. System validates: Is tracking number valid? Is it assigned to this shipper?
+ * 3. System updates status: assigned -> picked_up
+ * 4. Returns shipment details for confirmation
+ */
+async function scanPickup(req, res) {
+  try {
+    const { trackingNumber, location } = req.body;
+    
+    if (!trackingNumber) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'Tracking number is required',
+        status: 400,
+      });
+    }
+    
+    // Get shipper profile
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    
+    // Find shipment by tracking number
+    const shipment = await shipmentService.getByTrackingNumber(trackingNumber);
+    
+    if (!shipment) {
+      return errorResponse(res, {
+        code: 'SHIPMENT_NOT_FOUND',
+        message: 'Mã vận đơn không tồn tại trong hệ thống',
+        status: 404,
+      });
+    }
+    
+    // Verify shipper is assigned to this shipment
+    if (shipment.shipper_id !== shipper.id) {
+      return errorResponse(res, {
+        code: 'NOT_ASSIGNED',
+        message: 'Đơn hàng này không được phân công cho bạn',
+        status: 403,
+      });
+    }
+    
+    // Verify shipment status is 'assigned' (ready for pickup)
+    if (shipment.status !== 'assigned') {
+      const statusMessages = {
+        'picked_up': 'Đơn hàng này đã được lấy rồi',
+        'delivering': 'Đơn hàng này đang được giao',
+        'delivered': 'Đơn hàng này đã giao thành công',
+        'failed': 'Đơn hàng này đã giao thất bại',
+        'cancelled': 'Đơn hàng này đã bị hủy',
+      };
+      return errorResponse(res, {
+        code: 'INVALID_STATUS',
+        message: statusMessages[shipment.status] || `Không thể lấy hàng với trạng thái: ${shipment.status}`,
+        status: 400,
+      });
+    }
+    
+    // Update location if provided
+    if (location && location.lat && location.lng) {
+      try {
+        await locationService.updateLocation(
+          shipper.id,
+          parseFloat(location.lat),
+          parseFloat(location.lng),
+          { shipmentId: shipment.id }
+        );
+      } catch (locError) {
+        console.error('Failed to update location:', locError.message);
+      }
+    }
+    
+    // Mark as picked up
+    const updatedShipment = await shipmentService.markPickedUp(shipment.id, shipper.id);
+    
+    // Get full shipment details
+    const fullShipment = await shipmentService.getShipmentById(shipment.id);
+    
+    return sendSuccess(res, {
+      message: 'Đã xác nhận lấy hàng thành công',
+      data: {
+        shipment: toShipperMobileShipmentResponse(fullShipment),
+        scannedAt: new Date().toISOString(),
+        action: 'pickup',
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Scan barcode to deliver shipment
+ * POST /api/shipper/shipments/scan/delivery
+ * 
+ * Body:
+ * - trackingNumber: string (required) - Scanned barcode/tracking number
+ * - photoUrl: string (required) - Proof of delivery photo
+ * - signatureUrl: string (optional) - Customer signature
+ * - codCollected: boolean (required for COD orders)
+ * - location: { lat, lng } (optional)
+ * 
+ * Flow:
+ * 1. Shipper scans barcode at customer's address
+ * 2. System validates: Is tracking number valid? Is it assigned to this shipper? Is status correct?
+ * 3. Shipper uploads photo proof + confirms COD collection (if applicable)
+ * 4. System updates status: delivering -> delivered
+ */
+async function scanDelivery(req, res) {
+  try {
+    const { trackingNumber, photoUrl, signatureUrl, codCollected, location } = req.body;
+    
+    if (!trackingNumber) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'Tracking number is required',
+        status: 400,
+      });
+    }
+    
+    if (!photoUrl) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'Ảnh xác nhận giao hàng là bắt buộc',
+        status: 400,
+      });
+    }
+    
+    // Get shipper profile
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    
+    // Find shipment by tracking number
+    const shipment = await shipmentService.getByTrackingNumber(trackingNumber);
+    
+    if (!shipment) {
+      return errorResponse(res, {
+        code: 'SHIPMENT_NOT_FOUND',
+        message: 'Mã vận đơn không tồn tại trong hệ thống',
+        status: 404,
+      });
+    }
+    
+    // Verify shipper is assigned to this shipment
+    if (shipment.shipper_id !== shipper.id) {
+      return errorResponse(res, {
+        code: 'NOT_ASSIGNED',
+        message: 'Đơn hàng này không được phân công cho bạn',
+        status: 403,
+      });
+    }
+    
+    // Verify shipment status is 'delivering' (ready for delivery confirmation)
+    if (shipment.status !== 'delivering') {
+      const statusMessages = {
+        'assigned': 'Bạn cần lấy hàng trước khi giao',
+        'picked_up': 'Bạn cần bắt đầu giao hàng trước',
+        'delivered': 'Đơn hàng này đã giao thành công rồi',
+        'failed': 'Đơn hàng này đã giao thất bại',
+        'cancelled': 'Đơn hàng này đã bị hủy',
+      };
+      return errorResponse(res, {
+        code: 'INVALID_STATUS',
+        message: statusMessages[shipment.status] || `Không thể xác nhận giao với trạng thái: ${shipment.status}`,
+        status: 400,
+      });
+    }
+    
+    // Check COD collection for COD orders
+    const codAmount = parseFloat(shipment.cod_amount || 0);
+    if (codAmount > 0 && codCollected !== true) {
+      return errorResponse(res, {
+        code: 'COD_NOT_CONFIRMED',
+        message: `Vui lòng xác nhận đã thu tiền COD: ${codAmount.toLocaleString('vi-VN')}đ`,
+        status: 400,
+      });
+    }
+    
+    // Update location if provided
+    if (location && location.lat && location.lng) {
+      try {
+        await locationService.updateLocation(
+          shipper.id,
+          parseFloat(location.lat),
+          parseFloat(location.lng),
+          { shipmentId: shipment.id }
+        );
+      } catch (locError) {
+        console.error('Failed to update location:', locError.message);
+      }
+    }
+    
+    // Mark as delivered
+    const updatedShipment = await shipmentService.markDelivered(shipment.id, shipper.id, {
+      photoUrl,
+      signatureUrl,
+      codCollected,
+    });
+    
+    // Get full shipment details
+    const fullShipment = await shipmentService.getShipmentById(shipment.id);
+    
+    return sendSuccess(res, {
+      message: 'Đã xác nhận giao hàng thành công',
+      data: {
+        shipment: toShipperMobileShipmentResponse(fullShipment),
+        scannedAt: new Date().toISOString(),
+        action: 'delivery',
+        codCollected: codAmount > 0 ? codAmount : null,
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Validate barcode/tracking number without updating status
+ * POST /api/shipper/shipments/scan/validate
+ * 
+ * Body:
+ * - trackingNumber: string (required)
+ * 
+ * Returns shipment info if valid and assigned to shipper
+ * Useful for preview before confirming pickup/delivery
+ */
+async function validateBarcode(req, res) {
+  try {
+    const { trackingNumber } = req.body;
+    
+    if (!trackingNumber) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'Tracking number is required',
+        status: 400,
+      });
+    }
+    
+    // Get shipper profile
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    
+    // Find shipment by tracking number
+    const shipment = await shipmentService.getByTrackingNumber(trackingNumber);
+    
+    if (!shipment) {
+      return sendSuccess(res, {
+        valid: false,
+        message: 'Mã vận đơn không tồn tại trong hệ thống',
+        data: null,
+      });
+    }
+    
+    // Check if assigned to this shipper
+    const isAssignedToMe = shipment.shipper_id === shipper.id;
+    
+    // Determine available actions based on status
+    let availableActions = [];
+    if (isAssignedToMe) {
+      if (shipment.status === 'assigned') {
+        availableActions = ['pickup'];
+      } else if (shipment.status === 'picked_up') {
+        availableActions = ['start_delivery'];
+      } else if (shipment.status === 'delivering') {
+        availableActions = ['delivery', 'fail'];
+      }
+    }
+    
+    return sendSuccess(res, {
+      valid: true,
+      isAssignedToMe,
+      message: isAssignedToMe 
+        ? 'Mã vận đơn hợp lệ' 
+        : 'Đơn hàng này không được phân công cho bạn',
+      data: isAssignedToMe ? {
+        shipment: toShipperMobileShipmentResponse(shipment),
+        availableActions,
+      } : null,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Batch scan multiple packages for pickup
+ * POST /api/shipper/shipments/scan/batch-pickup
+ * 
+ * Body:
+ * - trackingNumbers: string[] (required) - Array of scanned barcodes
+ * - location: { lat, lng } (optional)
+ * 
+ * Returns results for each tracking number
+ */
+async function batchScanPickup(req, res) {
+  try {
+    const { trackingNumbers, location } = req.body;
+    
+    if (!trackingNumbers || !Array.isArray(trackingNumbers) || trackingNumbers.length === 0) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'At least one tracking number is required',
+        status: 400,
+      });
+    }
+    
+    if (trackingNumbers.length > 50) {
+      return errorResponse(res, {
+        code: 'VALIDATION_ERROR',
+        message: 'Maximum 50 packages per batch',
+        status: 400,
+      });
+    }
+    
+    // Get shipper profile
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    
+    // Update location once if provided
+    if (location && location.lat && location.lng) {
+      try {
+        await locationService.updateLocation(
+          shipper.id,
+          parseFloat(location.lat),
+          parseFloat(location.lng)
+        );
+      } catch (locError) {
+        console.error('Failed to update location:', locError.message);
+      }
+    }
+    
+    // Process each tracking number
+    const results = {
+      success: [],
+      failed: [],
+    };
+    
+    for (const trackingNumber of trackingNumbers) {
+      try {
+        const shipment = await shipmentService.getByTrackingNumber(trackingNumber);
+        
+        if (!shipment) {
+          results.failed.push({
+            trackingNumber,
+            error: 'Mã vận đơn không tồn tại',
+          });
+          continue;
+        }
+        
+        if (shipment.shipper_id !== shipper.id) {
+          results.failed.push({
+            trackingNumber,
+            error: 'Không được phân công cho bạn',
+          });
+          continue;
+        }
+        
+        if (shipment.status !== 'assigned') {
+          results.failed.push({
+            trackingNumber,
+            error: `Trạng thái không hợp lệ: ${shipment.status}`,
+          });
+          continue;
+        }
+        
+        // Mark as picked up
+        await shipmentService.markPickedUp(shipment.id, shipper.id);
+        
+        results.success.push({
+          trackingNumber,
+          shipmentId: shipment.id,
+        });
+      } catch (err) {
+        results.failed.push({
+          trackingNumber,
+          error: err.message,
+        });
+      }
+    }
+    
+    return sendSuccess(res, {
+      message: `Đã lấy ${results.success.length}/${trackingNumbers.length} đơn hàng`,
+      data: {
+        totalScanned: trackingNumbers.length,
+        successCount: results.success.length,
+        failedCount: results.failed.length,
+        success: results.success,
+        failed: results.failed,
+        scannedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}

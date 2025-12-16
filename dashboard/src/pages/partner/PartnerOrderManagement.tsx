@@ -5,7 +5,7 @@ import { shipperService } from "@/services/shipper.service";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Truck, Check, Package, Ban, Download, MapPin, Clock } from "lucide-react";
+import { Eye, Truck, Check, Package, Ban, Download, MapPin, Clock, FileText } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
 import {
     DropdownMenu,
@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { CancelOrderDialog } from "@/components/partner/CancelOrderDialog";
 import { PickupRequestModal } from "@/components/partner/shipping/PickupRequestModal";
+import { ShippingLabelModal } from "@/components/partner/shipping/ShippingLabelModal";
 import {
     Dialog,
     DialogContent,
@@ -73,6 +74,10 @@ export default function PartnerOrderManagement() {
         id: string;
         trackingNumber: string;
     } | null>(null);
+    
+    // Shipping label modal
+    const [shippingLabelOpen, setShippingLabelOpen] = useState(false);
+    const [selectedShipmentForLabel, setSelectedShipmentForLabel] = useState<string>("");
 
     useEffect(() => {
         loadOrders();
@@ -159,16 +164,27 @@ export default function PartnerOrderManagement() {
                 estimatedPickup: shipmentData?.estimatedPickup || shipmentData?.estimated_pickup,
             });
             
-            // Update order status locally
-            updateOrderStatus(selectedOrder.id, 'ready_to_ship');
-            if (activeTab === 'processing') {
-                removeOrderFromList(selectedOrder.id);
-            }
-            
             toast.success("Đã tạo đơn vận chuyển thành công");
-        } catch (error) {
+            
+            // Reload orders to get shipment data
+            loadOrders();
+        } catch (error: any) {
             console.error(error);
-            toast.error("Không thể tạo đơn vận chuyển");
+            const errorCode = error.response?.data?.error?.code || '';
+            const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message || "Không thể tạo đơn vận chuyển";
+            
+            // If shipment already exists, reload to show it
+            if (errorCode === 'SHIPMENT_EXISTS') {
+                toast.info("Đơn vận chuyển đã được tạo, đang tải lại...");
+                loadOrders();
+                setReadyToShipOpen(false);
+            } else if (errorMessage.includes('ready_to_ship') || errorMessage.includes('INVALID_STATUS')) {
+                toast.info("Đơn hàng đã sẵn sàng giao, đang tải lại...");
+                loadOrders();
+                setReadyToShipOpen(false);
+            } else {
+                toast.error(errorMessage);
+            }
         } finally {
             setReadyToShipLoading(false);
         }
@@ -320,17 +336,27 @@ export default function PartnerOrderManagement() {
             cell: (order: ShopOrder) => (
                 <div>
                     {getShipmentStatusBadge(order.shipment)}
-                    {order.shipment?.shipper && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                            {order.shipment.shipper.name}
+                    {order.shipment?.shipper ? (
+                        <div className="text-xs mt-1 space-y-0.5">
+                            <div className="flex items-center gap-1 text-green-600 font-medium">
+                                <Truck className="h-3 w-3" />
+                                {order.shipment.shipper.name}
+                            </div>
+                            {order.shipment.shipper.phone && (
+                                <div className="text-muted-foreground">{order.shipment.shipper.phone}</div>
+                            )}
+                            {order.shipment.shipper.vehiclePlate && (
+                                <div className="text-muted-foreground">{order.shipment.shipper.vehiclePlate}</div>
+                            )}
                         </div>
-                    )}
-                    {order.shipment?.estimatedPickup && (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                    ) : order.shipment?.estimatedPickup ? (
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                             <Clock className="h-3 w-3" />
-                            Lấy: {new Date(order.shipment.estimatedPickup).toLocaleDateString('vi-VN')}
+                            Lấy: {new Date(order.shipment.estimatedPickup).toLocaleString('vi-VN', { 
+                                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+                            })}
                         </div>
-                    )}
+                    ) : null}
                 </div>
             )
         },
@@ -379,12 +405,22 @@ export default function PartnerOrderManagement() {
                                 <>
                                     {order.shipment ? (
                                         <>
+                                            <DropdownMenuItem onClick={() => {
+                                                setSelectedShipmentForLabel(order.shipment!.id);
+                                                setShippingLabelOpen(true);
+                                            }}>
+                                                <FileText className="mr-2 h-4 w-4" /> Xem phiếu giao hàng
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => handleViewTracking(order.shipment!.id)}>
                                                 <MapPin className="mr-2 h-4 w-4" /> Xem vận đơn
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleRequestPickupClick(order)}>
-                                                <Truck className="mr-2 h-4 w-4" /> Yêu cầu lấy hàng
-                                            </DropdownMenuItem>
+                                            {/* Show pickup request option - can update pickup time if not yet picked up */}
+                                            {['created', 'assigned'].includes(order.shipment.status) && (
+                                                <DropdownMenuItem onClick={() => handleRequestPickupClick(order)}>
+                                                    <Clock className="mr-2 h-4 w-4" /> 
+                                                    {order.shipment.shipper ? 'Đổi giờ lấy hàng' : 'Yêu cầu lấy hàng'}
+                                                </DropdownMenuItem>
+                                            )}
                                         </>
                                     ) : (
                                         <DropdownMenuItem onClick={() => handleReadyToShipClick(order)}>
@@ -566,6 +602,13 @@ export default function PartnerOrderManagement() {
                     onConfirm={handlePickupConfirm}
                 />
             )}
+
+            {/* Shipping Label Modal */}
+            <ShippingLabelModal
+                open={shippingLabelOpen}
+                onOpenChange={setShippingLabelOpen}
+                shipmentId={selectedShipmentForLabel}
+            />
         </div>
     );
 }

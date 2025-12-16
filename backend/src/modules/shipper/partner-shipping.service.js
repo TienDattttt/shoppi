@@ -45,26 +45,58 @@ async function getShopDetails(shopId) {
 
 /**
  * Calculate estimated pickup time
- * @param {string} pickupTimeSlot - Optional preferred time slot
+ * @param {string} pickupTimeSlot - Optional preferred time slot 
+ *   Formats: "08:00-10:00", "today-08:00-10:00", "tomorrow-08:00-10:00"
  * @returns {string} ISO timestamp
  */
 function calculateEstimatedPickup(pickupTimeSlot) {
   const now = new Date();
   
   if (pickupTimeSlot) {
-    // Parse time slot (e.g., "09:00-12:00")
-    const [startTime] = pickupTimeSlot.split('-');
-    const [hours, minutes] = startTime.split(':').map(Number);
-    
-    const pickupDate = new Date(now);
-    pickupDate.setHours(hours, minutes, 0, 0);
-    
-    // If time has passed today, schedule for tomorrow
-    if (pickupDate <= now) {
-      pickupDate.setDate(pickupDate.getDate() + 1);
+    try {
+      let timeSlot = pickupTimeSlot.trim();
+      let isTomorrow = false;
+      
+      // Check for date prefix (e.g., "today-08:00-10:00" or "tomorrow-08:00-10:00")
+      if (timeSlot.startsWith('tomorrow-')) {
+        isTomorrow = true;
+        timeSlot = timeSlot.substring('tomorrow-'.length);
+      } else if (timeSlot.startsWith('today-')) {
+        isTomorrow = false;
+        timeSlot = timeSlot.substring('today-'.length);
+      }
+      
+      // Normalize time slot - remove spaces around dash
+      const normalizedSlot = timeSlot.replace(/\s*-\s*/g, '-').trim();
+      
+      // Parse time slot (e.g., "09:00-12:00")
+      const parts = normalizedSlot.split('-');
+      if (parts.length >= 2) {
+        const startTime = parts[0].trim();
+        const timeParts = startTime.split(':');
+        
+        if (timeParts.length >= 2) {
+          const hours = parseInt(timeParts[0], 10);
+          const minutes = parseInt(timeParts[1], 10);
+          
+          // Validate parsed values
+          if (!isNaN(hours) && !isNaN(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            const pickupDate = new Date(now);
+            pickupDate.setHours(hours, minutes, 0, 0);
+            
+            // If explicitly tomorrow or time has passed today, schedule for tomorrow
+            if (isTomorrow || pickupDate <= now) {
+              pickupDate.setDate(pickupDate.getDate() + 1);
+            }
+            
+            return pickupDate.toISOString();
+          }
+        }
+      }
+      console.warn('[calculateEstimatedPickup] Could not parse time slot:', pickupTimeSlot);
+    } catch (e) {
+      console.error('[calculateEstimatedPickup] Error parsing time slot:', e.message);
     }
-    
-    return pickupDate.toISOString();
   }
   
   // Default: 2-4 hours from now during business hours (8:00-18:00)
@@ -96,30 +128,33 @@ function calculateEstimatedPickup(pickupTimeSlot) {
  * @returns {Promise<Object>}
  */
 async function markReadyToShip(subOrderId, partnerId, options = {}) {
+  console.log('[PartnerShipping] markReadyToShip called:', { subOrderId, partnerId, options });
+  
   // 1. Verify sub-order exists and belongs to partner's shop
   const subOrder = await orderRepository.findSubOrderById(subOrderId);
   if (!subOrder) {
     throw new AppError('ORDER_NOT_FOUND', 'Đơn hàng không tồn tại', 404);
   }
+  console.log('[PartnerShipping] Found sub-order:', { id: subOrder.id, status: subOrder.status, shop_id: subOrder.shop_id });
 
   const shopId = await getShopIdFromPartner(partnerId);
   if (!shopId || subOrder.shop_id !== shopId) {
     throw new AppError('ORDER_NOT_FOUND', 'Đơn hàng không tồn tại', 404);
   }
 
-  // 2. Check sub-order status - must be 'processing' to mark ready to ship
-  if (subOrder.status !== 'processing') {
-    throw new AppError(
-      'INVALID_STATUS',
-      `Không thể đánh dấu sẵn sàng giao. Trạng thái hiện tại: ${subOrder.status}`,
-      400
-    );
-  }
-
-  // 3. Check if shipment already exists
+  // 2. Check if shipment already exists
   const existingShipment = await shipmentRepository.findBySubOrderId(subOrderId);
   if (existingShipment) {
     throw new AppError('SHIPMENT_EXISTS', 'Đơn vận chuyển đã được tạo', 400);
+  }
+
+  // 3. Check sub-order status - must be 'processing' or 'ready_to_ship' (without shipment)
+  if (subOrder.status !== 'processing' && subOrder.status !== 'ready_to_ship') {
+    throw new AppError(
+      'INVALID_STATUS',
+      `Không thể tạo đơn vận chuyển. Trạng thái hiện tại: ${subOrder.status}`,
+      400
+    );
   }
 
   // 4. Get shop details for pickup address
@@ -180,8 +215,10 @@ async function markReadyToShip(subOrderId, partnerId, options = {}) {
     notes: order.customer_note,
   });
 
-  // 9. Update sub-order status to ready_to_ship
-  await orderRepository.updateSubOrderStatus(subOrderId, 'ready_to_ship');
+  // 9. Update sub-order status to ready_to_ship (only if not already)
+  if (subOrder.status !== 'ready_to_ship') {
+    await orderRepository.updateSubOrderStatus(subOrderId, 'ready_to_ship');
+  }
 
   // 10. Calculate estimated pickup time
   const estimatedPickup = calculateEstimatedPickup(options.pickupTimeSlot);
@@ -213,9 +250,11 @@ async function markReadyToShip(subOrderId, partnerId, options = {}) {
   // 13. Try auto-assignment immediately (fallback if RabbitMQ consumer not running)
   let assignmentResult = null;
   try {
+    console.log('[PartnerShipping] Starting auto-assignment for shipment:', shipment.id);
     assignmentResult = await assignmentService.autoAssignShipment(shipment.id);
+    console.log('[PartnerShipping] Auto-assignment result:', assignmentResult);
   } catch (assignError) {
-    console.warn('[PartnerShippingService] Auto-assignment failed:', assignError.message);
+    console.warn('[PartnerShippingService] Auto-assignment failed:', assignError.message, assignError.stack);
     // Don't throw - shipment is created, assignment can be retried
   }
 
@@ -279,18 +318,11 @@ async function getPartnerShipments(partnerId, options = {}) {
     };
   }
 
-  // Build query
+  // Build query - avoid shipper join due to multiple relationships (shipper_id, pickup_shipper_id, delivery_shipper_id)
   let query = supabaseAdmin
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        vehicle_type,
-        vehicle_plate,
-        avg_rating,
-        user:users(id, full_name, phone, avatar_url)
-      ),
       sub_order:sub_orders!inner(
         id,
         order_id,
@@ -318,8 +350,25 @@ async function getPartnerShipments(partnerId, options = {}) {
     throw new AppError('QUERY_ERROR', `Failed to get shipments: ${error.message}`, 500);
   }
 
-  // Get tracking events for each shipment
+  // Get shipper info and tracking events for each shipment separately
   const shipments = await Promise.all((data || []).map(async (shipment) => {
+    // Get shipper info separately to avoid relationship issues
+    let shipperInfo = null;
+    if (shipment.shipper_id) {
+      const { data: shipper } = await supabaseAdmin
+        .from('shippers')
+        .select(`
+          id,
+          vehicle_type,
+          vehicle_plate,
+          avg_rating,
+          user:users(id, full_name, phone, avatar_url)
+        `)
+        .eq('id', shipment.shipper_id)
+        .single();
+      shipperInfo = shipper;
+    }
+
     // Get latest tracking events
     const { data: trackingEvents } = await supabaseAdmin
       .from('shipment_tracking_events')
@@ -346,14 +395,14 @@ async function getPartnerShipments(partnerId, options = {}) {
       codCollected: shipment.cod_collected,
       
       // Shipper info
-      shipper: shipment.shipper ? {
-        id: shipment.shipper.id,
-        name: shipment.shipper.user?.full_name,
-        phone: maskPhoneNumber(shipment.shipper.user?.phone),
-        avatarUrl: shipment.shipper.user?.avatar_url,
-        vehicleType: shipment.shipper.vehicle_type,
-        vehiclePlate: shipment.shipper.vehicle_plate,
-        rating: shipment.shipper.avg_rating,
+      shipper: shipperInfo ? {
+        id: shipperInfo.id,
+        name: shipperInfo.user?.full_name,
+        phone: maskPhoneNumber(shipperInfo.user?.phone),
+        avatarUrl: shipperInfo.user?.avatar_url,
+        vehicleType: shipperInfo.vehicle_type,
+        vehiclePlate: shipperInfo.vehicle_plate,
+        rating: shipperInfo.avg_rating,
       } : null,
       
       // Sub-order info
@@ -412,19 +461,11 @@ async function getShipmentById(shipmentId, partnerId) {
     throw new AppError('SHIPMENT_NOT_FOUND', 'Không tìm thấy đơn vận chuyển', 404);
   }
 
-  // Get shipment with related data
+  // Get shipment with related data (avoid shipper join due to multiple relationships)
   const { data: shipment, error } = await supabaseAdmin
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        vehicle_type,
-        vehicle_plate,
-        avg_rating,
-        total_deliveries,
-        user:users(id, full_name, phone, avatar_url)
-      ),
       sub_order:sub_orders(
         id,
         order_id,
@@ -439,6 +480,24 @@ async function getShipmentById(shipmentId, partnerId) {
 
   if (error || !shipment) {
     throw new AppError('SHIPMENT_NOT_FOUND', 'Không tìm thấy đơn vận chuyển', 404);
+  }
+  
+  // Get shipper info separately to avoid relationship issues
+  let shipperInfo = null;
+  if (shipment.shipper_id) {
+    const { data: shipper } = await supabaseAdmin
+      .from('shippers')
+      .select(`
+        id,
+        vehicle_type,
+        vehicle_plate,
+        avg_rating,
+        total_deliveries,
+        user:users(id, full_name, phone, avatar_url)
+      `)
+      .eq('id', shipment.shipper_id)
+      .single();
+    shipperInfo = shipper;
   }
 
   // Verify ownership
@@ -484,15 +543,15 @@ async function getShipmentById(shipmentId, partnerId) {
     failureReason: shipment.failure_reason,
     
     // Shipper info
-    shipper: shipment.shipper ? {
-      id: shipment.shipper.id,
-      name: shipment.shipper.user?.full_name,
-      phone: maskPhoneNumber(shipment.shipper.user?.phone),
-      avatarUrl: shipment.shipper.user?.avatar_url,
-      vehicleType: shipment.shipper.vehicle_type,
-      vehiclePlate: shipment.shipper.vehicle_plate,
-      rating: shipment.shipper.avg_rating,
-      totalDeliveries: shipment.shipper.total_deliveries,
+    shipper: shipperInfo ? {
+      id: shipperInfo.id,
+      name: shipperInfo.user?.full_name,
+      phone: maskPhoneNumber(shipperInfo.user?.phone),
+      avatarUrl: shipperInfo.user?.avatar_url,
+      vehicleType: shipperInfo.vehicle_type,
+      vehiclePlate: shipperInfo.vehicle_plate,
+      rating: shipperInfo.avg_rating,
+      totalDeliveries: shipperInfo.total_deliveries,
     } : null,
     
     // Sub-order info
@@ -558,16 +617,11 @@ async function requestPickup(shipmentId, partnerId, options = {}) {
     throw new AppError('SHIPMENT_NOT_FOUND', 'Không tìm thấy đơn vận chuyển', 404);
   }
 
-  // Get shipment
+  // Get shipment - avoid shipper join due to multiple relationships
   const { data: shipment, error } = await supabaseAdmin
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        user_id,
-        user:users(id, full_name, phone)
-      ),
       sub_order:sub_orders(id, shop_id)
     `)
     .eq('id', shipmentId)
@@ -575,6 +629,21 @@ async function requestPickup(shipmentId, partnerId, options = {}) {
 
   if (error || !shipment) {
     throw new AppError('SHIPMENT_NOT_FOUND', 'Không tìm thấy đơn vận chuyển', 404);
+  }
+
+  // Get shipper info separately if needed
+  let shipperInfo = null;
+  if (shipment.shipper_id) {
+    const { data: shipper } = await supabaseAdmin
+      .from('shippers')
+      .select(`
+        id,
+        user_id,
+        user:users(id, full_name, phone)
+      `)
+      .eq('id', shipment.shipper_id)
+      .single();
+    shipperInfo = shipper;
   }
 
   // Verify ownership
@@ -611,10 +680,32 @@ async function requestPickup(shipmentId, partnerId, options = {}) {
     console.error('[PartnerShippingService] Failed to add tracking event:', e.message);
   }
 
-  // Notify shipper if assigned
-  if (shipment.shipper?.user_id) {
+  // Auto-assign shipper if not yet assigned
+  let assignmentResult = null;
+  if (!shipment.shipper_id && shipment.status === 'created') {
+    console.log('[PartnerShipping] requestPickup: Shipment has no shipper, starting auto-assignment...');
     try {
-      await notificationService.send(shipment.shipper.user_id, 'pickup_request', {
+      assignmentResult = await assignmentService.autoAssignShipment(shipmentId);
+      console.log('[PartnerShipping] requestPickup: Auto-assignment result:', assignmentResult);
+      
+      // Update shipperInfo with newly assigned shipper
+      if (assignmentResult?.pickupShipper) {
+        shipperInfo = {
+          id: assignmentResult.pickupShipper.id,
+          user_id: assignmentResult.pickupShipper.user_id,
+          user: assignmentResult.pickupShipper.user,
+        };
+      }
+    } catch (assignError) {
+      console.warn('[PartnerShipping] requestPickup: Auto-assignment failed:', assignError.message);
+      // Don't throw - pickup request is still valid, assignment can be retried
+    }
+  }
+
+  // Notify shipper if assigned
+  if (shipperInfo?.user_id) {
+    try {
+      await notificationService.send(shipperInfo.user_id, 'pickup_request', {
         title: 'Yêu cầu lấy hàng',
         body: `Shop yêu cầu lấy hàng lúc ${new Date(pickupScheduled).toLocaleString('vi-VN')}`,
         payload: {
@@ -630,11 +721,15 @@ async function requestPickup(shipmentId, partnerId, options = {}) {
 
   return {
     pickupScheduled,
-    shipper: shipment.shipper ? {
-      id: shipment.shipper.id,
-      name: shipment.shipper.user?.full_name,
-      phone: maskPhoneNumber(shipment.shipper.user?.phone),
+    shipper: shipperInfo ? {
+      id: shipperInfo.id,
+      name: shipperInfo.user?.full_name,
+      phone: maskPhoneNumber(shipperInfo.user?.phone),
     } : null,
+    assigned: !!assignmentResult,
+    message: assignmentResult 
+      ? 'Đã phân công shipper thành công' 
+      : (shipperInfo ? 'Đã thông báo shipper' : 'Đang tìm shipper phù hợp'),
   };
 }
 

@@ -27,7 +27,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Fetch data when home is initialized
     context.read<DashboardCubit>().fetchStats();
     context.read<ShipmentListCubit>().fetchShipments();
     
@@ -48,116 +47,201 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Hello, Shipper!",
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              "Your Dashboard",
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 20,
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        centerTitle: false,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Stack(
-              children: [
-                const Icon(Icons.notifications_outlined, size: 28, color: AppColors.textPrimary),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppColors.error,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                )
-              ],
-            ),
-            onPressed: () => context.push('/notifications'),
-          ),
-          const SizedBox(width: 8),
-          BlocBuilder<OnlineStatusCubit, OnlineStatusState>(
-            builder: (context, state) {
-              final isOnline = state is OnlineStatusOnline;
-              return Switch(
-                value: isOnline,
-                activeColor: AppColors.success,
-                activeTrackColor: AppColors.success.withOpacity(0.2),
-                inactiveThumbColor: AppColors.textSecondary,
-                onChanged: _isNetworkOffline ? null : (value) {
-                  context.read<OnlineStatusCubit>().toggleOnlineStatus(value);
-                },
-              );
-            },
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: () async {
           context.read<DashboardCubit>().fetchStats();
           context.read<ShipmentListCubit>().fetchShipments();
         },
-        child: SingleChildScrollView(
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_isNetworkOffline) ...[
-                  const SizedBox(height: 16),
-                  OfflineIndicatorWidget(isOffline: _isNetworkOffline),
-                ],
-                const SizedBox(height: 24),
-                _buildStatsSection(),
-                const SizedBox(height: 32),
-                Row(
+          slivers: [
+            // Orange Gradient Header
+            SliverToBoxAdapter(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: AppColors.headerGradient,
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      // Top Bar
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            // Logo
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.local_shipping, color: AppColors.primary, size: 20),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'SPX Shipper',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            // Notifications
+                            IconButton(
+                              icon: Stack(
+                                children: [
+                                  const Icon(Icons.notifications_outlined, size: 28, color: Colors.white),
+                                  Positioned(
+                                    right: 0,
+                                    top: 0,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: Colors.yellow,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.primary, width: 1),
+                                      ),
+                                    ),
+                                  )
+                                ],
+                              ),
+                              onPressed: () => context.push('/notifications'),
+                            ),
+                            // Online Toggle
+                            BlocBuilder<OnlineStatusCubit, OnlineStatusState>(
+                              builder: (context, state) {
+                                final isOnline = state is OnlineStatusOnline;
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isOnline ? Colors.white : Colors.white.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: isOnline ? AppColors.success : AppColors.textSecondary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        isOnline ? 'Đang nhận đơn' : 'Nghỉ',
+                                        style: TextStyle(
+                                          color: isOnline ? AppColors.primary : Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Switch(
+                                        value: isOnline,
+                                        activeColor: AppColors.success,
+                                        activeTrackColor: AppColors.success.withValues(alpha: 0.3),
+                                        inactiveThumbColor: Colors.grey,
+                                        inactiveTrackColor: Colors.grey.withValues(alpha: 0.3),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        onChanged: _isNetworkOffline ? null : (value) {
+                                          context.read<OnlineStatusCubit>().toggleOnlineStatus(value);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Welcome Message
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Xin chào, Shipper!',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Chúc bạn một ngày làm việc hiệu quả!',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Stats Cards
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildStatsSection(),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Offline Indicator
+            if (_isNetworkOffline)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: OfflineIndicatorWidget(isOffline: _isNetworkOffline),
+                ),
+              ),
+            // Recent Shipments Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      "Recent Shipments",
+                      'Đơn hàng gần đây',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     TextButton(
-                      onPressed: () {
-                        // Navigate to Orders Tab using deep link or context navigation if possible,
-                        // otherwise user relies on bottom bar.
-                        // Ideally we find the shell and switch branch.
-                         // But simple push for now is fine if it acts as a shortcut.
-                         // Actually, since we have the bottom bar, maybe we don't need "View All" button unless it switches tabs.
-                         // context.go('/orders'); // This should switch the branch.
-                         context.go('/orders');
-                      },
-                      child: const Text("View All", style: TextStyle(color: AppColors.primary)),
+                      onPressed: () => context.go('/orders'),
+                      child: Text(
+                        'Xem tất cả',
+                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                _buildShipmentListSection(),
-                const SizedBox(height: 80), // Bottom padding
-              ],
+              ),
             ),
-          ),
+            // Shipment List
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: _buildShipmentListSliver(),
+            ),
+            // Bottom padding
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
         ),
       ),
     );
@@ -167,67 +251,141 @@ class _HomePageState extends State<HomePage> {
     return BlocBuilder<DashboardCubit, DashboardState>(
       builder: (context, state) {
         if (state is DashboardLoading) {
-           return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: Colors.white));
         }
         if (state is DashboardLoaded) {
           final stats = state.stats;
           return Row(
             children: [
-              StatCard(
-                label: "Today's Earnings",
-                value: "\$${stats.todayEarnings}",
-                icon: Icons.account_balance_wallet,
-                color: AppColors.success,
-                onTap: () => context.go('/earnings'),
+              Expanded(
+                child: _buildStatCard(
+                  icon: Icons.account_balance_wallet,
+                  label: 'Thu nhập hôm nay',
+                  value: '${stats.todayEarnings.toStringAsFixed(0)}đ',
+                  onTap: () => context.go('/earnings'),
+                ),
               ),
-              const SizedBox(width: 16),
-              StatCard(
-                label: "Completed Trips",
-                value: "${stats.todayTrips}",
-                icon: Icons.local_shipping,
-                color: AppColors.info,
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  icon: Icons.local_shipping,
+                  label: 'Đơn hoàn thành',
+                  value: '${stats.todayTrips}',
+                ),
               ),
             ],
           );
         }
-        return const SizedBox.shrink();
+        // Default/initial state
+        return Row(
+          children: [
+            Expanded(child: _buildStatCard(icon: Icons.account_balance_wallet, label: 'Thu nhập hôm nay', value: '0đ')),
+            const SizedBox(width: 12),
+            Expanded(child: _buildStatCard(icon: Icons.local_shipping, label: 'Đơn hoàn thành', value: '0')),
+          ],
+        );
       },
     );
   }
 
-  Widget _buildShipmentListSection() {
+  Widget _buildStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 24),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShipmentListSliver() {
     return BlocBuilder<ShipmentListCubit, ShipmentListState>(
       builder: (context, state) {
         if (state is ShipmentListLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const SliverToBoxAdapter(
+            child: Center(child: Padding(
+              padding: EdgeInsets.all(32),
+              child: CircularProgressIndicator(),
+            )),
+          );
         } else if (state is ShipmentListError) {
-          return Center(child: Text(state.message));
+          return SliverToBoxAdapter(
+            child: Center(child: Text(state.message)),
+          );
         } else if (state is ShipmentListLoaded) {
           if (state.shipments.isEmpty) {
-            return Container(
-              padding: const EdgeInsets.all(32),
-              alignment: Alignment.center,
-              child: Column(
-                children: [
-                  Icon(Icons.inbox_outlined, size: 64, color: AppColors.textHint),
-                  const SizedBox(height: 16),
-                  const Text("No active shipments", style: TextStyle(color: AppColors.textSecondary)),
-                ],
+            return SliverToBoxAdapter(
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                alignment: Alignment.center,
+                child: Column(
+                  children: [
+                    Icon(Icons.inbox_outlined, size: 64, color: AppColors.textHint),
+                    const SizedBox(height: 16),
+                    const Text('Chưa có đơn hàng', style: TextStyle(color: AppColors.textSecondary)),
+                  ],
+                ),
               ),
             );
           }
-          // Show only top 5 items on dashboard
           final recentShipments = state.shipments.take(5).toList();
-          return Column(
-            children: recentShipments.map((shipment) => ShipmentItemCard(
-              shipment: shipment,
-              onTap: () => context.push('/shipment/${shipment.id}', extra: shipment),
-            )).toList(),
+          return SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => ShipmentItemCard(
+                shipment: recentShipments[index],
+                onTap: () => context.push('/shipment/${recentShipments[index].id}', extra: recentShipments[index]),
+              ),
+              childCount: recentShipments.length,
+            ),
           );
         }
-        return const SizedBox.shrink();
+        return const SliverToBoxAdapter(child: SizedBox.shrink());
       },
     );
   }
 }
-

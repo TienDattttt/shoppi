@@ -23,6 +23,10 @@ class RegisterParams extends Equatable {
   final List<String> districts;
   final double maxDistance;
   final String workingArea;
+  // Post office assignment
+  final String? postOfficeId;
+  final String? provinceCode;
+  final String? wardCode;
 
   const RegisterParams({
     this.fullName = '',
@@ -44,6 +48,9 @@ class RegisterParams extends Equatable {
     this.districts = const [],
     this.maxDistance = 10.0,
     this.workingArea = '',
+    this.postOfficeId,
+    this.provinceCode,
+    this.wardCode,
   });
 
   RegisterParams copyWith({
@@ -66,6 +73,9 @@ class RegisterParams extends Equatable {
     List<String>? districts,
     double? maxDistance,
     String? workingArea,
+    String? postOfficeId,
+    String? provinceCode,
+    String? wardCode,
   }) {
     return RegisterParams(
       fullName: fullName ?? this.fullName,
@@ -87,6 +97,9 @@ class RegisterParams extends Equatable {
       districts: districts ?? this.districts,
       maxDistance: maxDistance ?? this.maxDistance,
       workingArea: workingArea ?? this.workingArea,
+      postOfficeId: postOfficeId ?? this.postOfficeId,
+      provinceCode: provinceCode ?? this.provinceCode,
+      wardCode: wardCode ?? this.wardCode,
     );
   }
 
@@ -111,5 +124,8 @@ class RegisterParams extends Equatable {
         districts,
         maxDistance,
         workingArea,
+        postOfficeId,
+        provinceCode,
+        wardCode,
       ];
 }

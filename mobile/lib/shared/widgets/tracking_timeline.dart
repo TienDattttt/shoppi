@@ -22,13 +22,13 @@ class TrackingTimeline extends StatelessWidget {
         children: [
           Row(
             children: [
-              _buildStep(context, 0, "Created", currentStep >= 0, currentStep == 0),
+              _buildStep(context, 0, 'Tạo đơn', currentStep >= 0, currentStep == 0),
               _buildLine(currentStep >= 1),
-              _buildStep(context, 1, "Picked Up", currentStep >= 1, currentStep == 1),
+              _buildStep(context, 1, 'Đã lấy', currentStep >= 1, currentStep == 1),
               _buildLine(currentStep >= 2),
-              _buildStep(context, 2, "In Transit", currentStep >= 2, currentStep == 2),
+              _buildStep(context, 2, 'Đang giao', currentStep >= 2, currentStep == 2),
               _buildLine(currentStep >= 3),
-              _buildStep(context, 3, "Delivered", currentStep >= 3, currentStep == 3),
+              _buildStep(context, 3, 'Hoàn thành', currentStep >= 3, currentStep == 3),
             ],
           ),
         ],
@@ -64,7 +64,7 @@ class TrackingTimeline extends StatelessWidget {
       child: Container(
         height: 2,
         color: isActive ? AppColors.primary : Colors.grey[300],
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 12), // Adjust vertical alignment
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
       ),
     );
   }
@@ -85,3 +85,4 @@ class TrackingTimeline extends StatelessWidget {
     }
   }
 }
+

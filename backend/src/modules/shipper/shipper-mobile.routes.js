@@ -62,6 +62,39 @@ router.post('/shipments/:id/status', shipperMobileController.updateShipmentStatu
 router.post('/shipments/:id/reject', shipperMobileController.rejectShipment);
 
 // ============================================
+// BARCODE SCAN ROUTES (Pickup & Delivery)
+// ============================================
+
+/**
+ * POST /api/shipper/shipments/scan/validate
+ * Validate barcode/tracking number without updating status
+ * Returns shipment info if valid and assigned to shipper
+ */
+router.post('/shipments/scan/validate', shipperMobileController.validateBarcode);
+
+/**
+ * POST /api/shipper/shipments/scan/pickup
+ * Scan barcode to confirm pickup at shop
+ * Updates status: assigned -> picked_up
+ */
+router.post('/shipments/scan/pickup', shipperMobileController.scanPickup);
+
+/**
+ * POST /api/shipper/shipments/scan/delivery
+ * Scan barcode to confirm delivery to customer
+ * Requires: photoUrl, codCollected (for COD orders)
+ * Updates status: delivering -> delivered
+ */
+router.post('/shipments/scan/delivery', shipperMobileController.scanDelivery);
+
+/**
+ * POST /api/shipper/shipments/scan/batch-pickup
+ * Batch scan multiple packages for pickup at shop
+ * Max 50 packages per batch
+ */
+router.post('/shipments/scan/batch-pickup', shipperMobileController.batchScanPickup);
+
+// ============================================
 // PHOTO UPLOAD ROUTES (Requirements: 13.6)
 // ============================================
 

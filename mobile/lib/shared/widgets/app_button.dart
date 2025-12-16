@@ -46,7 +46,7 @@ class AppButton extends StatelessWidget {
     switch (type) {
       case AppButtonType.primary:
         button = ElevatedButton(
-          onPressed: isLoading ? null : () {
+          onPressed: (isLoading || onPressed == null) ? null : () {
             HapticFeedback.lightImpact();
             onPressed?.call();
           },
@@ -62,7 +62,7 @@ class AppButton extends StatelessWidget {
         break;
       case AppButtonType.secondary:
         button = ElevatedButton(
-          onPressed: isLoading ? null : () {
+          onPressed: (isLoading || onPressed == null) ? null : () {
              HapticFeedback.lightImpact();
              onPressed?.call();
           },

@@ -43,6 +43,9 @@ class _RegisterPageState extends State<RegisterPage> {
   String _city = '';
   List<String> _districts = [];
   int _maxDistance = 10;
+  String? _postOfficeId;
+  String? _provinceCode;
+  String? _wardCode;
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +80,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 
                 // Step Content
                 Expanded(
-                  child: _buildCurrentStep(context),
+                  child: _buildCurrentStep(context, state),
                 ),
               ],
             );
@@ -142,7 +145,7 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _buildCurrentStep(BuildContext context) {
+  Widget _buildCurrentStep(BuildContext context, RegisterState state) {
     switch (_currentStep) {
       case 0:
         return PersonalInfoStep(
@@ -185,18 +188,48 @@ class _RegisterPageState extends State<RegisterPage> {
             _idCardBackPath = back;
             _driverLicensePath = license;
           },
-          onNext: () => setState(() => _currentStep = 3),
+          onNext: () {
+             setState(() => _currentStep = 3);
+             context.read<RegisterCubit>().fetchProvinces();
+          },
           onPrevious: () => setState(() => _currentStep = 1),
         );
       case 3:
+        final provinces = (state is RegisterStepUpdate) ? state.provinces : [];
+        final wards = (state is RegisterStepUpdate) ? state.wards : [];
+        final postOffices = (state is RegisterStepUpdate) ? state.postOffices : [];
+        
+        final isLoadingProvinces = (state is RegisterStepUpdate) ? state.isLoadingProvinces : false;
+        final isLoadingWards = (state is RegisterStepUpdate) ? state.isLoadingWards : false;
+        final isLoadingPostOffices = (state is RegisterStepUpdate) ? state.isLoadingPostOffices : false;
+
         return WorkingAreaStep(
           initialCity: _city,
           initialDistricts: _districts,
           initialMaxDistance: _maxDistance,
-          onWorkingAreaChanged: (city, districts, maxDistance) {
+          initialPostOfficeId: _postOfficeId,
+          initialProvinceCode: _provinceCode,
+          initialWardCode: _wardCode,
+          provinces: provinces,
+          wards: wards,
+          postOffices: postOffices,
+          isLoadingProvinces: isLoadingProvinces,
+          isLoadingWards: isLoadingWards,
+          isLoadingPostOffices: isLoadingPostOffices,
+          onRetryProvinces: () => context.read<RegisterCubit>().fetchProvinces(),
+          onProvinceChanged: (code) {
+             if (code != null) context.read<RegisterCubit>().fetchWards(code);
+          },
+          onWardChanged: (code) {
+             if (code != null) context.read<RegisterCubit>().fetchPostOffices(code);
+          },
+          onWorkingAreaChanged: (city, districts, maxDistance, postOfficeId, provinceCode, wardCode) {
             _city = city;
             _districts = districts;
             _maxDistance = maxDistance;
+            _postOfficeId = postOfficeId;
+            _provinceCode = provinceCode;
+            _wardCode = wardCode;
           },
           onSubmit: () => _submitRegistration(context),
           onPrevious: () => setState(() => _currentStep = 2),
@@ -223,6 +256,9 @@ class _RegisterPageState extends State<RegisterPage> {
       city: _city,
       districts: _districts,
       maxDistance: _maxDistance,
+      postOfficeId: _postOfficeId,
+      provinceCode: _provinceCode,
+      wardCode: _wardCode,
     );
   }
 }

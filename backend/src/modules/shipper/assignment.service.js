@@ -17,15 +17,13 @@ const shipmentRepository = require('./shipment.repository');
 const trackingService = require('./tracking.service');
 const rabbitmqClient = require('../../shared/rabbitmq/rabbitmq.client');
 const { AppError } = require('../../shared/utils/error.util');
+const goongClient = require('../../shared/goong/goong.client');
 
 // Cấu hình
-const MAX_ORDER_DIFFERENCE = 5; // Chênh lệch tối đa giữa các shipper
-const DEFAULT_SEARCH_RADIUS_KM = 10; // Bán kính tìm shipper (Requirements: 3.1)
+const MAX_ORDER_DIFFERENCE = 5; // Chênh lệch tối đa giữa các shipper cùng bưu cục
+const DEFAULT_SEARCH_RADIUS_KM = 50; // Bán kính tìm bưu cục (km) - mở rộng để tìm được bưu cục
 const ASSIGNMENT_RETRY_INTERVAL_MS = 5 * 60 * 1000; // 5 phút (Requirements: 3.3)
 const MAX_ASSIGNMENT_RETRIES = 12; // Tối đa 12 lần retry (1 giờ)
-
-// Queue name for unassigned shipments
-const UNASSIGNED_QUEUE = 'unassigned_shipments';
 
 /**
  * Tìm bưu cục gần nhất theo tọa độ
@@ -84,154 +82,130 @@ async function findNearestPostOffice(lat, lng, officeType = 'local', radiusKm = 
 }
 
 /**
- * Tìm shipper có ít đơn nhất trong bưu cục
+ * Tìm shipper có ít đơn nhất trong bưu cục (deprecated - use findAvailableShipperInOffice)
  * @param {string} postOfficeId - ID bưu cục
  * @param {string} type - 'pickup' hoặc 'delivery'
  */
 async function findAvailableShipper(postOfficeId, type = 'pickup') {
-  const countColumn = type === 'pickup' ? 'current_pickup_count' : 'current_delivery_count';
+  return findAvailableShipperInOffice(postOfficeId, type, null);
+}
 
-  const { data, error } = await supabaseAdmin
+/**
+ * Tìm shipper khả dụng trong bưu cục với load balancing
+ * 
+ * Logic:
+ * - Tìm tất cả shipper online và available trong bưu cục
+ * - Sắp xếp theo số đơn hiện tại (ít nhất trước)
+ * - Chọn ngẫu nhiên trong nhóm shipper có số đơn chênh lệch <= MAX_ORDER_DIFFERENCE
+ * 
+ * @param {string} postOfficeId - ID bưu cục
+ * @param {string} type - 'pickup' hoặc 'delivery'
+ * @param {string} excludeShipperId - ID shipper cần loại trừ
+ * @returns {Promise<Object|null>} Shipper được chọn hoặc null
+ */
+async function findAvailableShipperInOffice(postOfficeId, type = 'pickup', excludeShipperId = null) {
+  const countColumn = type === 'pickup' ? 'current_pickup_count' : 'current_delivery_count';
+  
+  console.log('[AssignmentService] findAvailableShipperInOffice:', { postOfficeId, type, excludeShipperId });
+
+  // Use explicit FK relationship to avoid "multiple relationships" error
+  // shippers has both user_id and approved_by pointing to users table
+  let query = supabaseAdmin
     .from('shippers')
-    .select('*')
+    .select(`
+      *,
+      user:users!shippers_user_id_fkey(id, full_name, phone, avatar_url)
+    `)
     .eq('post_office_id', postOfficeId)
     .eq('status', 'active')
     .eq('is_online', true)
     .eq('is_available', true)
-    .order(countColumn, { ascending: true })
-    .limit(5); // Lấy 5 shipper ít đơn nhất
+    .order(countColumn, { ascending: true });
+
+  // Loại trừ shipper nếu cần (dùng cho reassignment)
+  if (excludeShipperId) {
+    query = query.neq('id', excludeShipperId);
+  }
+
+  const { data, error } = await query.limit(10);
 
   if (error) {
-    console.error('Failed to find available shipper:', error);
+    console.error('[AssignmentService] Failed to find available shipper:', error);
     return null;
   }
 
-  if (!data || data.length === 0) return null;
+  console.log(`[AssignmentService] Query result: ${data?.length || 0} shippers found in office ${postOfficeId}`);
+  
+  if (data && data.length > 0) {
+    console.log('[AssignmentService] Available shippers:', data.map(s => ({
+      id: s.id,
+      name: s.user?.full_name,
+      status: s.status,
+      is_online: s.is_online,
+      is_available: s.is_available,
+      pickup_count: s.current_pickup_count,
+      delivery_count: s.current_delivery_count,
+    })));
+  }
 
-  // Kiểm tra cân bằng tải
+  if (!data || data.length === 0) {
+    // Query all shippers in office to see why none are available
+    const { data: allShippers } = await supabaseAdmin
+      .from('shippers')
+      .select('id, status, is_online, is_available, post_office_id, user_id')
+      .eq('post_office_id', postOfficeId);
+    
+    // Get user info separately
+    const shippersWithUsers = await Promise.all((allShippers || []).map(async (s) => {
+      const { data: user } = await supabaseAdmin
+        .from('users')
+        .select('full_name')
+        .eq('id', s.user_id)
+        .single();
+      return { ...s, user };
+    }));
+    
+    console.log(`[AssignmentService] All shippers in office ${postOfficeId}:`, shippersWithUsers.map(s => ({
+      id: s.id,
+      name: s.user?.full_name,
+      status: s.status,
+      is_online: s.is_online,
+      is_available: s.is_available,
+    })));
+    
+    return null;
+  }
+
+  // Load balancing: Chọn trong nhóm shipper có số đơn chênh lệch <= MAX_ORDER_DIFFERENCE
   const minCount = data[0][countColumn] || 0;
   const eligibleShippers = data.filter(s => {
     const count = s[countColumn] || 0;
     return count - minCount <= MAX_ORDER_DIFFERENCE;
   });
 
-  // Random chọn 1 trong các shipper đủ điều kiện để tránh luôn chọn cùng 1 người
+  if (eligibleShippers.length === 0) {
+    return data[0]; // Fallback: chọn shipper ít đơn nhất
+  }
+
+  // Random chọn 1 trong các shipper đủ điều kiện để phân bổ đều
   const randomIndex = Math.floor(Math.random() * eligibleShippers.length);
   return eligibleShippers[randomIndex];
 }
 
-/**
- * Tìm shipper trong bán kính 10km với load balancing
- * Requirements: 3.1, 3.2, 3.6
- * 
- * @param {number} lat - Vĩ độ điểm cần tìm
- * @param {number} lng - Kinh độ điểm cần tìm
- * @param {Object} options - Tùy chọn tìm kiếm
- * @param {number} options.radiusKm - Bán kính tìm kiếm (mặc định 10km)
- * @param {string} options.vehicleType - Loại xe yêu cầu (motorcycle, car, truck)
- * @param {string} options.workingArea - Khu vực làm việc (district code)
- * @param {string} options.excludeShipperId - ID shipper cần loại trừ (dùng cho reassignment)
- * @returns {Promise<Object|null>} Shipper được chọn hoặc null
- */
-async function findShipperWithinRadius(lat, lng, options = {}) {
-  const {
-    radiusKm = DEFAULT_SEARCH_RADIUS_KM,
-    vehicleType = null,
-    workingArea = null,
-    excludeShipperId = null,
-  } = options;
-
-  if (!lat || !lng) {
-    console.warn('[AssignmentService] Invalid coordinates for shipper search');
-    return null;
-  }
-
-  // Tính bounding box cho tìm kiếm
-  const latDelta = radiusKm / 111;
-  const lngDelta = radiusKm / (111 * Math.cos(lat * Math.PI / 180));
-
-  // Build query
-  let query = supabaseAdmin
-    .from('shippers')
-    .select(`
-      *,
-      user:users(id, full_name, phone, avatar_url)
-    `)
-    .eq('status', 'active')
-    .eq('is_online', true)
-    .eq('is_available', true)
-    .gte('current_lat', lat - latDelta)
-    .lte('current_lat', lat + latDelta)
-    .gte('current_lng', lng - lngDelta)
-    .lte('current_lng', lng + lngDelta);
-
-  // Filter by vehicle type if specified (Requirements: 3.6)
-  if (vehicleType) {
-    query = query.eq('vehicle_type', vehicleType);
-  }
-
-  // Filter by working area if specified (Requirements: 3.6)
-  if (workingArea) {
-    query = query.eq('working_area', workingArea);
-  }
-
-  // Exclude specific shipper (for reassignment)
-  if (excludeShipperId) {
-    query = query.neq('id', excludeShipperId);
-  }
-
-  // Order by current order count for load balancing (Requirements: 3.2)
-  query = query.order('current_pickup_count', { ascending: true });
-
-  const { data, error } = await query.limit(10);
-
-  if (error) {
-    console.error('[AssignmentService] Failed to find shippers within radius:', error);
-    return null;
-  }
-
-  if (!data || data.length === 0) {
-    console.log(`[AssignmentService] No shippers found within ${radiusKm}km radius`);
-    return null;
-  }
-
-  // Calculate actual distance and filter by radius
-  const shippersWithDistance = data.map(shipper => ({
-    ...shipper,
-    distance: calculateDistance(lat, lng, parseFloat(shipper.current_lat), parseFloat(shipper.current_lng)),
-  })).filter(s => s.distance <= radiusKm);
-
-  if (shippersWithDistance.length === 0) {
-    console.log(`[AssignmentService] No shippers within exact ${radiusKm}km radius`);
-    return null;
-  }
-
-  // Sort by order count first, then by distance
-  shippersWithDistance.sort((a, b) => {
-    const countDiff = (a.current_pickup_count || 0) - (b.current_pickup_count || 0);
-    if (countDiff !== 0) return countDiff;
-    return a.distance - b.distance;
-  });
-
-  // Apply load balancing: select from shippers with order count within MAX_ORDER_DIFFERENCE
-  const minCount = shippersWithDistance[0].current_pickup_count || 0;
-  const eligibleShippers = shippersWithDistance.filter(s => {
-    const count = s.current_pickup_count || 0;
-    return count - minCount <= MAX_ORDER_DIFFERENCE;
-  });
-
-  // Random selection among eligible shippers to avoid always picking the same one
-  const randomIndex = Math.floor(Math.random() * eligibleShippers.length);
-  const selectedShipper = eligibleShippers[randomIndex];
-
-  console.log(`[AssignmentService] Selected shipper ${selectedShipper.id} (${selectedShipper.user?.full_name}) - distance: ${selectedShipper.distance.toFixed(2)}km, orders: ${selectedShipper.current_pickup_count || 0}`);
-
-  return selectedShipper;
-}
+// NOTE: findShipperWithinRadius đã được loại bỏ
+// Nghiệp vụ mới: Shipper thuộc bưu cục nào thì nhận đơn của bưu cục đó
+// Sử dụng findAvailableShipperInOffice thay thế
 
 /**
  * Tự động phân công shipper cho shipment
- * Requirements: 3.1, 3.2, 3.6
+ * 
+ * Nghiệp vụ:
+ * - Mỗi bưu cục có nhiều shipper làm việc
+ * - Shipper thuộc bưu cục nào thì nhận đơn của bưu cục đó
+ * - Load balancing: Chênh lệch tối đa 5-7 đơn giữa các shipper cùng bưu cục
+ * 
+ * Luồng giao hàng:
+ * Shop → Bưu cục lấy hàng → [Kho trung chuyển nếu khác miền] → Bưu cục giao → Khách
  * 
  * @param {string} shipmentId
  * @param {Object} options - Tùy chọn phân công
@@ -241,76 +215,170 @@ async function findShipperWithinRadius(lat, lng, options = {}) {
  */
 async function autoAssignShipment(shipmentId, options = {}) {
   const { excludeShipperId = null, queueOnFailure = true } = options;
+  
+  console.log('[AssignmentService] ========== AUTO ASSIGN START ==========');
+  console.log('[AssignmentService] autoAssignShipment called:', { shipmentId, options });
 
   const shipment = await shipmentRepository.findShipmentById(shipmentId);
   if (!shipment) {
+    console.log('[AssignmentService] Shipment not found:', shipmentId);
     throw new AppError('SHIPMENT_NOT_FOUND', 'Shipment not found', 404);
   }
+  
+  console.log('[AssignmentService] Shipment found:', {
+    id: shipment.id,
+    status: shipment.status,
+    pickup_lat: shipment.pickup_lat,
+    pickup_lng: shipment.pickup_lng,
+    delivery_lat: shipment.delivery_lat,
+    delivery_lng: shipment.delivery_lng,
+    sub_order_id: shipment.sub_order_id,
+    sub_order: shipment.sub_order,
+  });
 
   if (shipment.status !== 'created' && shipment.status !== 'pending_assignment') {
+    console.log('[AssignmentService] Invalid status:', shipment.status);
     throw new AppError('INVALID_STATUS', 'Shipment already assigned or processed', 400);
   }
 
-  // Strategy 1: Tìm shipper trực tiếp trong bán kính 10km từ điểm lấy hàng
-  let pickupShipper = await findShipperWithinRadius(
-    parseFloat(shipment.pickup_lat),
-    parseFloat(shipment.pickup_lng),
-    {
-      radiusKm: DEFAULT_SEARCH_RADIUS_KM,
-      excludeShipperId,
+  // Get pickup coordinates - fallback to shop coordinates if shipment doesn't have them
+  let pickupLat = parseFloat(shipment.pickup_lat);
+  let pickupLng = parseFloat(shipment.pickup_lng);
+  
+  if (!pickupLat || !pickupLng || isNaN(pickupLat) || isNaN(pickupLng)) {
+    console.log('[AssignmentService] Shipment has no pickup coords, fetching from shop...');
+    
+    // Get shop_id from sub_order (either from joined data or query directly)
+    let shopId = shipment.sub_order?.shop_id;
+    
+    if (!shopId && shipment.sub_order_id) {
+      // Query sub_order directly to get shop_id
+      const { data: subOrder } = await supabaseAdmin
+        .from('sub_orders')
+        .select('shop_id')
+        .eq('id', shipment.sub_order_id)
+        .single();
+      shopId = subOrder?.shop_id;
+      console.log('[AssignmentService] Got shop_id from sub_order:', shopId);
     }
-  );
-
-  // Strategy 2: Nếu không tìm thấy, thử tìm qua bưu cục
-  let pickupOffice = null;
-  let deliveryOffice = null;
-
-  if (!pickupShipper) {
-    // Fallback: Tìm qua bưu cục
-    pickupOffice = await findNearestPostOffice(
-      parseFloat(shipment.pickup_lat),
-      parseFloat(shipment.pickup_lng),
-      'local'
-    );
-
-    if (pickupOffice) {
-      pickupShipper = await findAvailableShipper(pickupOffice.id, 'pickup');
+    
+    if (shopId) {
+      const { data: shop } = await supabaseAdmin
+        .from('shops')
+        .select('id, shop_name, lat, lng, address, ward, district, city')
+        .eq('id', shopId)
+        .single();
+      
+      if (shop) {
+        const fullAddress = [shop.address, shop.ward, shop.district, shop.city].filter(Boolean).join(', ');
+        console.log('[AssignmentService] Shop found:', { 
+          id: shop.id, 
+          name: shop.shop_name, 
+          lat: shop.lat, 
+          lng: shop.lng,
+          address: fullAddress
+        });
+        pickupLat = parseFloat(shop.lat);
+        pickupLng = parseFloat(shop.lng);
+        
+        // If shop has no coordinates, try to geocode the address
+        if ((!pickupLat || !pickupLng || isNaN(pickupLat) || isNaN(pickupLng)) && fullAddress) {
+          console.log('[AssignmentService] Shop has no coordinates, geocoding address...');
+          try {
+            const geocodeResult = await goongClient.geocode(fullAddress);
+            if (geocodeResult?.lat && geocodeResult?.lng) {
+              pickupLat = geocodeResult.lat;
+              pickupLng = geocodeResult.lng;
+              console.log('[AssignmentService] Geocoded shop address:', { lat: pickupLat, lng: pickupLng });
+              
+              // Update shop with geocoded coordinates
+              await supabaseAdmin
+                .from('shops')
+                .update({ lat: pickupLat, lng: pickupLng })
+                .eq('id', shopId);
+              console.log('[AssignmentService] Updated shop with geocoded coordinates');
+            } else {
+              console.log('[AssignmentService] Geocoding failed for address:', fullAddress);
+            }
+          } catch (geocodeError) {
+            console.error('[AssignmentService] Geocode error:', geocodeError.message);
+          }
+        }
+        
+        // Update shipment with shop coordinates for future use
+        if (pickupLat && pickupLng && !isNaN(pickupLat) && !isNaN(pickupLng)) {
+          await supabaseAdmin
+            .from('shipments')
+            .update({ pickup_lat: pickupLat, pickup_lng: pickupLng })
+            .eq('id', shipmentId);
+          console.log('[AssignmentService] Updated shipment with shop coordinates');
+        } else {
+          console.log('[AssignmentService] Shop has no coordinates and geocoding failed!');
+        }
+      } else {
+        console.log('[AssignmentService] Shop not found for id:', shopId);
+      }
+    } else {
+      console.log('[AssignmentService] No shop_id found in shipment or sub_order');
     }
   }
 
-  // Nếu vẫn không tìm thấy shipper
-  if (!pickupShipper) {
-    if (queueOnFailure) {
-      // Queue shipment for retry (Requirements: 3.3)
-      await queueUnassignedShipment(shipmentId);
-      console.log(`[AssignmentService] No shipper available, queued shipment ${shipmentId} for retry`);
-    }
-    throw new AppError('NO_SHIPPER_AVAILABLE', 'Không có shipper khả dụng trong khu vực', 400);
-  }
+  // 1. Tìm bưu cục lấy hàng (gần shop nhất)
+  console.log('[AssignmentService] Finding nearest pickup office for coords:', {
+    lat: pickupLat,
+    lng: pickupLng,
+  });
+  
+  const pickupOffice = await findNearestPostOffice(pickupLat, pickupLng, 'local');
 
-  // Tìm bưu cục nếu chưa có (để lưu thông tin)
   if (!pickupOffice) {
-    pickupOffice = await findNearestPostOffice(
-      parseFloat(shipment.pickup_lat),
-      parseFloat(shipment.pickup_lng),
-      'local'
-    );
+    console.warn(`[AssignmentService] No pickup office found for shipment ${shipmentId}`);
+    if (queueOnFailure) {
+      await queueUnassignedShipment(shipmentId);
+    }
+    throw new AppError('NO_OFFICE_FOUND', 'Không tìm thấy bưu cục lấy hàng trong khu vực', 400);
   }
 
-  deliveryOffice = await findNearestPostOffice(
+  console.log(`[AssignmentService] Found pickup office: ${pickupOffice.name_vi} (${pickupOffice.code}), distance: ${pickupOffice.distance?.toFixed(2)}km`);
+
+  // 2. Tìm shipper lấy hàng trong bưu cục (load balancing)
+  console.log('[AssignmentService] Finding available shipper in office:', pickupOffice.id);
+  const pickupShipper = await findAvailableShipperInOffice(pickupOffice.id, 'pickup', excludeShipperId);
+
+  if (!pickupShipper) {
+    console.log(`[AssignmentService] No shipper available in office ${pickupOffice.code} (${pickupOffice.id})`);
+    if (queueOnFailure) {
+      await queueUnassignedShipment(shipmentId);
+      console.log(`[AssignmentService] Queued shipment ${shipmentId} for retry`);
+    }
+    throw new AppError('NO_SHIPPER_AVAILABLE', `Không có shipper khả dụng tại bưu cục ${pickupOffice.name_vi}`, 400);
+  }
+
+  console.log(`[AssignmentService] ✓ Assigned pickup shipper:`, {
+    id: pickupShipper.id,
+    name: pickupShipper.user?.full_name,
+    phone: pickupShipper.user?.phone,
+    currentPickupCount: pickupShipper.current_pickup_count || 0,
+    isOnline: pickupShipper.is_online,
+    isAvailable: pickupShipper.is_available,
+  });
+
+  // 3. Tìm bưu cục giao hàng (gần khách nhất)
+  const deliveryOffice = await findNearestPostOffice(
     parseFloat(shipment.delivery_lat),
     parseFloat(shipment.delivery_lng),
     'local'
   );
 
-  // Tìm shipper giao hàng (có thể cùng hoặc khác shipper lấy hàng)
+  // 4. Xác định shipper giao hàng
   let deliveryShipper = pickupShipper; // Mặc định cùng shipper
 
-  // Nếu khoảng cách giao hàng xa (khác khu vực), có thể cần shipper khác
-  if (deliveryOffice && pickupOffice && deliveryOffice.id !== pickupOffice.id) {
-    const altDeliveryShipper = await findAvailableShipper(deliveryOffice.id, 'delivery');
+  // Nếu bưu cục giao khác bưu cục lấy → cần shipper khác
+  if (deliveryOffice && deliveryOffice.id !== pickupOffice.id) {
+    const altDeliveryShipper = await findAvailableShipperInOffice(deliveryOffice.id, 'delivery', null);
     if (altDeliveryShipper) {
       deliveryShipper = altDeliveryShipper;
+      console.log(`[AssignmentService] Assigned delivery shipper: ${deliveryShipper.user?.full_name} (different office)`);
     }
   }
 
@@ -783,7 +851,7 @@ module.exports = {
   // Core assignment
   findNearestPostOffice,
   findAvailableShipper,
-  findShipperWithinRadius,
+  findAvailableShipperInOffice,
   autoAssignShipment,
   
   // Order count management

@@ -14,130 +14,214 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: BlocBuilder<AuthBloc, AuthState>(
+      body: BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is Unauthenticated) {
+            context.go('/login');
+          }
+        },
         builder: (context, state) {
           if (state is Authenticated) {
             final shipper = state.shipper;
             return SingleChildScrollView(
               child: Column(
                 children: [
-                  // Header
+                  // Orange Gradient Header
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.only(top: 60, bottom: 30),
                     decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
-                        bottomRight: Radius.circular(30),
-                      ),
+                      gradient: AppColors.headerGradient,
                     ),
-                    child: Column(
-                      children: [
-                        Stack(
-                          children: [
-                            const CircleAvatar(
-                              radius: 50,
-                              backgroundColor: AppColors.primary,
-                              child: Icon(Icons.person, size: 50, color: Colors.white), 
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: AppColors.success,
-                                  shape: BoxShape.circle,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Column(
+                        children: [
+                          // Top Bar
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Hồ sơ của tôi',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                                child: const Icon(Icons.check, size: 16, color: Colors.white),
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          shipper.fullName,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                                  onPressed: () => context.push('/settings'),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          shipper.phone,
-                          style: GoogleFonts.plusJakartaSans(color: AppColors.textSecondary),
-                        ),
-                      ],
+                          const SizedBox(height: 20),
+                          // Avatar
+                          Stack(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 3),
+                                ),
+                                child: const CircleAvatar(
+                                  radius: 50,
+                                  backgroundColor: Colors.white,
+                                  child: Icon(Icons.person, size: 50, color: AppColors.primary),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 4,
+                                right: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(Icons.check, size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            shipper.fullName,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            shipper.phone,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
                   ),
                   
-                  const SizedBox(height: 24),
-                  
+                  // Content
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildSectionTitle("Vehicle Information"),
-                        const SizedBox(height: 12),
+                        // Stats Row
                         Container(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          child: Column(
+                          child: Row(
                             children: [
-                              _buildInfoRow("Vehicle Type", shipper.vehicleType, Icons.directions_car),
-                              const Divider(height: 30),
-                              _buildInfoRow("License Plate", shipper.vehiclePlate, Icons.credit_card),
+                              Expanded(
+                                child: _buildStatItem(
+                                  icon: Icons.local_shipping,
+                                  value: '${shipper.totalDeliveries}',
+                                  label: 'Đơn giao',
+                                ),
+                              ),
+                              Container(width: 1, height: 40, color: AppColors.border),
+                              Expanded(
+                                child: _buildStatItem(
+                                  icon: Icons.star,
+                                  value: '${shipper.avgRating}',
+                                  label: 'Đánh giá',
+                                ),
+                              ),
+                              Container(width: 1, height: 40, color: AppColors.border),
+                              Expanded(
+                                child: _buildStatItem(
+                                  icon: Icons.check_circle,
+                                  value: '98%',
+                                  label: 'Thành công',
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         
                         const SizedBox(height: 24),
-                        _buildSectionTitle("Statistics"),
+                        _buildSectionTitle('Phương tiện'),
                         const SizedBox(height: 12),
-                         Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                        _buildCard([
+                          _buildMenuItem(
+                            icon: Icons.two_wheeler,
+                            title: 'Loại xe',
+                            subtitle: shipper.vehicleType,
+                            iconColor: AppColors.primary,
                           ),
-                          child: Column(
-                            children: [
-                              _buildInfoRow("Total Deliveries", "${shipper.totalDeliveries}", Icons.local_shipping),
-                              const Divider(height: 30),
-                              _buildInfoRow("Overall Rating", "${shipper.avgRating} ⭐", Icons.star),
-                            ],
+                          _buildMenuItem(
+                            icon: Icons.credit_card,
+                            title: 'Biển số',
+                            subtitle: shipper.vehiclePlate,
+                            iconColor: AppColors.info,
                           ),
-                        ),
+                        ]),
                         
                         const SizedBox(height: 24),
-                        _buildSectionTitle("Settings"),
+                        _buildSectionTitle('Cài đặt'),
                         const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                        _buildCard([
+                          _buildMenuAction(
+                            icon: Icons.notifications_outlined,
+                            title: 'Thông báo',
+                            iconColor: AppColors.warning,
+                            onTap: () {},
                           ),
-                          child: Column(
-                            children: [
-                               ListTile(
-                                leading: const Icon(Icons.settings_outlined, color: AppColors.primary),
-                                title: const Text("App Settings"),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () => context.push('/settings'),
+                          _buildMenuAction(
+                            icon: Icons.lock_outline,
+                            title: 'Đổi mật khẩu',
+                            iconColor: AppColors.info,
+                            onTap: () {},
+                          ),
+                          _buildMenuAction(
+                            icon: Icons.help_outline,
+                            title: 'Hỗ trợ',
+                            iconColor: AppColors.success,
+                            onTap: () {},
+                          ),
+                        ]),
+                        
+                        const SizedBox(height: 24),
+                        // Logout Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              context.read<AuthBloc>().add(LogoutRequested());
+                            },
+                            icon: const Icon(Icons.logout, color: AppColors.error),
+                            label: const Text(
+                              'Đăng xuất',
+                              style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.error),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              ListTile(
-                                leading: const Icon(Icons.logout, color: AppColors.error),
-                                title: const Text("Log Out", style: TextStyle(color: AppColors.error)),
-                                onTap: () {
-                                  context.read<AuthBloc>().add(LogoutRequested());
-                                },
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 40),
@@ -148,7 +232,7 @@ class ProfilePage extends StatelessWidget {
               ),
             );
           }
-          return const Center(child: Text("Not authenticated"));
+          return const Center(child: Text('Chưa đăng nhập'));
         },
       ),
     );
@@ -158,33 +242,94 @@ class ProfilePage extends StatelessWidget {
     return Text(
       title,
       style: GoogleFonts.plusJakartaSans(
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
       ),
     );
   }
 
-  Widget _buildInfoRow(String title, String value, IconData icon) {
-    return Row(
+  Widget _buildStatItem({
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
+    return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(8),
+        Icon(icon, color: AppColors.primary, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
           ),
-          child: Icon(icon, size: 20, color: AppColors.textSecondary),
         ),
-        const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          ],
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
       ],
     );
   }
+
+  Widget _buildCard(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color iconColor,
+  }) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      title: Text(title, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _buildMenuAction({
+    required IconData icon,
+    required String title,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+      onTap: onTap,
+    );
+  }
 }
+

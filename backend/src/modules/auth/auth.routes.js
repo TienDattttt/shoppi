@@ -112,6 +112,20 @@ router.post(
 );
 
 /**
+ * Public Location Data (for shipper registration)
+ * No authentication required
+ */
+
+// Get provinces list
+router.get('/locations/provinces', authController.getProvinces);
+
+// Get wards by province
+router.get('/locations/wards', authController.getWards);
+
+// Get post offices by ward
+router.get('/locations/post-offices', authController.getPostOfficesByWard);
+
+/**
  * Protected Routes (Authentication required)
  */
 

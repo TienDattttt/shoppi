@@ -75,6 +75,20 @@ async function findOrderById(orderId) {
 }
 
 /**
+ * Find order by payment provider order ID (e.g., ZaloPay app_trans_id)
+ */
+async function findOrderByProviderOrderId(providerOrderId) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('payment_provider_order_id', providerOrderId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+}
+
+/**
  * Find orders by user with filters
  */
 async function findOrdersByUser(userId, filters = {}) {
@@ -272,7 +286,16 @@ async function findSubOrderById(subOrderId) {
     .from('sub_orders')
     .select(`
       *,
-      order_items (*)
+      order_items (*),
+      orders (
+        id,
+        order_number,
+        shipping_name,
+        shipping_phone,
+        shipping_address,
+        payment_method,
+        payment_status
+      )
     `)
     .eq('id', subOrderId)
     .single();
@@ -515,6 +538,7 @@ module.exports = {
   generateOrderNumber,
   createOrder,
   findOrderById,
+  findOrderByProviderOrderId,
   findOrdersByUser,
   updateOrderStatus,
   updatePaymentStatus,

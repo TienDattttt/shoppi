@@ -200,6 +200,7 @@ async function registerShipper(data) {
     phone, password, fullName, idCardNumber, vehicleType, vehiclePlate,
     vehicleBrand, vehicleModel, workingDistrict, workingCity, workingArea,
     idCardFrontUrl, idCardBackUrl, driverLicenseUrl,
+    postOfficeId, // New: bưu cục làm việc
   } = data;
 
   // Check for existing user
@@ -237,6 +238,8 @@ async function registerShipper(data) {
     id_card_front_url: idCardFrontUrl || null,
     id_card_back_url: idCardBackUrl || null,
     driver_license_url: driverLicenseUrl || null,
+    // Post office assignment
+    post_office_id: postOfficeId || null,
     status: 'pending', // Requires admin approval
   });
 

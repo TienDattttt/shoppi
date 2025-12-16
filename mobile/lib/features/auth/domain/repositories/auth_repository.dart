@@ -17,4 +17,9 @@ abstract class AuthRepository {
   Future<Either<Failure, void>> logout();
 
   Future<Either<Failure, ShipperEntity>> getCurrentShipper();
+
+  // Location APIs
+  Future<Either<Failure, List<dynamic>>> getProvinces();
+  Future<Either<Failure, List<dynamic>>> getWards(String provinceCode);
+  Future<Either<Failure, List<dynamic>>> getPostOffices(String wardCode);
 }

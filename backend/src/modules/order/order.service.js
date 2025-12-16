@@ -171,6 +171,86 @@ async function getOrders(userId, filters = {}) {
 }
 
 /**
+ * Get partner's sub-order by ID
+ */
+async function getPartnerOrderById(subOrderId, partnerId) {
+  const subOrder = await orderRepository.findSubOrderById(subOrderId);
+  
+  if (!subOrder) {
+    throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
+  }
+  
+  // Verify shop ownership via partner_id
+  const shopId = await getShopIdFromPartner(partnerId);
+  if (!shopId || subOrder.shop_id !== shopId) {
+    throw new AppError('ORDER_NOT_FOUND', 'Order not found', 404);
+  }
+  
+  const serialized = orderDTO.serializeSubOrder(subOrder);
+  
+  // Get shipment data for this sub-order
+  try {
+    const { data: shipment, error: shipmentError } = await supabaseAdmin
+      .from('shipments')
+      .select(`
+        id,
+        tracking_number,
+        status,
+        estimated_pickup,
+        estimated_delivery,
+        assigned_at,
+        picked_up_at,
+        delivered_at,
+        shipper_id
+      `)
+      .eq('sub_order_id', subOrder.id)
+      .single();
+    
+    // If shipment found, get shipper info separately to avoid relationship issues
+    let shipperInfo = null;
+    if (shipment?.shipper_id) {
+      const { data: shipper } = await supabaseAdmin
+        .from('shippers')
+        .select(`
+          id,
+          vehicle_type,
+          vehicle_plate,
+          user:users(id, full_name, phone, avatar_url)
+        `)
+        .eq('id', shipment.shipper_id)
+        .single();
+      shipperInfo = shipper;
+    }
+    
+    if (shipment && !shipmentError) {
+      serialized.shipment = {
+        id: shipment.id,
+        trackingNumber: shipment.tracking_number,
+        status: shipment.status,
+        statusVi: getShipmentStatusVietnamese(shipment.status),
+        estimatedPickup: shipment.estimated_pickup,
+        estimatedDelivery: shipment.estimated_delivery,
+        assignedAt: shipment.assigned_at,
+        pickedUpAt: shipment.picked_up_at,
+        deliveredAt: shipment.delivered_at,
+        shipper: shipperInfo ? {
+          id: shipperInfo.id,
+          name: shipperInfo.user?.full_name,
+          phone: maskPhoneNumber(shipperInfo.user?.phone),
+          avatarUrl: shipperInfo.user?.avatar_url,
+          vehicleType: shipperInfo.vehicle_type,
+          vehiclePlate: shipperInfo.vehicle_plate,
+        } : null,
+      };
+    }
+  } catch (e) {
+    // No shipment found, that's okay
+  }
+  
+  return serialized;
+}
+
+/**
  * Get partner's orders
  */
 async function getPartnerOrders(partnerId, filters = {}) {
@@ -202,7 +282,7 @@ async function getPartnerOrders(partnerId, filters = {}) {
     
     // Get shipment data for this sub-order
     try {
-      const { data: shipment } = await supabaseAdmin
+      const { data: shipment, error: shipmentError } = await supabaseAdmin
         .from('shipments')
         .select(`
           id,
@@ -213,17 +293,28 @@ async function getPartnerOrders(partnerId, filters = {}) {
           assigned_at,
           picked_up_at,
           delivered_at,
-          shipper:shippers(
-            id,
-            vehicle_type,
-            vehicle_plate,
-            user:users(id, full_name, phone, avatar_url)
-          )
+          shipper_id
         `)
         .eq('sub_order_id', subOrder.id)
         .single();
       
-      if (shipment) {
+      // If shipment found, get shipper info separately to avoid relationship issues
+      let shipperInfo = null;
+      if (shipment?.shipper_id) {
+        const { data: shipper } = await supabaseAdmin
+          .from('shippers')
+          .select(`
+            id,
+            vehicle_type,
+            vehicle_plate,
+            user:users(id, full_name, phone, avatar_url)
+          `)
+          .eq('id', shipment.shipper_id)
+          .single();
+        shipperInfo = shipper;
+      }
+      
+      if (shipment && !shipmentError) {
         serialized.shipment = {
           id: shipment.id,
           trackingNumber: shipment.tracking_number,
@@ -234,18 +325,21 @@ async function getPartnerOrders(partnerId, filters = {}) {
           assignedAt: shipment.assigned_at,
           pickedUpAt: shipment.picked_up_at,
           deliveredAt: shipment.delivered_at,
-          shipper: shipment.shipper ? {
-            id: shipment.shipper.id,
-            name: shipment.shipper.user?.full_name,
-            phone: maskPhoneNumber(shipment.shipper.user?.phone),
-            avatarUrl: shipment.shipper.user?.avatar_url,
-            vehicleType: shipment.shipper.vehicle_type,
-            vehiclePlate: shipment.shipper.vehicle_plate,
+          shipper: shipperInfo ? {
+            id: shipperInfo.id,
+            name: shipperInfo.user?.full_name,
+            phone: maskPhoneNumber(shipperInfo.user?.phone),
+            avatarUrl: shipperInfo.user?.avatar_url,
+            vehicleType: shipperInfo.vehicle_type,
+            vehiclePlate: shipperInfo.vehicle_plate,
           } : null,
         };
       }
     } catch (e) {
-      // No shipment found, that's okay
+      // No shipment found, that's okay - PGRST116 is "no rows returned"
+      if (e.code !== 'PGRST116') {
+        console.warn(`[OrderService] Error fetching shipment for sub-order ${subOrder.id}:`, e.message);
+      }
     }
     
     return serialized;
@@ -650,8 +744,9 @@ async function handlePaymentSuccess(orderId, transactionData) {
   
   console.log(`[OrderService] Processing payment success for order ${orderId}`);
   
-  // Update order payment status
+  // Update order payment status and order status
   await orderRepository.updatePaymentStatus(orderId, 'paid');
+  await orderRepository.updateOrderStatus(orderId, ORDER_STATUS.PROCESSING);
   
   // Update sub-orders to pending (waiting for partner confirmation)
   const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
@@ -849,6 +944,7 @@ module.exports = {
   getOrderById,
   getOrders,
   getPartnerOrders,
+  getPartnerOrderById,
   cancelOrder,
   confirmReceipt,
   confirmOrder,

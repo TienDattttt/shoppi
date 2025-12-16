@@ -23,13 +23,25 @@ export default function PaymentResultPage() {
         }
     }, [orderId]);
 
-    const confirmAndCheckPayment = async () => {
+    const confirmAndCheckPayment = async (retryCount = 0) => {
         try {
             // First, try to confirm payment with provider (for sandbox where webhook doesn't work)
             // This will query the payment provider and update status if paid
             const confirmResult = await orderService.confirmPayment(orderId!);
             console.log("Payment confirm result:", confirmResult);
+            
+            // If still pending and we haven't retried too many times, wait and retry
+            // ZaloPay sandbox sometimes takes a few seconds to process payment
+            // Increase retry count and delay for better success rate
+            if (confirmResult.paymentStatus === 'pending' && retryCount < 5) {
+                const delay = retryCount < 2 ? 2000 : 3000; // First 2 attempts: 2s, then 3s
+                console.log(`Payment still pending, retrying in ${delay/1000}s... (attempt ${retryCount + 1}/5)`);
+                setTimeout(() => confirmAndCheckPayment(retryCount + 1), delay);
+                return;
+            }
+            
             setPaymentStatus(confirmResult.paymentStatus);
+            setLoading(false);
         } catch (error) {
             console.error("Failed to confirm payment:", error);
             // Fallback to just checking status
@@ -39,7 +51,6 @@ export default function PaymentResultPage() {
             } catch (statusError) {
                 console.error("Failed to check payment status:", statusError);
             }
-        } finally {
             setLoading(false);
         }
     };

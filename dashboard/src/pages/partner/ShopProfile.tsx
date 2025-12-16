@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { AddressPicker } from "@/components/partner/AddressPicker";
+import { AddressAutocomplete } from "@/components/common/AddressAutocomplete";
 import { OperatingHoursEditor } from "@/components/partner/OperatingHoursEditor";
 import { ImagePlus, Upload, Loader2 } from "lucide-react";
 import { shopService } from "@/services/shop.service";
+import type { PlaceDetail } from "@/services/address.service";
 import { toast } from "sonner";
 
 export default function ShopProfile() {
@@ -21,10 +22,12 @@ export default function ShopProfile() {
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
     const [address, setAddress] = useState("");
+    const [fullAddress, setFullAddress] = useState("");
     const [city, setCity] = useState("");
     const [district, setDistrict] = useState("");
     const [ward, setWard] = useState("");
     const [hours, setHours] = useState({});
+    const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
     
     // Image states
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -54,9 +57,13 @@ export default function ShopProfile() {
             setPhone(shopData.phone || "");
             setEmail(shopData.email || "");
             setAddress(shopData.address || "");
+            setFullAddress(shopData.fullAddress || shopData.full_address || "");
             setCity(shopData.city || "");
             setDistrict(shopData.district || "");
             setWard(shopData.ward || "");
+            if (shopData.lat && shopData.lng) {
+                setCoordinates({ lat: shopData.lat, lng: shopData.lng });
+            }
             setHours(shopData.operatingHours || shopData.operating_hours || {});
             setLogoUrl(shopData.logoUrl || shopData.logo_url || null);
             setBannerUrl(shopData.bannerUrl || shopData.banner_url || null);
@@ -138,9 +145,12 @@ export default function ShopProfile() {
                 phone,
                 email: email || null,
                 address: address || null,
+                full_address: fullAddress || null,
                 city: city || null,
                 district: district || null,
                 ward: ward || null,
+                lat: coordinates?.lat || null,
+                lng: coordinates?.lng || null,
             };
             
             // Only include operating_hours if it has valid data
@@ -299,25 +309,76 @@ export default function ShopProfile() {
                                 </div>
                             </div>
 
-                            {/* Address Section */}
-                            <div className="space-y-2 pt-2">
+                            {/* Address Section - Goong Autocomplete */}
+                            <div className="space-y-4 pt-2">
                                 <Label className="text-base font-semibold">Địa chỉ kho hàng</Label>
-                                <AddressPicker
-                                    city={city}
-                                    district={district}
-                                    ward={ward}
-                                    onCityChange={setCity}
-                                    onDistrictChange={setDistrict}
-                                    onWardChange={setWard}
-                                />
-                                <div className="grid gap-2 mt-2">
+                                
+                                {/* Autocomplete tìm địa chỉ */}
+                                <div className="space-y-2">
+                                    <Label>Tìm địa chỉ</Label>
+                                    <AddressAutocomplete
+                                        value={fullAddress}
+                                        placeholder="Nhập địa chỉ kho hàng để tìm kiếm..."
+                                        onSelect={(place: PlaceDetail) => {
+                                            setFullAddress(place.formattedAddress);
+                                            setCity(place.compound?.province || city);
+                                            setDistrict(place.compound?.district || district);
+                                            setWard(place.compound?.commune || ward);
+                                            setAddress(place.name || place.formattedAddress.split(',')[0] || address);
+                                            if (place.lat && place.lng) {
+                                                setCoordinates({ lat: place.lat, lng: place.lng });
+                                            }
+                                        }}
+                                        onChange={setFullAddress}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Gợi ý: Nhập số nhà, tên đường hoặc tên địa điểm
+                                    </p>
+                                </div>
+
+                                {/* Chi tiết địa chỉ */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="space-y-2">
+                                        <Label>Tỉnh/Thành phố</Label>
+                                        <Input 
+                                            value={city}
+                                            onChange={(e) => setCity(e.target.value)}
+                                            placeholder="TP. Hồ Chí Minh"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Quận/Huyện</Label>
+                                        <Input 
+                                            value={district}
+                                            onChange={(e) => setDistrict(e.target.value)}
+                                            placeholder="Tân Bình"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Phường/Xã</Label>
+                                        <Input 
+                                            value={ward}
+                                            onChange={(e) => setWard(e.target.value)}
+                                            placeholder="Phường 1"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
                                     <Label htmlFor="street">Số nhà, Tên đường</Label>
                                     <Input 
                                         id="street" 
                                         value={address}
                                         onChange={(e) => setAddress(e.target.value)}
+                                        placeholder="263B Lê Văn Sỹ"
                                     />
                                 </div>
+
+                                {coordinates && (
+                                    <p className="text-xs text-muted-foreground">
+                                        📍 Tọa độ: {coordinates.lat.toFixed(6)}, {coordinates.lng.toFixed(6)}
+                                    </p>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
