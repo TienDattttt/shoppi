@@ -236,9 +236,14 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
       if (location != null) 'location': location,
     });
     
+    print('[ShipmentRemoteDataSource] scanPickup response: $response');
+    
     if (response is Map<String, dynamic>) {
       final data = response['data']?['shipment'] ?? response['data'] ?? response;
-      return ShipmentModel.fromJson(data as Map<String, dynamic>);
+      print('[ShipmentRemoteDataSource] scanPickup parsed data: $data');
+      final model = ShipmentModel.fromJson(data as Map<String, dynamic>);
+      print('[ShipmentRemoteDataSource] scanPickup model status: ${model.status}');
+      return model;
     }
     throw Exception('Invalid response format');
   }

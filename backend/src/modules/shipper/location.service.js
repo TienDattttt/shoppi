@@ -15,6 +15,7 @@ const shipperRepository = require('./shipper.repository');
 const redisClient = require('../../shared/redis/redis.client');
 const shipperTrackingRepo = require('../../shared/cassandra/shipper-tracking.cassandra.repository');
 const realtimeClient = require('../../shared/supabase/realtime.client');
+const { emitShipperLocation } = require('../../shared/socket/socket.service');
 
 // Proximity threshold in meters for "shipper nearby" notification
 const PROXIMITY_THRESHOLD_METERS = 500;
@@ -65,8 +66,18 @@ async function updateLocation(shipperId, lat, lng, metadata = {}) {
 
   // Broadcast location update for active shipments (async, don't wait)
   if (metadata.shipmentId) {
+    // Broadcast via Supabase Realtime
     broadcastLocation(metadata.shipmentId, locationData).catch(err => {
-      console.error('Failed to broadcast location:', err.message);
+      console.error('Failed to broadcast location via Supabase:', err.message);
+    });
+    
+    // Also emit via Socket.io for real-time tracking
+    emitShipperLocation(metadata.shipmentId, {
+      shipperId,
+      latitude: lat,
+      longitude: lng,
+      heading: metadata.heading,
+      speed: metadata.speed,
     });
   }
 

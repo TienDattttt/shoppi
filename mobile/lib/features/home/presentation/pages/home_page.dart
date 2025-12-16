@@ -379,7 +379,13 @@ class _HomePageState extends State<HomePage> {
             delegate: SliverChildBuilderDelegate(
               (context, index) => ShipmentItemCard(
                 shipment: recentShipments[index],
-                onTap: () => context.push('/shipment/${recentShipments[index].id}', extra: recentShipments[index]),
+                onTap: () async {
+                  final result = await context.push<bool>('/shipment/${recentShipments[index].id}', extra: recentShipments[index]);
+                  // Refresh if shipment was updated
+                  if (result == true && context.mounted) {
+                    context.read<ShipmentListCubit>().fetchShipments();
+                  }
+                },
               ),
               childCount: recentShipments.length,
             ),

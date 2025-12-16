@@ -30,6 +30,15 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
     super.dispose();
   }
 
+  /// Navigate to shipment detail and refresh list when returning
+  Future<void> _navigateToDetail(ShipmentEntity shipment) async {
+    final result = await context.push<bool>('/shipment/${shipment.id}', extra: shipment);
+    // Refresh list if shipment was updated (result == true)
+    if (result == true && mounted) {
+      context.read<ShipmentListCubit>().fetchShipments();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -756,7 +765,7 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
                 child: SizedBox(
                   height: 32,
                   child: ElevatedButton(
-                    onPressed: () => context.push('/shipment/${shipment.id}', extra: shipment),
+                    onPressed: () => _navigateToDetail(shipment),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -777,7 +786,7 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
   /// Mini shipment item trong group
   Widget _buildMiniShipmentItem(ShipmentEntity shipment, {required bool isPickup}) {
     return InkWell(
-      onTap: () => context.push('/shipment/${shipment.id}', extra: shipment),
+      onTap: () => _navigateToDetail(shipment),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
@@ -858,7 +867,7 @@ class _ShipmentsPageState extends State<ShipmentsPage> with SingleTickerProvider
         ],
       ),
       child: InkWell(
-        onTap: () => context.push('/shipment/${shipment.id}', extra: shipment),
+        onTap: () => _navigateToDetail(shipment),
         borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.all(12),

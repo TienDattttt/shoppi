@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:injectable/injectable.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/services/socket_service.dart';
 import '../../domain/entities/location_entity.dart';
 
 abstract class LocationDataSource {
@@ -144,6 +145,19 @@ class LocationDataSourceImpl implements LocationDataSource {
         'speed': location.speed,
         if (shipmentId != null) 'shipmentId': shipmentId,
       });
+
+      // Also emit via Socket.io for real-time tracking
+      // This allows customers to see shipper location in real-time
+      if (shipmentId != null) {
+        SocketService.instance.emitShipperLocation(
+          shipmentId: shipmentId,
+          shipperId: '', // Will be filled by backend from auth token
+          latitude: location.lat,
+          longitude: location.lng,
+          heading: location.heading,
+          speed: location.speed,
+        );
+      }
     } catch (e) {
       // Ignore error - location update failed, will retry on next interval
       // In production, could queue for retry or log to analytics

@@ -6,8 +6,9 @@ Hệ thống tracking vị trí shipper sử dụng kiến trúc hybrid để t�
 
 - **Redis**: Real-time location (GEO commands) - TTL 5 phút
 - **Cassandra**: Lịch sử vị trí (time-series data)
-- **OpenStreetMap**: Hiển thị bản đồ (miễn phí, thay thế Google Maps)
-- **Google Maps**: Chỉ dùng cho navigation/điều hướng
+- **Google Maps**: Hiển thị bản đồ + Navigation
+- **Mapbox**: Backup cho routing/directions (có trong .env)
+- **Supabase Realtime**: Broadcast location updates cho customer
 
 ## Data Flow
 

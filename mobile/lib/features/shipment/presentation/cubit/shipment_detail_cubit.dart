@@ -84,8 +84,14 @@ class ShipmentDetailCubit extends Cubit<ShipmentDetailState> {
     emit(ShipmentDetailLoading());
     final result = await _shipmentRepository.scanPickup(trackingNumber);
     result.fold(
-      (failure) => emit(ShipmentDetailError(failure.message)),
-      (shipment) => emit(ShipmentDetailUpdated(shipment)),
+      (failure) {
+        print('[ShipmentDetailCubit] scanPickup failed: ${failure.message}');
+        emit(ShipmentDetailError(failure.message));
+      },
+      (shipment) {
+        print('[ShipmentDetailCubit] scanPickup success: status=${shipment.status}');
+        emit(ShipmentDetailUpdated(shipment));
+      },
     );
   }
 }
