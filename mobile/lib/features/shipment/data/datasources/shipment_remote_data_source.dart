@@ -60,6 +60,10 @@ abstract class ShipmentRemoteDataSource {
   
   /// Get tracking history for a shipment
   Future<List<TrackingEventModel>> getTrackingHistory(String shipmentId);
+  
+  /// Scan barcode to pickup shipment
+  /// Requirements: Barcode scan for pickup confirmation
+  Future<ShipmentModel> scanPickup(String trackingNumber, {Map<String, double>? location});
 }
 
 @LazySingleton(as: ShipmentRemoteDataSource)
@@ -221,5 +225,21 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
     }
     
     return events.map((e) => TrackingEventModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<ShipmentModel> scanPickup(String trackingNumber, {Map<String, double>? location}) async {
+    // Backend endpoint: POST /api/shipper/shipments/scan/pickup
+    // Validates tracking number and marks as picked_up
+    final response = await _client.post('/shipper/shipments/scan/pickup', data: {
+      'trackingNumber': trackingNumber,
+      if (location != null) 'location': location,
+    });
+    
+    if (response is Map<String, dynamic>) {
+      final data = response['data']?['shipment'] ?? response['data'] ?? response;
+      return ShipmentModel.fromJson(data as Map<String, dynamic>);
+    }
+    throw Exception('Invalid response format');
   }
 }

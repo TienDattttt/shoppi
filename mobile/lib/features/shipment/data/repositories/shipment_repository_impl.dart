@@ -300,4 +300,24 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
       return const Left(NetworkFailure());
     }
   }
+
+  @override
+  Future<Either<Failure, ShipmentEntity>> scanPickup(String trackingNumber) async {
+    if (AppConfig.useMockData) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final mockShipments = _getMockShipments();
+      return Right(mockShipments.first);
+    }
+    
+    if (await _networkInfo.isConnected) {
+      try {
+        final result = await _remoteDataSource.scanPickup(trackingNumber);
+        return Right(result);
+      } catch (e) {
+        return Left(ServerFailure(e.toString()));
+      }
+    } else {
+      return const Left(NetworkFailure());
+    }
+  }
 }

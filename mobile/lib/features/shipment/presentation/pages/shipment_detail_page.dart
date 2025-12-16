@@ -1,13 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mobile/core/utils/map_utils.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mobile/core/constants/app_colors.dart';
-import 'package:mobile/features/shipment/domain/entities/shipment_entity.dart';
-import 'package:mobile/features/shipment/presentation/cubit/shipment_detail_cubit.dart';
-import 'package:mobile/features/shipment/presentation/widgets/shipment_map_view.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/map_utils.dart';
+import '../../../../injection.dart';
 import '../../../../shared/widgets/tracking_timeline.dart';
-import 'package:mobile/injection.dart';
+import '../../domain/entities/shipment_entity.dart';
+import '../cubit/shipment_detail_cubit.dart';
 
 class ShipmentDetailPage extends StatelessWidget {
   final ShipmentEntity shipment;
@@ -33,298 +38,195 @@ class ShipmentDetailView extends StatefulWidget {
 
 class _ShipmentDetailViewState extends State<ShipmentDetailView> {
   late ShipmentEntity _shipment;
+  GoogleMapController? _mapController;
+  Position? _currentPosition;
+  StreamSubscription<Position>? _positionStream;
+  Set<Marker> _markers = {};
+  BitmapDescriptor? _shipperIcon;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _shipment = widget.shipment;
+    _loadCustomMarker();
+    _setupMarkers();
+    _startLocationTracking();
   }
 
-  void _onPickupPressed() {
+  @override
+  void dispose() {
+    _positionStream?.cancel();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+
+  Future<void> _loadCustomMarker() async {
+    try {
+      _shipperIcon = await BitmapDescriptor.asset(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/images/shipper_marker.png',
+      );
+    } catch (_) {
+      _shipperIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _setupMarkers() {
+    final pickupLat = _shipment.pickupAddress.lat;
+    final pickupLng = _shipment.pickupAddress.lng;
+    final deliveryLat = _shipment.deliveryAddress.lat;
+    final deliveryLng = _shipment.deliveryAddress.lng;
+
+    _markers = {
+      if (pickupLat != 0 && pickupLng != 0)
+        Marker(
+          markerId: const MarkerId('pickup'),
+          position: LatLng(pickupLat, pickupLng),
+          infoWindow: InfoWindow(
+            title: 'Điểm lấy hàng',
+            snippet: _shipment.pickupContactName,
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        ),
+      if (deliveryLat != 0 && deliveryLng != 0)
+        Marker(
+          markerId: const MarkerId('delivery'),
+          position: LatLng(deliveryLat, deliveryLng),
+          infoWindow: InfoWindow(
+            title: 'Điểm giao hàng',
+            snippet: _shipment.deliveryContactName,
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ),
+    };
+  }
+
+  void _startLocationTracking() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    // Get initial position
+    _currentPosition = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+    _updateShipperMarker();
+
+    // Start streaming location updates
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((Position position) {
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+          _updateShipperMarker();
+        });
+      }
+    });
+  }
+
+  void _updateShipperMarker() {
+    if (_currentPosition == null) return;
+    
+    final shipperMarker = Marker(
+      markerId: const MarkerId('shipper'),
+      position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+      icon: _shipperIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      rotation: _currentPosition!.heading,
+      anchor: const Offset(0.5, 0.5),
+      flat: true,
+      infoWindow: const InfoWindow(title: 'Vị trí của bạn'),
+    );
+
+    setState(() {
+      _markers.removeWhere((m) => m.markerId.value == 'shipper');
+      _markers.add(shipperMarker);
+    });
+  }
+
+  void _openBarcodeScanner() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _BarcodeScannerSheet(
+        expectedTrackingNumber: _shipment.trackingNumber,
+        onSuccess: (scannedCode) {
+          Navigator.pop(context);
+          _confirmPickupWithScan(scannedCode);
+        },
+        onError: (message) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message), backgroundColor: AppColors.error),
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmPickupWithScan(String trackingNumber) {
+    setState(() => _isLoading = true);
+    context.read<ShipmentDetailCubit>().scanPickup(trackingNumber);
+  }
+
+  void _confirmPickup() {
+    setState(() => _isLoading = true);
     context.read<ShipmentDetailCubit>().pickUpShipment(_shipment.id);
   }
 
-  void _onDeliverPressed() {
-    context.read<ShipmentDetailCubit>().deliverShipment(_shipment.id, "mock/path/to/photo.jpg", null);
+  void _confirmDelivery() {
+    Navigator.pushNamed(context, '/delivery-confirmation', arguments: _shipment);
+  }
+
+  Future<void> _makePhoneCall(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  void _openNavigation(double lat, double lng) {
+    MapUtils.openNavigation(lat, lng);
   }
 
   String _getStatusText(ShipmentStatus status) {
     switch (status) {
-      case ShipmentStatus.created: return 'Mới';
-      case ShipmentStatus.assigned: return 'Đã nhận';
-      case ShipmentStatus.pickedUp: return 'Đã lấy';
+      case ShipmentStatus.created: return 'Chờ xử lý';
+      case ShipmentStatus.pendingAssignment: return 'Đang tìm shipper';
+      case ShipmentStatus.assigned: return 'Cần lấy hàng';
+      case ShipmentStatus.pickedUp: return 'Đã lấy hàng';
+      case ShipmentStatus.inTransit: return 'Đang trung chuyển';
+      case ShipmentStatus.readyForDelivery: return 'Chờ giao hàng';
       case ShipmentStatus.delivering: return 'Đang giao';
-      case ShipmentStatus.delivered: return 'Hoàn thành';
-      case ShipmentStatus.failed: return 'Thất bại';
-      case ShipmentStatus.returning: return 'Đang trả';
-      case ShipmentStatus.returned: return 'Đã trả';
+      case ShipmentStatus.delivered: return 'Giao thành công';
+      case ShipmentStatus.failed: return 'Giao thất bại';
+      case ShipmentStatus.pendingRedelivery: return 'Chờ giao lại';
+      case ShipmentStatus.returning: return 'Đang hoàn';
+      case ShipmentStatus.returned: return 'Đã hoàn';
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return BlocListener<ShipmentDetailCubit, ShipmentDetailState>(
-      listener: (context, state) {
-        if (state is ShipmentDetailUpdated) {
-          setState(() {
-            _shipment = state.shipment;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('Cập nhật thành công'), backgroundColor: AppColors.success),
-          );
-        } else if (state is ShipmentDetailError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-             SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
-          );
-        }
-      },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: CustomScrollView(
-          slivers: [
-            // Orange Header
-            SliverToBoxAdapter(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppColors.headerGradient,
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Column(
-                    children: [
-                      // App Bar
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            Expanded(
-                              child: Text(
-                                'Chi tiết đơn hàng',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  color: Colors.white,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                            IconButton(
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.navigation, color: Colors.white, size: 18),
-                              ),
-                              onPressed: () {
-                                MapUtils.openNavigation(
-                                  _shipment.deliveryAddress.lat,
-                                  _shipment.deliveryAddress.lng,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Tracking Number
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Mã vận đơn',
-                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '#${_shipment.trackingNumber}',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  _getStatusText(_shipment.status),
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            
-            // Content
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Map Section
-                    Container(
-                      height: 180,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: ShipmentMapView(shipment: _shipment),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    TrackingTimeline(currentStatus: _shipment.status),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Addresses
-                    _buildAddressSection('Điểm lấy hàng', _shipment.pickupAddress.fullAddress, _shipment.pickupContactName, _shipment.pickupContactPhone, true),
-                    const SizedBox(height: 12),
-                    _buildAddressSection('Điểm giao hàng', _shipment.deliveryAddress.fullAddress, _shipment.deliveryContactName, _shipment.deliveryContactPhone, false),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Action Buttons
-                    if (_shipment.status == ShipmentStatus.assigned)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          onPressed: _onPickupPressed,
-                          icon: const Icon(Icons.inventory_2, color: Colors.white),
-                          label: Text('Xác nhận lấy hàng', style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            elevation: 4,
-                            shadowColor: AppColors.primary.withValues(alpha: 0.4),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                      ),
-                      
-                    if (_shipment.status == ShipmentStatus.pickedUp || _shipment.status == ShipmentStatus.delivering)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          onPressed: _onDeliverPressed,
-                          icon: const Icon(Icons.check_circle, color: Colors.white),
-                          label: Text('Xác nhận giao hàng', style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.success,
-                            elevation: 4,
-                            shadowColor: AppColors.success.withValues(alpha: 0.4),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                      ),
-                      
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Color _getStatusColor(ShipmentStatus status) {
+    switch (status) {
+      case ShipmentStatus.assigned: return Colors.blue;
+      case ShipmentStatus.pickedUp:
+      case ShipmentStatus.inTransit: return Colors.orange;
+      case ShipmentStatus.readyForDelivery:
+      case ShipmentStatus.delivering: return Colors.purple;
+      case ShipmentStatus.delivered: return Colors.green;
+      case ShipmentStatus.failed: return Colors.red;
+      default: return Colors.grey;
+    }
   }
-
-  Widget _buildAddressSection(String title, String address, String contactName, String contactPhone, bool isPickup) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isPickup ? Colors.blue.withValues(alpha: 0.1) : AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              isPickup ? Icons.inventory_2 : Icons.location_on,
-              color: isPickup ? Colors.blue : AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                const SizedBox(height: 4),
-                Text(address, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.person, size: 14, color: AppColors.textSecondary),
-                    const SizedBox(width: 4),
-                    Expanded(child: Text(contactName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                    InkWell(
-                      onTap: () {
-                         // Implement Call
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.phone, size: 16, color: AppColors.success),
-                      ),
-                    )
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-

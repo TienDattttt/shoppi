@@ -3,11 +3,15 @@ import 'address_entity.dart';
 
 enum ShipmentStatus {
   created,
+  pendingAssignment, // pending_assignment
   assigned,
   pickedUp, // picked_up
+  inTransit, // in_transit - đang trung chuyển
+  readyForDelivery, // ready_for_delivery - đã đến bưu cục giao, chờ shipper giao
   delivering,
   delivered,
   failed,
+  pendingRedelivery, // pending_redelivery - chờ giao lại
   returning,
   returned,
 }
@@ -48,6 +52,14 @@ class ShipmentEntity extends Equatable {
   // Order info
   final String? subOrderId;
   final String? orderId;
+  
+  // Shipment type for shipper
+  final String shipmentType; // 'pickup' | 'delivery' | 'both'
+  
+  // Transit info
+  final String? sourceRegion;
+  final String? destRegion;
+  final bool isCrossRegion;
 
   const ShipmentEntity({
     required this.id,
@@ -72,6 +84,10 @@ class ShipmentEntity extends Equatable {
     this.deliveryAttempts = 0,
     this.subOrderId,
     this.orderId,
+    this.shipmentType = 'both',
+    this.sourceRegion,
+    this.destRegion,
+    this.isCrossRegion = false,
   });
 
   /// Check if this is a COD order
@@ -87,6 +103,6 @@ class ShipmentEntity extends Equatable {
     deliveryAddress, deliveryContactName, deliveryContactPhone,
     shippingFee, codAmount, codCollected, distanceKm, estimatedMinutes,
     createdAt, pickedUpAt, deliveredAt, failureReason, deliveryPhotoUrl,
-    deliveryAttempts, subOrderId, orderId,
+    deliveryAttempts, subOrderId, orderId, shipmentType, sourceRegion, destRegion, isCrossRegion,
   ];
 }

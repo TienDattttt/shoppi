@@ -373,7 +373,8 @@ class _HomePageState extends State<HomePage> {
               ),
             );
           }
-          final recentShipments = state.shipments.take(5).toList();
+          // Chỉ hiển thị 3 đơn gần nhất trên trang chủ
+          final recentShipments = state.shipments.take(3).toList();
           return SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) => ShipmentItemCard(

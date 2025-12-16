@@ -158,7 +158,9 @@ async function handleShipmentCreated(data, timestamp) {
  * @param {string} timestamp - Event timestamp
  */
 async function handleShipmentAssigned(data, timestamp) {
-  const { shipmentId, trackingNumber, shipperId, shipperName, orderId, customerId } = data;
+  // shipperUserId is the user_id (FK to users table) for notifications
+  // shipperId is the shipper record ID (from shippers table)
+  const { shipmentId, trackingNumber, shipperId, shipperUserId, shipperName, orderId, customerId } = data;
   
   console.log(`[ShipmentConsumer] Processing SHIPMENT_ASSIGNED for shipment ${shipmentId}`);
   
@@ -175,14 +177,19 @@ async function handleShipmentAssigned(data, timestamp) {
     timestamp,
   });
   
-  // 3. Notify shipper
-  await notifyShipper(shipperId, {
-    type: 'NEW_SHIPMENT',
-    shipmentId,
-    trackingNumber,
-    message: 'Bạn có đơn giao hàng mới',
-    timestamp,
-  });
+  // 3. Notify shipper - use shipperUserId (user_id) not shipperId (shipper record ID)
+  // notifications table has FK to users table, not shippers table
+  if (shipperUserId) {
+    await notifyShipper(shipperUserId, {
+      type: 'NEW_SHIPMENT',
+      shipmentId,
+      trackingNumber,
+      message: 'Bạn có đơn giao hàng mới',
+      timestamp,
+    });
+  } else {
+    console.warn(`[ShipmentConsumer] No shipperUserId for shipment ${shipmentId}, skipping shipper notification`);
+  }
   
   console.log(`[ShipmentConsumer] SHIPMENT_ASSIGNED processed for shipment ${shipmentId}`);
 }
@@ -1015,11 +1022,13 @@ async function notifyCustomer(customerId, notification) {
 
 /**
  * Send notification to shipper
+ * @param {string} shipperUserId - The user_id of the shipper (from users table, NOT shipper.id)
+ * @param {object} notification - Notification data
  */
-async function notifyShipper(shipperId, notification) {
+async function notifyShipper(shipperUserId, notification) {
   try {
     await rabbitmqClient.publishNotification('push', {
-      userId: shipperId,
+      userId: shipperUserId,
       userRole: 'shipper',
       ...notification,
     });

@@ -8,19 +8,21 @@ class AppConfig {
   /// For Android emulator: use 10.0.2.2 to access host machine's localhost
   /// For iOS simulator: use localhost or 127.0.0.1
   /// For real device: use your machine's IP address (e.g., 192.168.x.x)
-  static const String apiBaseUrl = 'http://192.168.1.3:3000/api';
+  static const String apiBaseUrl = 'http://192.168.1.60:3000/api';
 
   /// WebSocket URL for real-time updates
-  static const String wsBaseUrl = 'ws://192.168.1.3:3000';
+  static const String wsBaseUrl = 'ws://192.168.1.60:3000';
 
   /// Enable debug logging
   static const bool enableLogging = true;
 
-  /// Location update interval in seconds
-  static const int locationUpdateInterval = 10;
+  /// Location update interval in seconds (send to backend)
+  /// Requirements: 13.4 - Send GPS location every 30 seconds
+  static const int locationUpdateInterval = 30;
 
-  /// Location distance filter in meters (minimum distance to trigger update)
-  static const double locationDistanceFilter = 50;
+  /// Location distance filter in meters (minimum distance to trigger local update)
+  /// Lower value = more frequent updates but more battery usage
+  static const double locationDistanceFilter = 20;
 
   // ========================================
   // MAP CONFIGURATION

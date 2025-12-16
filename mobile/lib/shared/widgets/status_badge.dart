@@ -17,6 +17,10 @@ class StatusBadge extends StatelessWidget {
         color = AppColors.statusCreated;
         label = "Created";
         break;
+      case ShipmentStatus.pendingAssignment:
+        color = AppColors.statusAssigned;
+        label = "Pending Assignment";
+        break;
       case ShipmentStatus.assigned:
         color = AppColors.statusAssigned;
         label = "Assigned";
@@ -24,6 +28,14 @@ class StatusBadge extends StatelessWidget {
       case ShipmentStatus.pickedUp:
         color = AppColors.statusPickedUp;
         label = "Picked Up";
+        break;
+      case ShipmentStatus.inTransit:
+        color = AppColors.statusPickedUp;
+        label = "In Transit";
+        break;
+      case ShipmentStatus.readyForDelivery:
+        color = AppColors.statusPickedUp;
+        label = "Ready For Delivery";
         break;
       case ShipmentStatus.delivering:
         color = AppColors.statusDelivering;
@@ -36,6 +48,10 @@ class StatusBadge extends StatelessWidget {
       case ShipmentStatus.failed:
         color = AppColors.statusFailed;
         label = "Failed";
+        break;
+      case ShipmentStatus.pendingRedelivery:
+        color = AppColors.statusFailed;
+        label = "Pending Redelivery";
         break;
       case ShipmentStatus.returning:
         color = AppColors.statusReturning;

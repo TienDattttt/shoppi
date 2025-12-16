@@ -25,6 +25,10 @@ class ShipmentModel extends ShipmentEntity {
     super.deliveryAttempts,
     super.subOrderId,
     super.orderId,
+    super.shipmentType,
+    super.sourceRegion,
+    super.destRegion,
+    super.isCrossRegion,
   });
 
   /// Parse from backend response (snake_case format)
@@ -75,7 +79,30 @@ class ShipmentModel extends ShipmentEntity {
                         data['delivery_attempts'] as int? ?? 0,
       subOrderId: data['subOrderId'] as String? ?? data['sub_order_id'] as String?,
       orderId: data['orderId'] as String? ?? data['order_id'] as String?,
+      shipmentType: data['shipmentType'] as String? ?? 
+                    data['shipment_type'] as String? ?? 'both',
+      sourceRegion: _parseTransitRegion(data, 'sourceRegion', 'source_region'),
+      destRegion: _parseTransitRegion(data, 'destRegion', 'dest_region'),
+      isCrossRegion: _parseTransitBool(data, 'isCrossRegion', 'is_cross_region'),
     );
+  }
+  
+  /// Parse transit region from nested or flat structure
+  static String? _parseTransitRegion(Map<String, dynamic> data, String camelKey, String snakeKey) {
+    final transit = data['transit'] as Map<String, dynamic>?;
+    if (transit != null) {
+      return transit[camelKey] as String? ?? transit[snakeKey] as String?;
+    }
+    return data[camelKey] as String? ?? data[snakeKey] as String?;
+  }
+  
+  /// Parse transit boolean from nested or flat structure
+  static bool _parseTransitBool(Map<String, dynamic> data, String camelKey, String snakeKey) {
+    final transit = data['transit'] as Map<String, dynamic>?;
+    if (transit != null) {
+      return transit[camelKey] as bool? ?? transit[snakeKey] as bool? ?? false;
+    }
+    return data[camelKey] as bool? ?? data[snakeKey] as bool? ?? false;
   }
 
   /// Parse pickup address from flat or nested structure
@@ -144,11 +171,20 @@ class ShipmentModel extends ShipmentEntity {
 
   static ShipmentStatus _mapStatus(String status) {
     switch (status) {
+      case 'pending_assignment':
+      case 'pendingAssignment':
+        return ShipmentStatus.pendingAssignment;
       case 'assigned':
         return ShipmentStatus.assigned;
       case 'picked_up':
       case 'pickedUp':
         return ShipmentStatus.pickedUp;
+      case 'in_transit':
+      case 'inTransit':
+        return ShipmentStatus.inTransit;
+      case 'ready_for_delivery':
+      case 'readyForDelivery':
+        return ShipmentStatus.readyForDelivery;
       case 'delivering':
       case 'out_for_delivery':
         return ShipmentStatus.delivering;
@@ -156,6 +192,9 @@ class ShipmentModel extends ShipmentEntity {
         return ShipmentStatus.delivered;
       case 'failed':
         return ShipmentStatus.failed;
+      case 'pending_redelivery':
+      case 'pendingRedelivery':
+        return ShipmentStatus.pendingRedelivery;
       case 'returning':
         return ShipmentStatus.returning;
       case 'returned':

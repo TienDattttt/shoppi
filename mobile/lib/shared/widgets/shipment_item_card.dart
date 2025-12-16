@@ -12,17 +12,32 @@ class ShipmentItemCard extends StatelessWidget {
       case ShipmentStatus.created:
         bgColor = Colors.grey.shade100;
         textColor = Colors.grey.shade700;
-        text = 'Mới tạo';
+        text = 'Chờ xử lý';
+        break;
+      case ShipmentStatus.pendingAssignment:
+        bgColor = Colors.amber.shade100;
+        textColor = Colors.amber.shade700;
+        text = 'Đang tìm shipper';
         break;
       case ShipmentStatus.assigned:
         bgColor = Colors.blue.shade100;
         textColor = Colors.blue.shade700;
-        text = 'Đã nhận đơn';
+        text = 'Cần lấy hàng';
         break;
       case ShipmentStatus.pickedUp:
         bgColor = Colors.orange.shade100;
         textColor = Colors.orange.shade700;
         text = 'Đã lấy hàng';
+        break;
+      case ShipmentStatus.inTransit:
+        bgColor = Colors.cyan.shade100;
+        textColor = Colors.cyan.shade700;
+        text = 'Đang trung chuyển';
+        break;
+      case ShipmentStatus.readyForDelivery:
+        bgColor = Colors.teal.shade100;
+        textColor = Colors.teal.shade700;
+        text = 'Chờ giao hàng';
         break;
       case ShipmentStatus.delivering:
         bgColor = Colors.purple.shade100;
@@ -32,22 +47,27 @@ class ShipmentItemCard extends StatelessWidget {
       case ShipmentStatus.delivered:
         bgColor = Colors.green.shade100;
         textColor = Colors.green.shade700;
-        text = 'Hoàn thành';
+        text = 'Giao thành công';
         break;
       case ShipmentStatus.failed:
         bgColor = Colors.red.shade100;
         textColor = Colors.red.shade700;
         text = 'Giao thất bại';
         break;
+      case ShipmentStatus.pendingRedelivery:
+        bgColor = Colors.deepOrange.shade100;
+        textColor = Colors.deepOrange.shade700;
+        text = 'Chờ giao lại';
+        break;
       case ShipmentStatus.returning:
         bgColor = Colors.orange.shade100;
         textColor = Colors.orange.shade700;
-        text = 'Đang trả hàng';
+        text = 'Đang hoàn';
         break;
       case ShipmentStatus.returned:
         bgColor = Colors.indigo.shade100;
         textColor = Colors.indigo.shade700;
-        text = 'Đã trả hàng';
+        text = 'Đã hoàn';
         break;
     }
     
