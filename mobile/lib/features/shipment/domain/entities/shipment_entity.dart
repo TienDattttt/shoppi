@@ -1,6 +1,41 @@
 import 'package:equatable/equatable.dart';
 import 'address_entity.dart';
 
+/// Tracking event for shipment history
+class TrackingEvent extends Equatable {
+  final String id;
+  final String status;
+  final String description;
+  final DateTime timestamp;
+  final String? location;
+  final String? note;
+
+  const TrackingEvent({
+    required this.id,
+    required this.status,
+    required this.description,
+    required this.timestamp,
+    this.location,
+    this.note,
+  });
+
+  factory TrackingEvent.fromJson(Map<String, dynamic> json) {
+    return TrackingEvent(
+      id: json['id'] ?? '',
+      status: json['status'] ?? '',
+      description: json['description'] ?? '',
+      timestamp: json['timestamp'] != null 
+          ? DateTime.parse(json['timestamp']) 
+          : DateTime.now(),
+      location: json['location'],
+      note: json['note'],
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, status, description, timestamp, location, note];
+}
+
 enum ShipmentStatus {
   created,
   pendingAssignment, // pending_assignment
@@ -60,6 +95,9 @@ class ShipmentEntity extends Equatable {
   final String? sourceRegion;
   final String? destRegion;
   final bool isCrossRegion;
+  
+  // Tracking events
+  final List<TrackingEvent> trackingEvents;
 
   const ShipmentEntity({
     required this.id,
@@ -88,6 +126,7 @@ class ShipmentEntity extends Equatable {
     this.sourceRegion,
     this.destRegion,
     this.isCrossRegion = false,
+    this.trackingEvents = const [],
   });
 
   /// Check if this is a COD order
@@ -103,6 +142,6 @@ class ShipmentEntity extends Equatable {
     deliveryAddress, deliveryContactName, deliveryContactPhone,
     shippingFee, codAmount, codCollected, distanceKm, estimatedMinutes,
     createdAt, pickedUpAt, deliveredAt, failureReason, deliveryPhotoUrl,
-    deliveryAttempts, subOrderId, orderId, shipmentType, sourceRegion, destRegion, isCrossRegion,
+    deliveryAttempts, subOrderId, orderId, shipmentType, sourceRegion, destRegion, isCrossRegion, trackingEvents,
   ];
 }

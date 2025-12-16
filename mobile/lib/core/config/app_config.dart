@@ -37,7 +37,7 @@ class AppConfig {
   /// Get from: https://account.mapbox.com
   /// Free tier: 50,000 map loads/month
   static const String mapboxAccessToken =
-      'pk.eyJ1Ijoic2hvcHBpLWRldiIsImEiOiJjbHh4eHh4eHgwMDAwMnFzOHh4eHh4eHh4In0.xxxxxxxxxxxxxxxxxxxx';
+      'MAPBOX_PUBLIC_TOKEN_REDACTED';
 
   /// Default map center (Ho Chi Minh City)
   static const double defaultLatitude = 10.8231;

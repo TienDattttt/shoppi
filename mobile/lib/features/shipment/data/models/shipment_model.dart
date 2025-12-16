@@ -29,6 +29,7 @@ class ShipmentModel extends ShipmentEntity {
     super.sourceRegion,
     super.destRegion,
     super.isCrossRegion,
+    super.trackingEvents,
   });
 
   /// Parse from backend response (snake_case format)
@@ -84,7 +85,19 @@ class ShipmentModel extends ShipmentEntity {
       sourceRegion: _parseTransitRegion(data, 'sourceRegion', 'source_region'),
       destRegion: _parseTransitRegion(data, 'destRegion', 'dest_region'),
       isCrossRegion: _parseTransitBool(data, 'isCrossRegion', 'is_cross_region'),
+      trackingEvents: _parseTrackingEvents(data),
     );
+  }
+  
+  /// Parse tracking events from API response
+  static List<TrackingEvent> _parseTrackingEvents(Map<String, dynamic> data) {
+    final events = data['trackingEvents'] ?? data['tracking_events'] ?? data['events'];
+    if (events == null || events is! List) return [];
+    
+    return events
+        .map((e) => TrackingEvent.fromJson(e as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Most recent first
   }
   
   /// Parse transit region from nested or flat structure

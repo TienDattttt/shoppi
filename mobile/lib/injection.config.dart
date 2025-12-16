@@ -180,16 +180,17 @@ extension GetItInjectableX on _i174.GetIt {
         () => _i527.MarkFailedUseCase(gh<_i652.ShipmentRepository>()));
     gh.lazySingleton<_i298.MarkPickedUpUseCase>(
         () => _i298.MarkPickedUpUseCase(gh<_i652.ShipmentRepository>()));
-    gh.factory<_i980.ShipmentDetailCubit>(() => _i980.ShipmentDetailCubit(
-          gh<_i298.MarkPickedUpUseCase>(),
-          gh<_i823.MarkDeliveredUseCase>(),
-          gh<_i527.MarkFailedUseCase>(),
-        ));
     gh.factory<_i980.ShipmentListCubit>(
         () => _i980.ShipmentListCubit(gh<_i930.GetActiveShipmentsUseCase>()));
     gh.lazySingleton<_i626.ProfileRepository>(() => _i277.ProfileRepositoryImpl(
           gh<_i336.ProfileRemoteDataSource>(),
           gh<_i75.NetworkInfo>(),
+        ));
+    gh.factory<_i980.ShipmentDetailCubit>(() => _i980.ShipmentDetailCubit(
+          gh<_i298.MarkPickedUpUseCase>(),
+          gh<_i823.MarkDeliveredUseCase>(),
+          gh<_i527.MarkFailedUseCase>(),
+          gh<_i652.ShipmentRepository>(),
         ));
     gh.factory<_i793.LocationCubit>(
         () => _i793.LocationCubit(gh<_i55.LocationRepository>()));
