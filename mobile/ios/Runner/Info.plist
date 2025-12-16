@@ -57,5 +57,7 @@
 		<string>remote-notification</string>
 		<string>location</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Ứng dụng cần quyền truy cập camera để quét mã vạch kiện hàng.</string>
 </dict>
 </plist>

@@ -96,6 +96,12 @@ const TRACKING_STATUSES = {
     description: 'Package arrived at delivery post office',
     description_vi: 'Hàng đã đến bưu cục khu vực khách hàng',
   },
+  DELIVERY_SHIPPER_ASSIGNED: {
+    status: 'delivery_shipper_assigned',
+    status_vi: 'Đã phân công shipper giao',
+    description: 'Delivery shipper has been assigned',
+    description_vi: 'Shipper giao hàng đã được phân công',
+  },
 
   // Giai đoạn 4: Giao hàng
   OUT_FOR_DELIVERY: {

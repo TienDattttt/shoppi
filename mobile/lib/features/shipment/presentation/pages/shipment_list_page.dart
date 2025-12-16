@@ -255,15 +255,27 @@ class _ShipmentListPageState extends State<ShipmentListPage> with SingleTickerPr
     switch (status) {
       case ShipmentStatus.created:
         color = AppColors.statusNew;
-        text = "Mới";
+        text = "Chờ xử lý";
+        break;
+      case ShipmentStatus.pendingAssignment:
+        color = AppColors.statusNew;
+        text = "Chờ tài xế";
         break;
       case ShipmentStatus.assigned:
         color = AppColors.statusAssigned;
-        text = "Đã nhận";
+        text = "Cần lấy hàng";
         break;
       case ShipmentStatus.pickedUp:
         color = AppColors.statusPickedUp;
-        text = "Đã lấy";
+        text = "Cần giao hàng";
+        break;
+      case ShipmentStatus.inTransit:
+        color = AppColors.statusPickedUp;
+        text = "Đang trung chuyển";
+        break;
+      case ShipmentStatus.readyForDelivery:
+        color = AppColors.statusPickedUp;
+        text = "Đến bưu cục giao";
         break;
       case ShipmentStatus.delivering:
         color = AppColors.primary;
@@ -271,19 +283,23 @@ class _ShipmentListPageState extends State<ShipmentListPage> with SingleTickerPr
         break;
       case ShipmentStatus.delivered:
         color = AppColors.success;
-        text = "Hoàn thành";
+        text = "Giao thành công";
         break;
       case ShipmentStatus.failed:
         color = AppColors.error;
-        text = "Thất bại";
+        text = "Giao thất bại";
+        break;
+      case ShipmentStatus.pendingRedelivery:
+        color = AppColors.warning;
+        text = "Chờ giao lại";
         break;
       case ShipmentStatus.returning:
         color = AppColors.statusReturning;
-        text = "Đang trả";
+        text = "Đang hoàn";
         break;
       case ShipmentStatus.returned:
         color = AppColors.statusReturned;
-        text = "Đã trả";
+        text = "Đã hoàn";
         break;
     }
     

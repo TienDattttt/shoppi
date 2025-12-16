@@ -65,6 +65,8 @@ class TrackingEventEntity extends Equatable {
         return '🚛';
       case 'arrived_delivery_office':
         return '🏢';
+      case 'delivery_shipper_assigned':
+        return '🛵';
       case 'out_for_delivery':
         return '🛵';
       case 'delivered':

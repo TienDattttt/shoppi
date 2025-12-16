@@ -296,14 +296,19 @@ function toLocationHistoryResponse(history) {
  */
 function getStatusLabel(status) {
   const labels = {
-    created: 'Đang chờ shipper',
-    assigned: 'Shipper đã nhận đơn',
+    created: 'Chờ xử lý',
+    pending_assignment: 'Đang tìm shipper',
+    assigned: 'Cần lấy hàng',
     picked_up: 'Đã lấy hàng',
-    delivering: 'Đang giao hàng',
-    delivered: 'Đã giao hàng',
-    failed: 'Giao hàng thất bại',
+    in_transit: 'Đang trung chuyển',
+    ready_for_delivery: 'Chờ giao hàng',
+    delivering: 'Đang giao',
+    delivered: 'Giao thành công',
+    failed: 'Giao thất bại',
+    pending_redelivery: 'Chờ giao lại',
     cancelled: 'Đã hủy',
-    returned: 'Đã hoàn trả',
+    returning: 'Đang hoàn',
+    returned: 'Đã hoàn',
   };
   return labels[status] || status;
 }

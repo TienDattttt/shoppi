@@ -85,7 +85,7 @@ async function getShipments(req, res) {
     const result = await getShipperShipmentsWithDetails(shipper.id, statusFilter, pagination);
     
     return sendSuccess(res, {
-      data: result.data.map(toShipperMobileShipmentResponse),
+      data: result.data.map(s => toShipperMobileShipmentResponse(s, shipper.id)),
       pagination: {
         total: result.count,
         page: pagination.page,
@@ -323,6 +323,75 @@ async function updateLocation(req, res) {
   }
 }
 
+/**
+ * Get shipper location history from Cassandra
+ * GET /api/shipper/location/history
+ * 
+ * Query params:
+ * - date: YYYY-MM-DD (defaults to today)
+ * - startTime: ISO timestamp (optional)
+ * - endTime: ISO timestamp (optional)
+ * - limit: number (default 100)
+ */
+async function getLocationHistory(req, res) {
+  try {
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    const { date, startTime, endTime, limit = 100 } = req.query;
+    
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    
+    const history = await locationService.getLocationHistory(
+      shipper.id,
+      startTime ? new Date(startTime) : null,
+      endTime ? new Date(endTime) : null,
+      parseInt(limit)
+    );
+    
+    return sendSuccess(res, {
+      data: {
+        date: targetDate,
+        locations: history,
+        count: history.length,
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get shipper route for a specific shipment
+ * GET /api/shipper/shipments/:id/route
+ */
+async function getShipmentRoute(req, res) {
+  try {
+    const shipper = await shipperService.getShipperByUserId(req.user.userId);
+    const { id: shipmentId } = req.params;
+    
+    // Verify shipper owns this shipment
+    const shipment = await shipmentService.getShipmentById(shipmentId);
+    if (!shipment || shipment.shipper_id !== shipper.id) {
+      return errorResponse(res, {
+        code: 'NOT_FOUND',
+        message: 'Shipment not found',
+        status: 404,
+      });
+    }
+    
+    const route = await locationService.getShipmentLocationHistory(shipmentId, shipper.id);
+    
+    return sendSuccess(res, {
+      data: {
+        shipmentId,
+        trackingNumber: shipment.tracking_number,
+        route,
+        pointCount: route.length,
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
 
 // ============================================
 // EARNINGS ENDPOINT (Requirements: 10.1, 10.3)
@@ -410,6 +479,8 @@ async function getEarnings(req, res) {
 
 /**
  * Get shipper shipments with full details
+ * Shipper có thể là pickup_shipper_id hoặc delivery_shipper_id
+ * 
  * @param {string} shipperId
  * @param {string[]} statusFilter
  * @param {Object} pagination
@@ -420,31 +491,25 @@ async function getShipperShipmentsWithDetails(shipperId, statusFilter, paginatio
   const { page = 1, limit = 20 } = pagination;
   const offset = (page - 1) * limit;
   
+  // Note: 
+  // - shipments table has multiple FKs to shippers - don't join shippers
+  // - sub_orders.shop_id has no FK constraint to shops - can't join shops directly
+  // - Shop info is already in shipment (pickup_contact_name = shop name)
+  // - Shipper có thể là pickup_shipper_id (lấy hàng) hoặc delivery_shipper_id (giao hàng)
+  //   hoặc shipper_id (shipper chính hiện tại)
   const { data, error, count } = await supabaseAdmin
     .from('shipments')
     .select(`
       *,
-      shipper:shippers(
-        id,
-        vehicle_type,
-        vehicle_plate,
-        user:users(id, full_name, phone, avatar_url)
-      ),
       sub_order:sub_orders(
         id,
         order_id,
         shop_id,
-        total_amount,
-        status,
-        shops:shops(id, shop_name, logo_url, address),
-        order:orders(
-          id,
-          customer_id,
-          customer:users(id, full_name, phone)
-        )
+        total,
+        status
       )
     `, { count: 'exact' })
-    .eq('shipper_id', shipperId)
+    .or(`shipper_id.eq.${shipperId},pickup_shipper_id.eq.${shipperId},delivery_shipper_id.eq.${shipperId}`)
     .in('status', statusFilter)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -458,17 +523,33 @@ async function getShipperShipmentsWithDetails(shipperId, statusFilter, paginatio
 
 /**
  * Transform shipment for shipper mobile app response
- * Includes pickup/delivery addresses and COD info
+ * Includes pickup/delivery addresses, COD info, and shipment type
  * 
  * @param {Object} shipment
+ * @param {string} currentShipperId - ID của shipper hiện tại để xác định loại đơn
  * @returns {Object}
  */
-function toShipperMobileShipmentResponse(shipment) {
+function toShipperMobileShipmentResponse(shipment, currentShipperId = null) {
   if (!shipment) return null;
   
-  // Get shop info from sub_order
-  const shop = shipment.sub_order?.shops;
-  const customer = shipment.sub_order?.order?.customer;
+  // Note: Shop info is stored directly in shipment (pickup_contact_name = shop name)
+  // We don't join shops table because sub_orders.shop_id has no FK constraint
+  
+  // Xác định loại đơn cho shipper này
+  // - 'pickup': Shipper là pickup_shipper_id, cần lấy hàng từ shop
+  // - 'delivery': Shipper là delivery_shipper_id (khác pickup), cần giao hàng cho khách
+  // - 'both': Shipper vừa lấy vừa giao (cùng bưu cục)
+  let shipmentType = 'both';
+  if (currentShipperId) {
+    const isPickupShipper = shipment.pickup_shipper_id === currentShipperId;
+    const isDeliveryShipper = shipment.delivery_shipper_id === currentShipperId;
+    
+    if (isPickupShipper && !isDeliveryShipper) {
+      shipmentType = 'pickup';
+    } else if (isDeliveryShipper && !isPickupShipper) {
+      shipmentType = 'delivery';
+    }
+  }
   
   return {
     id: shipment.id,
@@ -476,15 +557,18 @@ function toShipperMobileShipmentResponse(shipment) {
     status: shipment.status,
     statusLabel: shipperDto.getStatusLabel(shipment.status),
     
-    // Pickup info (from shop)
+    // Loại đơn cho shipper này
+    shipmentType, // 'pickup' | 'delivery' | 'both'
+    
+    // Pickup info (from shop - stored in shipment)
     pickup: {
       address: shipment.pickup_address,
       lat: shipment.pickup_lat ? parseFloat(shipment.pickup_lat) : null,
       lng: shipment.pickup_lng ? parseFloat(shipment.pickup_lng) : null,
       contactName: shipment.pickup_contact_name,
       contactPhone: shipment.pickup_contact_phone,
-      shopName: shop?.shop_name,
-      shopLogo: shop?.logo_url,
+      shopName: shipment.pickup_contact_name, // Shop name is stored as pickup_contact_name
+      shopLogo: null, // Not available without joining shops
     },
     
     // Delivery info (to customer)
@@ -492,8 +576,8 @@ function toShipperMobileShipmentResponse(shipment) {
       address: shipment.delivery_address,
       lat: shipment.delivery_lat ? parseFloat(shipment.delivery_lat) : null,
       lng: shipment.delivery_lng ? parseFloat(shipment.delivery_lng) : null,
-      contactName: shipment.delivery_contact_name || customer?.full_name,
-      contactPhone: shipment.delivery_contact_phone || customer?.phone,
+      contactName: shipment.delivery_contact_name,
+      contactPhone: shipment.delivery_contact_phone,
       notes: shipment.delivery_notes,
     },
     
@@ -516,6 +600,15 @@ function toShipperMobileShipmentResponse(shipment) {
     deliveryAttempts: shipment.delivery_attempts || 0,
     failureReason: shipment.failure_reason,
     deliveryPhotoUrl: shipment.delivery_photo_url,
+    
+    // Transit info (mô phỏng trung chuyển)
+    transit: {
+      sourceRegion: shipment.source_region,
+      destRegion: shipment.dest_region,
+      isCrossRegion: shipment.is_cross_region || false,
+      transitStartedAt: shipment.transit_started_at,
+      readyForDeliveryAt: shipment.ready_for_delivery_at,
+    },
     
     // Timestamps
     timestamps: {
@@ -865,6 +958,8 @@ module.exports = {
   getShipmentById,
   updateShipmentStatus,
   updateLocation,
+  getLocationHistory,
+  getShipmentRoute,
   getEarnings,
   getCodBalance,
   rejectShipment,

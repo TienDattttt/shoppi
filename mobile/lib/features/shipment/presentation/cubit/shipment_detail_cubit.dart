@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
 import '../../domain/entities/shipment_entity.dart';
+import '../../domain/repositories/shipment_repository.dart';
 import '../../domain/usecases/mark_delivered_usecase.dart';
 import '../../domain/usecases/mark_failed_usecase.dart';
 import '../../domain/usecases/mark_picked_up_usecase.dart';
@@ -34,11 +35,13 @@ class ShipmentDetailCubit extends Cubit<ShipmentDetailState> {
   final MarkPickedUpUseCase _markPickedUpUseCase;
   final MarkDeliveredUseCase _markDeliveredUseCase;
   final MarkFailedUseCase _markFailedUseCase;
+  final ShipmentRepository _shipmentRepository;
 
   ShipmentDetailCubit(
     this._markPickedUpUseCase,
     this._markDeliveredUseCase,
     this._markFailedUseCase,
+    this._shipmentRepository,
   ) : super(ShipmentDetailInitial());
 
   // Usually we'd start with getting details, but here we assumme shipment is passed in or fetched via separate usecase.
@@ -69,6 +72,17 @@ class ShipmentDetailCubit extends Cubit<ShipmentDetailState> {
   Future<void> markFailed(String id, String reason) async {
     emit(ShipmentDetailLoading());
     final result = await _markFailedUseCase(MarkFailedParams(id: id, reason: reason));
+    result.fold(
+      (failure) => emit(ShipmentDetailError(failure.message)),
+      (shipment) => emit(ShipmentDetailUpdated(shipment)),
+    );
+  }
+
+  /// Scan barcode to pickup shipment
+  /// Validates tracking number and marks as picked_up
+  Future<void> scanPickup(String trackingNumber) async {
+    emit(ShipmentDetailLoading());
+    final result = await _shipmentRepository.scanPickup(trackingNumber);
     result.fold(
       (failure) => emit(ShipmentDetailError(failure.message)),
       (shipment) => emit(ShipmentDetailUpdated(shipment)),

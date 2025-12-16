@@ -38,4 +38,8 @@ abstract class ShipmentRepository {
   /// Reject assigned shipment
   /// Requirements: 3.4
   Future<Either<Failure, void>> rejectShipment(String id, String reason);
+  
+  /// Scan barcode to pickup shipment
+  /// Validates tracking number and marks as picked_up
+  Future<Either<Failure, ShipmentEntity>> scanPickup(String trackingNumber);
 }

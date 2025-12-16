@@ -433,10 +433,11 @@ async function autoAssignShipment(shipmentId, options = {}) {
           shipmentId,
           trackingNumber: updatedShipment.tracking_number,
           shipperId: pickupShipper.id,
+          shipperUserId: pickupShipper.user?.id, // user_id for notifications (FK to users table)
           shipperName: pickupShipper.user?.full_name,
           shipperPhone: pickupShipper.user?.phone,
           orderId: shipment.sub_order?.order_id,
-          customerId: shipment.sub_order?.order?.customer_id,
+          customerId: shipment.sub_order?.order?.user_id, // orders table uses user_id, not customer_id
         },
         timestamp: new Date().toISOString(),
       }

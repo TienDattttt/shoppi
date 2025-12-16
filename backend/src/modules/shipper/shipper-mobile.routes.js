@@ -116,6 +116,19 @@ router.post('/upload/photo', upload.single('photo'), shipperMobileController.upl
  */
 router.post('/location', shipperMobileController.updateLocation);
 
+/**
+ * GET /api/shipper/location/history
+ * Get shipper location history from Cassandra
+ * Query params: date (YYYY-MM-DD), startTime, endTime, limit
+ */
+router.get('/location/history', shipperMobileController.getLocationHistory);
+
+/**
+ * GET /api/shipper/shipments/:id/route
+ * Get shipper route for a specific shipment
+ */
+router.get('/shipments/:id/route', shipperMobileController.getShipmentRoute);
+
 // ============================================
 // EARNINGS ROUTES (Requirements: 10.1, 10.3)
 // ============================================

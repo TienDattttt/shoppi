@@ -9,17 +9,22 @@ const shipmentRepository = require('./shipment.repository');
 const shipperRepository = require('./shipper.repository');
 const shipperService = require('./shipper.service');
 const trackingService = require('./tracking.service');
+const transitSimulationService = require('./transit-simulation.service');
 const { AppError, ValidationError } = require('../../shared/utils/error.util');
 const rabbitmqClient = require('../../shared/rabbitmq/rabbitmq.client');
 
 // Valid status transitions
 const STATUS_TRANSITIONS = {
-  created: ['assigned', 'cancelled'],
+  created: ['assigned', 'pending_assignment', 'cancelled'],
+  pending_assignment: ['assigned', 'cancelled'],
   assigned: ['picked_up', 'cancelled'],
-  picked_up: ['delivering', 'failed'],
+  picked_up: ['in_transit', 'delivering', 'failed'],
+  in_transit: ['ready_for_delivery', 'delivering', 'failed'],
+  ready_for_delivery: ['delivering', 'failed'],
   delivering: ['delivered', 'failed'],
   delivered: [],
-  failed: ['returned'],
+  failed: ['returned', 'pending_redelivery'],
+  pending_redelivery: ['delivering', 'failed', 'returned'],
   cancelled: [],
   returned: [],
 };
@@ -279,7 +284,17 @@ async function markPickedUp(shipmentId, shipperId) {
     throw new AppError('UNAUTHORIZED', 'You are not assigned to this shipment', 403);
   }
 
-  return updateStatus(shipmentId, 'picked_up');
+  const updatedShipment = await updateStatus(shipmentId, 'picked_up');
+
+  // Start transit simulation - mô phỏng hành trình trung chuyển
+  try {
+    await transitSimulationService.startTransitSimulation(shipmentId, updatedShipment);
+  } catch (e) {
+    console.error('[ShipmentService] Failed to start transit simulation:', e.message);
+    // Don't throw - transit simulation is non-blocking
+  }
+
+  return updatedShipment;
 }
 
 /**

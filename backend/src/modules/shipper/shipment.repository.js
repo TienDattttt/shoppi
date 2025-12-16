@@ -53,7 +53,11 @@ async function findShipmentById(shipmentId) {
         id,
         order_id,
         shop_id,
-        total
+        total,
+        order:orders(
+          id,
+          user_id
+        )
       )
     `)
     .eq('id', shipmentId)
