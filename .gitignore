@@ -9,3 +9,4 @@ backend/firebase-service-account.json
 backend/ARCHITECTURE_REVIEW.md
 backend/ENV_SETUP_GUIDE.md
 backend/srs.md
+backend/srs/database/seeds/
