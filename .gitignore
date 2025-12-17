@@ -10,3 +10,9 @@ backend/ARCHITECTURE_REVIEW.md
 backend/ENV_SETUP_GUIDE.md
 backend/srs.md
 backend/srs/database/seeds/
+backend/docs/
+backend/database/
+backend/tools/
+backend/TEST_CASES_SHIPPER.md
+backend/TEST_PLAN.md
+backend/ENV_SET_GUIDE.md
