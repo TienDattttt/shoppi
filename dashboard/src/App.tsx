@@ -55,6 +55,7 @@ const FollowersManagement = lazy(() => import("@/pages/partner/FollowersManageme
 const Chat = lazy(() => import("@/pages/partner/Chat"));
 const PartnerSettings = lazy(() => import("@/pages/partner/PartnerSettings"));
 const PartnerReports = lazy(() => import("@/pages/partner/PartnerReports"));
+const ShipmentTrackingPage = lazy(() => import("@/pages/partner/ShipmentTrackingPage"));
 
 // Lazy Load Customer Pages
 const HomePage = lazy(() => import("@/pages/customer/HomePage"));
@@ -124,6 +125,7 @@ function App() {
               <Route path="account/password" element={<ChangePasswordPage />} />
               <Route path="purchase" element={<PurchaseHistoryPage />} />
               <Route path="purchase/order/:id" element={<OrderDetailPageCustomer />} />
+              <Route path="order/:id" element={<OrderDetailPageCustomer />} />
               <Route path="notifications" element={<NotificationsPageCustomer />} />
               <Route path="voucher-wallet" element={<VoucherWalletPage />} />
               <Route path="following" element={<FollowedShopsPage />} />
@@ -164,6 +166,7 @@ function App() {
             <Route path="/partner/profile" element={<PartnerLayout><ShopProfile /></PartnerLayout>} />
             <Route path="/partner/orders" element={<PartnerLayout><PartnerOrderManagement /></PartnerLayout>} />
             <Route path="/partner/orders/:id" element={<PartnerLayout><OrderDetail /></PartnerLayout>} />
+            <Route path="/partner/shipments/:shipmentId" element={<PartnerLayout><ShipmentTrackingPage /></PartnerLayout>} />
             <Route path="/partner/vouchers" element={<PartnerLayout><PartnerVoucherManagement /></PartnerLayout>} />
             <Route path="/partner/reviews" element={<PartnerLayout><ReviewManagement /></PartnerLayout>} />
             <Route path="/partner/followers" element={<PartnerLayout><FollowersManagement /></PartnerLayout>} />

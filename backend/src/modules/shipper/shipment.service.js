@@ -440,7 +440,51 @@ async function rateDelivery(shipmentId, rating, feedback = null) {
  * @param {string} previousStatus
  */
 async function handleStatusChange(shipment, previousStatus) {
-  const { status, shipper_id } = shipment;
+  const { status, shipper_id, sub_order_id } = shipment;
+
+  console.log(`[ShipmentService] handleStatusChange called:`, {
+    shipmentId: shipment.id,
+    status,
+    previousStatus,
+    sub_order_id,
+    shipper_id,
+  });
+
+  // Sync sub_order status based on shipment status
+  if (sub_order_id) {
+    const subOrderStatusMap = {
+      'picked_up': 'shipping',      // Shipper đã lấy hàng -> Đang giao
+      'in_transit': 'shipping',     // Đang trung chuyển -> Đang giao
+      'delivering': 'shipping',     // Đang giao -> Đang giao
+      'delivered': 'delivered',     // Đã giao -> Đã giao
+      'failed': 'shipping',         // Giao thất bại -> vẫn đang giao (chờ giao lại)
+      'returned': 'returned',       // Hoàn hàng -> Đã hoàn
+    };
+    
+    const newSubOrderStatus = subOrderStatusMap[status];
+    console.log(`[ShipmentService] Mapping shipment status '${status}' to sub_order status '${newSubOrderStatus}'`);
+    
+    if (newSubOrderStatus) {
+      try {
+        const { supabaseAdmin } = require('../../shared/supabase/supabase.client');
+        const { data, error } = await supabaseAdmin
+          .from('sub_orders')
+          .update({ status: newSubOrderStatus, updated_at: new Date().toISOString() })
+          .eq('id', sub_order_id)
+          .select();
+        
+        if (error) {
+          console.error(`[ShipmentService] Supabase error updating sub_order:`, error);
+        } else {
+          console.log(`[ShipmentService] Successfully updated sub_order ${sub_order_id} to '${newSubOrderStatus}':`, data);
+        }
+      } catch (e) {
+        console.error('[ShipmentService] Failed to sync sub_order status:', e.message);
+      }
+    }
+  } else {
+    console.warn(`[ShipmentService] No sub_order_id found for shipment ${shipment.id}`);
+  }
 
   // When delivered or failed, make shipper available again
   if ((status === 'delivered' || status === 'failed') && shipper_id) {

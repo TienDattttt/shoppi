@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { cn } from "@/lib/utils";
+import { useShipperTracking } from "@/hooks/useShipperTracking";
 
 // Fix for default marker icons in Leaflet with Vite
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -33,11 +34,12 @@ export interface LocationPoint {
 
 interface ShipperLocationMapProps {
     shipmentId: string;
-    shipperLocation: ShipperLocation | null;
+    initialShipperLocation?: ShipperLocation | null;
     deliveryAddress: LocationPoint;
     pickupAddress: LocationPoint;
     estimatedArrival?: string;
     className?: string;
+    enableRealtime?: boolean; // Enable real-time tracking via Socket.io
 }
 
 // Custom shipper icon (blue motorcycle)
@@ -134,12 +136,21 @@ function MapBoundsUpdater({
 }
 
 export function ShipperLocationMap({
-    shipperLocation,
+    shipmentId,
+    initialShipperLocation,
     deliveryAddress,
     pickupAddress,
     estimatedArrival,
     className,
+    enableRealtime = true,
 }: ShipperLocationMapProps) {
+    // Use real-time tracking if enabled
+    const { shipperLocation: realtimeLocation, isConnected } = useShipperTracking(
+        enableRealtime ? shipmentId : null
+    );
+    
+    // Use realtime location if available, otherwise fall back to initial
+    const shipperLocation: ShipperLocation | null = realtimeLocation ?? initialShipperLocation ?? null;
     // Default center (Vietnam - Ho Chi Minh City)
     const defaultCenter: L.LatLngExpression = [10.8231, 106.6297];
 
@@ -270,6 +281,24 @@ export function ShipperLocationMap({
                     )}
                 </div>
             </div>
+
+            {/* Real-time connection indicator */}
+            {enableRealtime && (
+                <div className="absolute top-4 right-4 z-[1000]">
+                    <div className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium shadow-md",
+                        isConnected 
+                            ? "bg-green-100 text-green-700" 
+                            : "bg-gray-100 text-gray-500"
+                    )}>
+                        <div className={cn(
+                            "w-2 h-2 rounded-full",
+                            isConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"
+                        )} />
+                        {isConnected ? "Đang theo dõi trực tiếp" : "Đang kết nối..."}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -171,20 +171,25 @@ async function markReadyToShip(subOrderId, partnerId, options = {}) {
     throw new AppError('ORDER_NOT_FOUND', 'Không tìm thấy thông tin đơn hàng', 404);
   }
 
-  // 6. Get delivery address coordinates (if available)
+  // 6. Get delivery address coordinates
+  // user_addresses table doesn't have lat/lng, so we geocode the full address
   let deliveryLat = null;
   let deliveryLng = null;
   
-  if (order.shipping_address_id) {
-    const { data: address } = await supabaseAdmin
-      .from('user_addresses')
-      .select('lat, lng')
-      .eq('id', order.shipping_address_id)
-      .single();
-    
-    if (address) {
-      deliveryLat = address.lat;
-      deliveryLng = address.lng;
+  if (order.shipping_address) {
+    console.log('[PartnerShipping] Geocoding delivery address:', order.shipping_address);
+    try {
+      const goongClient = require('../../shared/goong/goong.client');
+      const geocodeResult = await goongClient.geocode(order.shipping_address);
+      if (geocodeResult?.lat && geocodeResult?.lng) {
+        deliveryLat = geocodeResult.lat;
+        deliveryLng = geocodeResult.lng;
+        console.log('[PartnerShipping] Geocoded delivery coordinates:', { lat: deliveryLat, lng: deliveryLng });
+      } else {
+        console.warn('[PartnerShipping] Geocoding failed for delivery address');
+      }
+    } catch (geocodeError) {
+      console.error('[PartnerShipping] Geocode error:', geocodeError.message);
     }
   }
 
