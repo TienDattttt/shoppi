@@ -24,15 +24,15 @@ const SIMULATION_DELAYS = {
   ARRIVE_DELIVERY_OFFICE: 6 * 60 * 60 * 1000, // 6 giờ (cùng miền) hoặc 16 giờ (khác miền)
 };
 
-// Cho demo/test: thời gian ngắn hơn (seconds)
+// Cho demo/test: thời gian ngắn hơn (seconds) - tổng ~35 giây
 const DEMO_DELAYS = {
-  ARRIVE_PICKUP_OFFICE: 10 * 1000,      // 10 giây
-  LEAVE_PICKUP_OFFICE: 20 * 1000,       // 20 giây
-  ARRIVE_SOURCE_HUB: 30 * 1000,         // 30 giây
-  LEAVE_SOURCE_HUB: 40 * 1000,          // 40 giây
-  ARRIVE_DEST_HUB: 50 * 1000,           // 50 giây (nếu khác miền)
-  LEAVE_DEST_HUB: 60 * 1000,            // 60 giây (nếu khác miền)
-  ARRIVE_DELIVERY_OFFICE: 70 * 1000,    // 70 giây
+  ARRIVE_PICKUP_OFFICE: 5 * 1000,       // 5 giây
+  LEAVE_PICKUP_OFFICE: 10 * 1000,       // 10 giây
+  ARRIVE_SOURCE_HUB: 15 * 1000,         // 15 giây
+  LEAVE_SOURCE_HUB: 20 * 1000,          // 20 giây
+  ARRIVE_DEST_HUB: 25 * 1000,           // 25 giây (nếu khác miền)
+  LEAVE_DEST_HUB: 30 * 1000,            // 30 giây (nếu khác miền)
+  ARRIVE_DELIVERY_OFFICE: 35 * 1000,    // 35 giây
 };
 
 // Sử dụng demo delays cho development
@@ -312,21 +312,101 @@ function scheduleDeliveryOfficeArrival(shipmentId, executeAt, context) {
  */
 async function autoAssignDeliveryShipper(shipmentId, shipment) {
   console.log(`[TransitSimulation] Auto-assigning delivery shipper for ${shipmentId}`);
+  console.log(`[TransitSimulation] Shipment info:`, {
+    pickup_shipper_id: shipment.pickup_shipper_id,
+    delivery_shipper_id: shipment.delivery_shipper_id,
+    delivery_office_id: shipment.delivery_office_id,
+    pickup_office_id: shipment.pickup_office_id,
+  });
 
   try {
-    // Nếu pickup và delivery shipper giống nhau (cùng bưu cục), không cần assign lại
-    if (shipment.pickup_shipper_id === shipment.delivery_shipper_id && shipment.delivery_shipper_id) {
-      console.log(`[TransitSimulation] Same shipper for pickup and delivery, no reassignment needed`);
+    // Kiểm tra xem bưu cục lấy và giao có giống nhau không
+    const isSameOffice = shipment.pickup_office_id && 
+                         shipment.delivery_office_id && 
+                         shipment.pickup_office_id === shipment.delivery_office_id;
+    
+    // Nếu cùng bưu cục, shipper lấy hàng cũng sẽ giao hàng
+    if (isSameOffice && shipment.pickup_shipper_id) {
+      console.log(`[TransitSimulation] Same office for pickup and delivery, keeping same shipper`);
       
-      // Notify shipper về đơn giao
-      await notifyDeliveryShipper(shipment.delivery_shipper_id, shipmentId, shipment);
+      // Lấy user_id của shipper để notify (KHÔNG dùng shipper_id!)
+      const { data: shipper } = await supabaseAdmin
+        .from('shippers')
+        .select('user_id')
+        .eq('id', shipment.pickup_shipper_id)
+        .single();
+      
+      if (shipper?.user_id) {
+        await notifyDeliveryShipper(shipper.user_id, shipmentId, shipment);
+      }
+      
+      // Update status to delivering (shipper đã sẵn sàng giao)
+      await supabaseAdmin
+        .from('shipments')
+        .update({
+          status: 'delivering',
+        })
+        .eq('id', shipmentId);
+      
+      console.log(`[TransitSimulation] Updated shipment status to ready_for_delivery`);
       return;
     }
+    
+    console.log(`[TransitSimulation] Different offices - need to assign new delivery shipper`);
 
     // Tìm shipper trong bưu cục giao
-    const deliveryOfficeId = shipment.delivery_office_id;
+    let deliveryOfficeId = shipment.delivery_office_id;
+    let deliveryLat = shipment.delivery_lat ? parseFloat(shipment.delivery_lat) : null;
+    let deliveryLng = shipment.delivery_lng ? parseFloat(shipment.delivery_lng) : null;
+    
+    // Nếu không có tọa độ, thử geocode từ địa chỉ
+    if ((!deliveryLat || !deliveryLng) && shipment.delivery_address) {
+      console.log(`[TransitSimulation] No delivery coordinates, trying to geocode address: ${shipment.delivery_address}`);
+      try {
+        const goongClient = require('../../shared/goong/goong.client');
+        const geocodeResult = await goongClient.geocode(shipment.delivery_address);
+        if (geocodeResult && geocodeResult.lat && geocodeResult.lng) {
+          deliveryLat = geocodeResult.lat;
+          deliveryLng = geocodeResult.lng;
+          console.log(`[TransitSimulation] Geocoded delivery address: ${deliveryLat}, ${deliveryLng}`);
+          
+          // Update shipment với tọa độ
+          await supabaseAdmin
+            .from('shipments')
+            .update({ delivery_lat: deliveryLat, delivery_lng: deliveryLng })
+            .eq('id', shipmentId);
+        }
+      } catch (geocodeError) {
+        console.error(`[TransitSimulation] Geocoding failed:`, geocodeError.message);
+      }
+    }
+    
+    // Nếu không có delivery_office_id, tìm bưu cục gần địa chỉ giao
     if (!deliveryOfficeId) {
-      console.warn(`[TransitSimulation] No delivery office for shipment ${shipmentId}`);
+      console.log(`[TransitSimulation] No delivery_office_id, finding nearest office to delivery address`);
+      
+      if (deliveryLat && deliveryLng) {
+        const nearestOffice = await assignmentService.findNearestPostOffice(deliveryLat, deliveryLng);
+        
+        if (nearestOffice) {
+          deliveryOfficeId = nearestOffice.id;
+          console.log(`[TransitSimulation] Found nearest delivery office: ${nearestOffice.name_vi} (${nearestOffice.id})`);
+          
+          // Update shipment với delivery_office_id
+          await supabaseAdmin
+            .from('shipments')
+            .update({ delivery_office_id: deliveryOfficeId })
+            .eq('id', shipmentId);
+        }
+      } else {
+        // Fallback: dùng pickup_office_id nếu không có tọa độ
+        console.log(`[TransitSimulation] No delivery coordinates, using pickup office as fallback`);
+        deliveryOfficeId = shipment.pickup_office_id;
+      }
+    }
+    
+    if (!deliveryOfficeId) {
+      console.warn(`[TransitSimulation] No delivery office for shipment ${shipmentId}, cannot assign shipper`);
       return;
     }
 
@@ -337,20 +417,26 @@ async function autoAssignDeliveryShipper(shipmentId, shipment) {
     );
 
     if (!deliveryShipper) {
-      console.warn(`[TransitSimulation] No delivery shipper available for shipment ${shipmentId}`);
+      console.warn(`[TransitSimulation] No delivery shipper available in office ${deliveryOfficeId} for shipment ${shipmentId}`);
       // Queue for retry
       await assignmentService.queueUnassignedShipment(shipmentId, 0);
       return;
     }
 
+    console.log(`[TransitSimulation] Found delivery shipper:`, {
+      shipperId: deliveryShipper.id,
+      userId: deliveryShipper.user?.id,
+      name: deliveryShipper.user?.full_name,
+    });
+
     // Update shipment với delivery shipper
+    // Status: delivering (shipper đã sẵn sàng giao)
     const { error } = await supabaseAdmin
       .from('shipments')
       .update({
         delivery_shipper_id: deliveryShipper.id,
         shipper_id: deliveryShipper.id, // Shipper chính giờ là delivery shipper
-        status: 'ready_for_delivery',
-        ready_for_delivery_at: new Date().toISOString(),
+        status: 'delivering',
       })
       .eq('id', shipmentId);
 
@@ -368,10 +454,12 @@ async function autoAssignDeliveryShipper(shipmentId, shipment) {
       description_vi: `Shipper ${deliveryShipper.user?.full_name || ''} đã được phân công giao hàng`,
     });
 
-    // Notify delivery shipper
-    await notifyDeliveryShipper(deliveryShipper.user?.id, shipmentId, shipment);
+    // Notify delivery shipper - dùng user_id, KHÔNG phải shipper_id
+    if (deliveryShipper.user?.id) {
+      await notifyDeliveryShipper(deliveryShipper.user.id, shipmentId, shipment);
+    }
 
-    console.log(`[TransitSimulation] Assigned delivery shipper ${deliveryShipper.id} for shipment ${shipmentId}`);
+    console.log(`[TransitSimulation] Successfully assigned delivery shipper ${deliveryShipper.id} (user: ${deliveryShipper.user?.id}) for shipment ${shipmentId}`);
 
   } catch (error) {
     console.error(`[TransitSimulation] Error assigning delivery shipper:`, error);

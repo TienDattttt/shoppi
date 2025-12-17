@@ -1070,11 +1070,9 @@ async function scanPickup(req, res) {
     
     return sendSuccess(res, {
       message: 'Đã xác nhận lấy hàng thành công',
-      data: {
-        shipment: toShipperMobileShipmentResponse(fullShipment),
-        scannedAt: new Date().toISOString(),
-        action: 'pickup',
-      },
+      shipment: toShipperMobileShipmentResponse(fullShipment),
+      scannedAt: new Date().toISOString(),
+      action: 'pickup',
     });
   } catch (error) {
     return errorResponse(res, error);
@@ -1193,12 +1191,10 @@ async function scanDelivery(req, res) {
     
     return sendSuccess(res, {
       message: 'Đã xác nhận giao hàng thành công',
-      data: {
-        shipment: toShipperMobileShipmentResponse(fullShipment),
-        scannedAt: new Date().toISOString(),
-        action: 'delivery',
-        codCollected: codAmount > 0 ? codAmount : null,
-      },
+      shipment: toShipperMobileShipmentResponse(fullShipment),
+      scannedAt: new Date().toISOString(),
+      action: 'delivery',
+      codCollected: codAmount > 0 ? codAmount : null,
     });
   } catch (error) {
     return errorResponse(res, error);
@@ -1262,10 +1258,8 @@ async function validateBarcode(req, res) {
       message: isAssignedToMe 
         ? 'Mã vận đơn hợp lệ' 
         : 'Đơn hàng này không được phân công cho bạn',
-      data: isAssignedToMe ? {
-        shipment: toShipperMobileShipmentResponse(shipment),
-        availableActions,
-      } : null,
+      shipment: isAssignedToMe ? toShipperMobileShipmentResponse(shipment) : null,
+      availableActions: isAssignedToMe ? availableActions : null,
     });
   } catch (error) {
     return errorResponse(res, error);

@@ -226,9 +226,15 @@ export default function OrderDetailPage() {
     };
 
     const fetchTrackingData = async (shipmentId: string) => {
+        console.log('[OrderDetailPage] Fetching tracking data for shipment:', shipmentId);
         setTrackingLoading(true);
         try {
             const tracking = await shipperService.getTrackingHistory(shipmentId);
+            console.log('[OrderDetailPage] Tracking data received:', {
+                shipmentStatus: tracking.shipment?.status,
+                eventsCount: tracking.events?.length,
+                events: tracking.events?.map(e => ({ status: e.status, statusVi: e.statusVi, time: e.eventTime })),
+            });
             setTrackingData(tracking);
             
             // If shipment is being delivered, fetch location and subscribe to updates
@@ -244,7 +250,7 @@ export default function OrderDetailPage() {
                 }
             }
         } catch (error) {
-            console.error("Failed to fetch tracking:", error);
+            console.error("[OrderDetailPage] Failed to fetch tracking:", error);
             setTrackingData(null);
         } finally {
             setTrackingLoading(false);
@@ -796,11 +802,12 @@ export default function OrderDetailPage() {
                 {showMap && shipperLocationData && (
                     <ShipperLocationMap
                         shipmentId={shipment.id}
-                        shipperLocation={shipperLocationData}
+                        initialShipperLocation={shipperLocationData}
                         deliveryAddress={deliveryAddress}
                         pickupAddress={pickupAddress}
                         estimatedArrival={shipperLocation?.etaRange?.display}
                         className="h-[350px]"
+                        enableRealtime={true}
                     />
                 )}
 

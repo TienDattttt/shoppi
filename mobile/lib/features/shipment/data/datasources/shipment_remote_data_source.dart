@@ -239,9 +239,11 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
     print('[ShipmentRemoteDataSource] scanPickup response: $response');
     
     if (response is Map<String, dynamic>) {
-      final data = response['data']?['shipment'] ?? response['data'] ?? response;
-      print('[ShipmentRemoteDataSource] scanPickup parsed data: $data');
-      final model = ShipmentModel.fromJson(data as Map<String, dynamic>);
+      // ApiClient unwraps { success, data } -> data
+      // So response is: { message, shipment, scannedAt, action }
+      final shipmentData = response['shipment'] ?? response;
+      print('[ShipmentRemoteDataSource] scanPickup parsed shipment: $shipmentData');
+      final model = ShipmentModel.fromJson(shipmentData as Map<String, dynamic>);
       print('[ShipmentRemoteDataSource] scanPickup model status: ${model.status}');
       return model;
     }

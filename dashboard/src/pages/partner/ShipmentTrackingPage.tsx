@@ -226,18 +226,40 @@ export default function ShipmentTrackingPage() {
     }, [shipmentId]);
 
     const loadShipmentDetail = async () => {
+        console.log('[ShipmentTrackingPage] Loading shipment detail:', shipmentId);
         setLoading(true);
         setError(null);
         try {
             const response = await api.get(`/partner/shipping/shipments/${shipmentId}`);
-            setShipment(response.data.data.shipment);
+            console.log('[ShipmentTrackingPage] Raw response:', response.data);
+            
+            // Handle different response formats
+            const shipmentData = response.data?.data?.shipment || response.data?.shipment || response.data;
+            
+            if (!shipmentData || !shipmentData.id) {
+                throw new Error('Invalid shipment data received');
+            }
+            
+            console.log('[ShipmentTrackingPage] Shipment loaded:', {
+                id: shipmentData.id,
+                status: shipmentData.status,
+                trackingEventsCount: shipmentData.trackingEvents?.length,
+                trackingEvents: shipmentData.trackingEvents?.map((e: TrackingEvent) => ({
+                    status: e.status,
+                    statusVi: e.statusVi,
+                    time: e.eventTime,
+                    location: e.locationName,
+                })),
+            });
+            setShipment(shipmentData);
             
             // If shipment is being delivered, try to get shipper location
-            if (["out_for_delivery", "delivering"].includes(response.data.data.shipment.status)) {
+            if (["out_for_delivery", "delivering"].includes(shipmentData.status)) {
                 loadShipperLocation();
             }
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : "Không thể tải thông tin vận đơn";
+            console.error('[ShipmentTrackingPage] Error loading shipment:', errorMessage, err);
             setError(errorMessage);
             toast.error(errorMessage);
         } finally {
@@ -342,11 +364,12 @@ export default function ShipmentTrackingPage() {
                             <CardContent>
                                 <ShipperLocationMap
                                     shipmentId={shipment.id}
-                                    shipperLocation={shipperLocation}
+                                    initialShipperLocation={shipperLocation}
                                     deliveryAddress={deliveryLocation}
                                     pickupAddress={pickupLocation}
                                     estimatedArrival={shipment.estimatedDelivery ? dayjs(shipment.estimatedDelivery).format("HH:mm") : undefined}
                                     className="h-[300px]"
+                                    enableRealtime={["out_for_delivery", "delivering"].includes(shipment.status)}
                                 />
                             </CardContent>
                         </Card>

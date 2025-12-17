@@ -364,11 +364,43 @@ async function autoAssignShipment(shipmentId, options = {}) {
   });
 
   // 3. Tìm bưu cục giao hàng (gần khách nhất)
-  const deliveryOffice = await findNearestPostOffice(
-    parseFloat(shipment.delivery_lat),
-    parseFloat(shipment.delivery_lng),
-    'local'
-  );
+  // Lấy delivery coordinates - geocode nếu không có
+  let deliveryLat = parseFloat(shipment.delivery_lat);
+  let deliveryLng = parseFloat(shipment.delivery_lng);
+  
+  if (!deliveryLat || !deliveryLng || isNaN(deliveryLat) || isNaN(deliveryLng)) {
+    console.log('[AssignmentService] Shipment has no delivery coords, trying to geocode...');
+    
+    // Try to geocode delivery address
+    if (shipment.delivery_address) {
+      try {
+        const geocodeResult = await goongClient.geocode(shipment.delivery_address);
+        if (geocodeResult?.lat && geocodeResult?.lng) {
+          deliveryLat = geocodeResult.lat;
+          deliveryLng = geocodeResult.lng;
+          console.log('[AssignmentService] Geocoded delivery address:', { lat: deliveryLat, lng: deliveryLng });
+          
+          // Update shipment with geocoded coordinates
+          await supabaseAdmin
+            .from('shipments')
+            .update({ delivery_lat: deliveryLat, delivery_lng: deliveryLng })
+            .eq('id', shipmentId);
+          console.log('[AssignmentService] Updated shipment with delivery coordinates');
+        } else {
+          console.log('[AssignmentService] Geocoding failed for delivery address:', shipment.delivery_address);
+        }
+      } catch (geocodeError) {
+        console.error('[AssignmentService] Delivery geocode error:', geocodeError.message);
+      }
+    }
+  }
+  
+  console.log('[AssignmentService] Finding nearest delivery office for coords:', {
+    lat: deliveryLat,
+    lng: deliveryLng,
+  });
+  
+  const deliveryOffice = await findNearestPostOffice(deliveryLat, deliveryLng, 'local');
 
   // 4. Xác định shipper giao hàng
   let deliveryShipper = pickupShipper; // Mặc định cùng shipper

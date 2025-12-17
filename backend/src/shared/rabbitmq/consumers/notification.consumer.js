@@ -122,25 +122,49 @@ async function handlePushNotification(payload, timestamp) {
     return;
   }
   
+  // Validate userId exists in users table before creating notification
+  // This prevents FK constraint errors and infinite retry loops
+  const { supabaseAdmin } = require('../../supabase/supabase.client');
+  const { data: user, error: userError } = await supabaseAdmin
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single();
+  
+  if (userError || !user) {
+    console.warn(`[NotificationConsumer] User ${userId} not found, skipping notification. This might be a shipper_id instead of user_id.`);
+    return; // Skip instead of throwing - prevents infinite retry loop
+  }
+  
   // Build notification content based on type
   const notificationContent = buildNotificationContent(type, payload);
   
   // Create in-app notification
-  const service = getNotificationService();
-  await service.send(userId, type || 'general', {
-    title: notificationContent.title,
-    body: notificationContent.body,
-    payload: {
-      orderId,
-      type,
-      userRole,
-      timestamp,
-      ...rest,
-    },
-    sendPush: true,
-  });
-  
-  console.log(`[NotificationConsumer] Push notification sent to user ${userId}`);
+  try {
+    const service = getNotificationService();
+    await service.send(userId, type || 'general', {
+      title: notificationContent.title,
+      body: notificationContent.body,
+      payload: {
+        orderId,
+        type,
+        userRole,
+        timestamp,
+        ...rest,
+      },
+      sendPush: true,
+    });
+    
+    console.log(`[NotificationConsumer] Push notification sent to user ${userId}`);
+  } catch (error) {
+    // Log error but don't throw - prevents infinite retry loop for non-recoverable errors
+    if (error.message?.includes('foreign key constraint') || error.message?.includes('violates')) {
+      console.error(`[NotificationConsumer] FK constraint error for user ${userId}, skipping:`, error.message);
+      return;
+    }
+    // Re-throw other errors for retry
+    throw error;
+  }
 }
 
 /**
