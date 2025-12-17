@@ -15,7 +15,7 @@ class MarkDeliveredUseCase implements UseCase<ShipmentEntity, MarkDeliveredParam
   Future<Either<Failure, ShipmentEntity>> call(MarkDeliveredParams params) async {
     return await repository.markDelivered(
       params.id, 
-      params.photoUrl, 
+      params.photoUrls, 
       params.signatureUrl,
       codCollected: params.codCollected,
     );
@@ -24,13 +24,14 @@ class MarkDeliveredUseCase implements UseCase<ShipmentEntity, MarkDeliveredParam
 
 class MarkDeliveredParams {
   final String id;
-  final String photoUrl;
+  /// Array of 1-3 delivery proof photo URLs
+  final List<String> photoUrls;
   final String? signatureUrl;
   final bool codCollected;
 
   MarkDeliveredParams({
     required this.id, 
-    required this.photoUrl, 
+    required this.photoUrls, 
     this.signatureUrl,
     this.codCollected = false,
   });

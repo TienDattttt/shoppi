@@ -16,6 +16,7 @@ import '../../../../injection.dart';
 import '../../../../shared/widgets/tracking_timeline.dart';
 import '../../domain/entities/shipment_entity.dart';
 import '../cubit/shipment_detail_cubit.dart';
+import 'delivery_confirmation_page.dart';
 
 class ShipmentDetailPage extends StatelessWidget {
   final ShipmentEntity shipment;
@@ -404,7 +405,15 @@ class _ShipmentDetailViewState extends State<ShipmentDetailView> {
       }
     }
     
-    Navigator.pushNamed(context, '/delivery-confirmation', arguments: _shipment);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeliveryConfirmationPage(
+          shipmentId: _shipment.id,
+          shipment: _shipment,
+        ),
+      ),
+    );
   }
 
   Future<void> _makePhoneCall(String phone) async {

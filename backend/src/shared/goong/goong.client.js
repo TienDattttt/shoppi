@@ -36,11 +36,12 @@ async function makeRequest(endpoint, params = {}) {
     const response = await fetch(url.toString());
     const data = await response.json();
     
-    if (data.status === 'OK' || data.predictions || data.results || data.result) {
+    // Check for various success indicators from different Goong endpoints
+    if (data.status === 'OK' || data.predictions || data.results || data.result || data.routes || data.rows) {
       return data;
     }
     
-    console.error('[Goong] API error:', data.status || data.error);
+    console.error('[Goong] API error:', data.status || data.error || 'Unknown error');
     return null;
   } catch (error) {
     console.error('[Goong] Request failed:', error.message);
@@ -238,6 +239,121 @@ async function getDistance(fromLat, fromLng, toLat, toLng, vehicle = 'bike') {
 }
 
 /**
+ * Get directions/route between two points
+ * @param {number} originLat - Origin latitude
+ * @param {number} originLng - Origin longitude
+ * @param {number} destLat - Destination latitude
+ * @param {number} destLng - Destination longitude
+ * @param {string} vehicle - Vehicle type: car, bike, taxi, truck
+ * @returns {Promise<Object>} Route with polyline and steps
+ */
+async function getDirections(originLat, originLng, destLat, destLng, vehicle = 'bike') {
+  if (!originLat || !originLng || !destLat || !destLng) return null;
+
+  const data = await makeRequest('Direction', {
+    origin: `${originLat},${originLng}`,
+    destination: `${destLat},${destLng}`,
+    vehicle,
+  });
+
+  if (!data?.routes?.[0]) return null;
+
+  const route = data.routes[0];
+  const leg = route.legs?.[0];
+
+  return {
+    // Encoded polyline for the entire route
+    overviewPolyline: route.overview_polyline?.points,
+    // Decoded polyline points
+    polylinePoints: decodePolyline(route.overview_polyline?.points || ''),
+    // Summary
+    distance: leg?.distance ? {
+      text: leg.distance.text,
+      value: leg.distance.value, // meters
+    } : null,
+    duration: leg?.duration ? {
+      text: leg.duration.text,
+      value: leg.duration.value, // seconds
+    } : null,
+    // Turn-by-turn steps
+    steps: leg?.steps?.map(step => ({
+      instruction: step.html_instructions?.replace(/<[^>]*>/g, '') || '',
+      distance: step.distance ? {
+        text: step.distance.text,
+        value: step.distance.value,
+      } : null,
+      duration: step.duration ? {
+        text: step.duration.text,
+        value: step.duration.value,
+      } : null,
+      startLocation: step.start_location ? {
+        lat: step.start_location.lat,
+        lng: step.start_location.lng,
+      } : null,
+      endLocation: step.end_location ? {
+        lat: step.end_location.lat,
+        lng: step.end_location.lng,
+      } : null,
+      maneuver: step.maneuver,
+      polyline: decodePolyline(step.polyline?.points || ''),
+    })) || [],
+    // Bounds for map fitting
+    bounds: route.bounds?.northeast && route.bounds?.southwest ? {
+      northeast: { lat: route.bounds.northeast.lat, lng: route.bounds.northeast.lng },
+      southwest: { lat: route.bounds.southwest.lat, lng: route.bounds.southwest.lng },
+    } : null,
+  };
+}
+
+/**
+ * Decode Google-encoded polyline string to array of coordinates
+ * @param {string} encoded - Encoded polyline string
+ * @returns {Array<{lat: number, lng: number}>} Array of coordinates
+ */
+function decodePolyline(encoded) {
+  if (!encoded) return [];
+  
+  const points = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let b;
+    let shift = 0;
+    let result = 0;
+
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+
+    const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+
+    const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lng += dlng;
+
+    points.push({
+      lat: lat / 1e5,
+      lng: lng / 1e5,
+    });
+  }
+
+  return points;
+}
+
+/**
  * Check if Goong API is available
  */
 function isAvailable() {
@@ -251,6 +367,8 @@ module.exports = {
   reverseGeocode,
   distanceMatrix,
   getDistance,
+  getDirections,
+  decodePolyline,
   isAvailable,
   
   // Constants

@@ -22,11 +22,11 @@ abstract class ShipmentRepository {
   Future<Either<Failure, ShipmentEntity>> markDelivering(String id);
   
   /// Mark shipment as delivered with proof
-  /// Requirements: 7.1 - Photo required
+  /// Requirements: 7.1 - At least 1 photo required (max 3)
   /// Requirements: 6.2 - COD collection confirmation required for COD orders
   Future<Either<Failure, ShipmentEntity>> markDelivered(
     String id, 
-    String photoUrl, 
+    List<String> photoUrls, 
     String? signatureUrl,
     {required bool codCollected}
   );

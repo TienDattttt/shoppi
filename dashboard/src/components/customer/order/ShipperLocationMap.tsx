@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { cn } from "@/lib/utils";
 import { useShipperTracking } from "@/hooks/useShipperTracking";
+import { shipperService, type RouteResponse } from "@/services/shipper.service";
 
 // Fix for default marker icons in Leaflet with Vite
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -149,10 +150,75 @@ export function ShipperLocationMap({
         enableRealtime ? shipmentId : null
     );
     
+    // Route state
+    const [routeData, setRouteData] = useState<RouteResponse | null>(null);
+    const [routeLoading, setRouteLoading] = useState(false);
+    const lastRouteOriginRef = useRef<string>("");
+    
     // Use realtime location if available, otherwise fall back to initial
     const shipperLocation: ShipperLocation | null = realtimeLocation ?? initialShipperLocation ?? null;
+    
     // Default center (Vietnam - Ho Chi Minh City)
     const defaultCenter: L.LatLngExpression = [10.8231, 106.6297];
+
+    // Fetch route from Goong Directions API
+    const fetchRoute = useCallback(async (fromShipper: boolean = false) => {
+        if (!shipmentId) return;
+        
+        // Create a key to check if we need to refetch
+        const originKey = fromShipper && shipperLocation 
+            ? `${shipperLocation.lat.toFixed(4)},${shipperLocation.lng.toFixed(4)}`
+            : `${pickupAddress.lat.toFixed(4)},${pickupAddress.lng.toFixed(4)}`;
+        
+        // Don't refetch if origin hasn't changed significantly
+        if (lastRouteOriginRef.current === originKey && routeData) return;
+        
+        setRouteLoading(true);
+        try {
+            const data = await shipperService.getShipmentRoute(shipmentId, fromShipper);
+            setRouteData(data);
+            lastRouteOriginRef.current = originKey;
+        } catch (error) {
+            console.error("[ShipperLocationMap] Failed to fetch route:", error);
+        } finally {
+            setRouteLoading(false);
+        }
+    }, [shipmentId, shipperLocation, pickupAddress, routeData]);
+
+    // Fetch route on mount and when shipper location changes significantly
+    useEffect(() => {
+        // Fetch route from shipper if available, otherwise from pickup
+        const hasShipper = !!shipperLocation;
+        fetchRoute(hasShipper);
+    }, [shipmentId]); // Only on mount
+
+    // Update route when shipper moves significantly (every 500m)
+    useEffect(() => {
+        if (!shipperLocation || !routeData) return;
+        
+        const currentOrigin = routeData.origin;
+        const distance = calculateDistance(
+            shipperLocation.lat, shipperLocation.lng,
+            currentOrigin.lat, currentOrigin.lng
+        );
+        
+        // Refetch route if shipper moved more than 500m
+        if (distance > 0.5) {
+            fetchRoute(true);
+        }
+    }, [shipperLocation?.lat, shipperLocation?.lng]);
+
+    // Calculate distance between two points (km)
+    const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+        const R = 6371; // Earth's radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    };
 
     // Calculate center based on available locations
     const getCenter = (): L.LatLngExpression => {
@@ -165,13 +231,19 @@ export function ShipperLocationMap({
         return defaultCenter;
     };
 
-    // Create route line from shipper to delivery
-    const routePositions: L.LatLngExpression[] = [];
-    if (shipperLocation) {
-        routePositions.push([shipperLocation.lat, shipperLocation.lng]);
-    }
-    if (deliveryAddress.lat && deliveryAddress.lng) {
-        routePositions.push([deliveryAddress.lat, deliveryAddress.lng]);
+    // Convert route polyline points to Leaflet format
+    const routePositions: L.LatLngExpression[] = routeData?.route?.polylinePoints?.map(
+        p => [p.lat, p.lng] as L.LatLngExpression
+    ) || [];
+    
+    // Fallback to straight line if no route
+    if (routePositions.length === 0) {
+        if (shipperLocation) {
+            routePositions.push([shipperLocation.lat, shipperLocation.lng]);
+        }
+        if (deliveryAddress.lat && deliveryAddress.lng) {
+            routePositions.push([deliveryAddress.lat, deliveryAddress.lng]);
+        }
     }
 
     return (
@@ -247,15 +319,32 @@ export function ShipperLocationMap({
                     </Marker>
                 )}
 
-                {/* Route line from shipper to delivery */}
+                {/* Route line - real route from Goong or fallback to straight line */}
                 {routePositions.length >= 2 && (
                     <Polyline
                         positions={routePositions}
                         pathOptions={{
                             color: "#3b82f6",
-                            weight: 4,
-                            opacity: 0.7,
-                            dashArray: "10, 10",
+                            weight: 5,
+                            opacity: 0.8,
+                            // Solid line for real route, dashed for fallback
+                            dashArray: routeData ? undefined : "10, 10",
+                        }}
+                    />
+                )}
+                
+                {/* Route from pickup to delivery (background route) */}
+                {pickupAddress.lat && pickupAddress.lng && deliveryAddress.lat && deliveryAddress.lng && !shipperLocation && (
+                    <Polyline
+                        positions={[
+                            [pickupAddress.lat, pickupAddress.lng],
+                            [deliveryAddress.lat, deliveryAddress.lng],
+                        ]}
+                        pathOptions={{
+                            color: "#9ca3af",
+                            weight: 3,
+                            opacity: 0.5,
+                            dashArray: "5, 10",
                         }}
                     />
                 )}
@@ -280,6 +369,14 @@ export function ShipperLocationMap({
                         </div>
                     )}
                 </div>
+                {/* Route info */}
+                {routeData?.route && (
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                        <div className="text-xs text-gray-500">
+                            {routeData.route.distance?.text} • {routeData.route.duration?.text}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Real-time connection indicator */}
@@ -296,6 +393,16 @@ export function ShipperLocationMap({
                             isConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"
                         )} />
                         {isConnected ? "Đang theo dõi trực tiếp" : "Đang kết nối..."}
+                    </div>
+                </div>
+            )}
+            
+            {/* Route loading indicator */}
+            {routeLoading && (
+                <div className="absolute top-4 left-4 z-[1000]">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium shadow-md bg-blue-100 text-blue-700">
+                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        Đang tải đường đi...
                     </div>
                 </div>
             )}

@@ -29,6 +29,8 @@ export interface TrackingEvent {
     actorId?: string;
     actorName?: string;
     eventTime: string;
+    // Delivery proof photos (for delivered status)
+    deliveryPhotoUrls?: string[];
 }
 
 interface TrackingTimelineProps {
@@ -245,6 +247,32 @@ export function TrackingTimeline({
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Delivery proof photos - Requirements 7.1 */}
+                                {event.status === 'delivered' && event.deliveryPhotoUrls && event.deliveryPhotoUrls.length > 0 && (
+                                    <div className="mt-3">
+                                        <div className="text-xs text-muted-foreground mb-2">
+                                            Ảnh xác nhận giao hàng:
+                                        </div>
+                                        <div className="flex gap-2 flex-wrap">
+                                            {event.deliveryPhotoUrls.map((url, photoIndex) => (
+                                                <a
+                                                    key={photoIndex}
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block"
+                                                >
+                                                    <img
+                                                        src={url}
+                                                        alt={`Ảnh giao hàng ${photoIndex + 1}`}
+                                                        className="h-20 w-20 object-cover rounded-lg border hover:opacity-80 transition-opacity cursor-pointer"
+                                                    />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );

@@ -38,6 +38,9 @@ router.get('/:id/tracking', shipperController.getTrackingHistory);
 // Get real-time location for shipment
 router.get('/:id/location', shipperController.getShipmentLocation);
 
+// Get route/directions for shipment (for map display)
+router.get('/:id/route', shipperController.getShipmentRoute);
+
 // Update shipment status (shipper only)
 router.patch('/:id/status', authorize('shipper'), shipperController.updateShipmentStatus);
 
