@@ -71,7 +71,7 @@ export function useShipperTracking(shipmentId: string | null): UseShipperTrackin
       speed?: number;
       timestamp?: string;
     }) => {
-      console.log('[ShipperTracking] Received location update:', data);
+      console.log('[ShipperTracking] 🚚 Received location update:', data);
       setShipperLocation({
         lat: data.latitude,
         lng: data.longitude,
@@ -79,6 +79,27 @@ export function useShipperTracking(shipmentId: string | null): UseShipperTrackin
         speed: data.speed,
         updatedAt: data.timestamp || new Date().toISOString(),
       });
+    });
+    
+    // Also listen for generic shipper:location event (in case server broadcasts differently)
+    newSocket.on('shipper:location', (data: {
+      shipmentId: string;
+      latitude: number;
+      longitude: number;
+      heading?: number;
+      speed?: number;
+      timestamp?: string;
+    }) => {
+      if (data.shipmentId === shipmentId) {
+        console.log('[ShipperTracking] 🚚 Received generic location update:', data);
+        setShipperLocation({
+          lat: data.latitude,
+          lng: data.longitude,
+          heading: data.heading,
+          speed: data.speed,
+          updatedAt: data.timestamp || new Date().toISOString(),
+        });
+      }
     });
 
     socketRef.current = newSocket;
