@@ -36,6 +36,8 @@ export interface TrackingEvent {
     actorType: 'system' | 'shipper' | 'shop' | 'customer';
     actorName?: string;
     eventTime: string;
+    // Delivery proof photos (for delivered status)
+    deliveryPhotoUrls?: string[];
 }
 
 // Shipper info for tracking
@@ -63,6 +65,11 @@ export interface TrackingResponse {
         deliveryAttempts: number;
         nextDeliveryAttempt?: string;
         failureReason?: string;
+        // Coordinates for map
+        pickupLat?: number;
+        pickupLng?: number;
+        deliveryLat?: number;
+        deliveryLng?: number;
     };
     shipper: ShipperTrackingInfo | null;
     events: TrackingEvent[];
@@ -143,6 +150,35 @@ export interface OrderShipment {
         assigned?: string;
         pickedUp?: string;
         delivered?: string;
+    };
+    // Customer confirmation and rating
+    customerConfirmed?: boolean;
+    customerRating?: number;
+    deliveryPhotoUrls?: string[];
+}
+
+// Route/Directions response
+export interface RouteResponse {
+    shipmentId: string;
+    origin: { lat: number; lng: number };
+    destination: { lat: number; lng: number };
+    route: {
+        overviewPolyline: string;
+        polylinePoints: Array<{ lat: number; lng: number }>;
+        distance: { text: string; value: number } | null;
+        duration: { text: string; value: number } | null;
+        bounds: {
+            northeast: { lat: number; lng: number };
+            southwest: { lat: number; lng: number };
+        } | null;
+        steps: Array<{
+            instruction: string;
+            distance: { text: string; value: number } | null;
+            duration: { text: string; value: number } | null;
+            startLocation: { lat: number; lng: number } | null;
+            endLocation: { lat: number; lng: number } | null;
+            maneuver?: string;
+        }>;
     };
 }
 
@@ -308,6 +344,14 @@ export const shipperService = {
     rateShipment: async (shipmentId: string, rating: number, comment?: string) => {
         const response = await api.post(`/shipments/${shipmentId}/rate`, { rating, comment });
         return response.data;
+    },
+
+    // Get route/directions for a shipment (for map display)
+    getShipmentRoute: async (shipmentId: string, fromShipper: boolean = false): Promise<RouteResponse> => {
+        const response = await api.get(`/shipments/${shipmentId}/route`, { 
+            params: { fromShipper: fromShipper ? 'true' : 'false' } 
+        });
+        return response.data.data;
     },
 
     // ============================================

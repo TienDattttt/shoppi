@@ -208,7 +208,7 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
   @override
   Future<Either<Failure, ShipmentEntity>> markDelivered(
     String id, 
-    String photoUrl, 
+    List<String> photoUrls, 
     String? signatureUrl,
     {required bool codCollected}
   ) async {
@@ -220,11 +220,11 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
     
     if (await _networkInfo.isConnected) {
       try {
-        // Requirements: 7.1 - Photo required for delivered status
+        // Requirements: 7.1 - At least 1 photo required (max 3)
         // Requirements: 6.2 - COD collection confirmation required
         final result = await _remoteDataSource.markDelivered(
           id,
-          photoUrl: photoUrl,
+          photoUrls: photoUrls,
           signatureUrl: signatureUrl,
           codCollected: codCollected,
         );
@@ -238,7 +238,7 @@ class ShipmentRepositoryImpl implements ShipmentRepository {
         type: 'deliver',
         payload: {
           'shipmentId': id, 
-          'photoUrl': photoUrl, 
+          'photoUrls': photoUrls, 
           'signatureUrl': signatureUrl,
           'codCollected': codCollected,
         },

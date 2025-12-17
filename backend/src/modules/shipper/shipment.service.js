@@ -321,7 +321,8 @@ async function markDelivering(shipmentId, shipperId) {
  * @param {string} shipmentId
  * @param {string} shipperId
  * @param {Object} proofData - Delivery proof
- * @param {string} proofData.photoUrl - Photo proof URL
+ * @param {string} proofData.photoUrl - Single photo proof URL (legacy)
+ * @param {string[]} proofData.photoUrls - Array of photo proof URLs (1-3 photos)
  * @param {string} proofData.signatureUrl - Signature URL (optional)
  * @param {boolean} proofData.codCollected - COD collection confirmation (required for COD orders)
  * @returns {Promise<Object>}
@@ -333,6 +334,15 @@ async function markDelivered(shipmentId, shipperId, proofData = {}) {
     throw new AppError('UNAUTHORIZED', 'You are not assigned to this shipment', 403);
   }
 
+  // Validate photos - require at least 1, max 3
+  const photoUrls = proofData.photoUrls || (proofData.photoUrl ? [proofData.photoUrl] : []);
+  if (photoUrls.length === 0) {
+    throw new AppError('SHIP_005', 'At least 1 delivery proof photo is required', 400);
+  }
+  if (photoUrls.length > 3) {
+    throw new AppError('SHIP_007', 'Maximum 3 delivery proof photos allowed', 400);
+  }
+
   // Requirements 6.2: Require COD collection confirmation for COD orders
   const codAmount = parseFloat(shipment.cod_amount || 0);
   if (codAmount > 0) {
@@ -342,7 +352,8 @@ async function markDelivered(shipmentId, shipperId, proofData = {}) {
   }
 
   const updateData = {
-    delivery_photo_url: proofData.photoUrl,
+    delivery_photo_url: photoUrls[0], // Keep first photo in legacy column for compatibility
+    delivery_photo_urls: JSON.stringify(photoUrls), // Store all photos as JSON array
     recipient_signature_url: proofData.signatureUrl,
   };
 
@@ -355,7 +366,21 @@ async function markDelivered(shipmentId, shipperId, proofData = {}) {
     await shipperRepository.updateDailyCodBalance(shipperId, codAmount);
   }
 
-  return updateStatus(shipmentId, 'delivered', updateData);
+  const updatedShipment = await updateStatus(shipmentId, 'delivered', updateData);
+
+  // Broadcast delivery status to customer and partner via Socket.io
+  try {
+    const socketService = require('../../shared/socket/socket.service');
+    socketService.broadcastShipmentUpdate(shipmentId, {
+      status: 'delivered',
+      deliveryPhotoUrls: photoUrls,
+      deliveredAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('[ShipmentService] Failed to broadcast delivery update:', e.message);
+  }
+
+  return updatedShipment;
 }
 
 /**

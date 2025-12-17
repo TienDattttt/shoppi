@@ -24,6 +24,7 @@ const BUCKETS = [
     { name: 'reviews', public: true },
     { name: 'chat', public: true },
     { name: 'documents', public: false },
+    { name: 'shipments', public: true }, // Delivery proof photos
 ];
 
 async function initBuckets() {

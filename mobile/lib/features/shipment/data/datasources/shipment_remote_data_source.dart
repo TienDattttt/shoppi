@@ -43,8 +43,9 @@ abstract class ShipmentRemoteDataSource {
   
   /// Mark shipment as delivered with proof
   /// Requirements: 7.1, 13.3
+  /// [photoUrls] - Array of 1-3 delivery proof photo URLs
   Future<ShipmentModel> markDelivered(String id, {
-    required String photoUrl,
+    required List<String> photoUrls,
     String? signatureUrl,
     required bool codCollected,
     Map<String, double>? location,
@@ -157,17 +158,24 @@ class ShipmentRemoteDataSourceImpl implements ShipmentRemoteDataSource {
 
   @override
   Future<ShipmentModel> markDelivered(String id, {
-    required String photoUrl,
+    required List<String> photoUrls,
     String? signatureUrl,
     required bool codCollected,
     Map<String, double>? location,
   }) async {
     // Backend endpoint: POST /api/shipper/shipments/:id/status
-    // Requirements: 7.1 - Photo required for delivered status
+    // Requirements: 7.1 - At least 1 photo required for delivered status (max 3)
     // Requirements: 6.2 - COD collection confirmation required
+    if (photoUrls.isEmpty) {
+      throw Exception('At least 1 delivery proof photo is required');
+    }
+    if (photoUrls.length > 3) {
+      throw Exception('Maximum 3 delivery proof photos allowed');
+    }
+    
     final response = await _client.post('/shipper/shipments/$id/status', data: {
       'status': 'delivered',
-      'photoUrl': photoUrl,
+      'photoUrls': photoUrls, // Array of 1-3 photo URLs
       if (signatureUrl != null) 'signatureUrl': signatureUrl,
       'codCollected': codCollected,
       if (location != null) 'location': location,

@@ -15,9 +15,17 @@ function getDisplayStatus(order: Order): string {
     
     // Check sub-orders for more specific status
     const subOrders = order.subOrders || [];
+    
+    // Đã giao nhưng chưa xác nhận nhận hàng -> hiển thị trong tab "Hoàn thành" để user bấm xác nhận
+    if (subOrders.some(so => so.status === 'delivered')) return 'Completed';
+    
+    // Đang giao
     if (subOrders.some(so => so.status === 'shipping')) return 'To Receive';
+    
+    // Chờ giao hàng
     if (subOrders.some(so => so.status === 'ready_to_ship')) return 'To Ship';
-    if (subOrders.some(so => so.status === 'delivered')) return 'To Receive';
+    
+    // Đang xử lý
     if (subOrders.some(so => so.status === 'pending' || so.status === 'confirmed' || so.status === 'processing')) return 'To Ship';
     
     return 'Processing';

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star, Package } from "lucide-react";
+import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star, Package, CheckCircle2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { orderService, type Order } from "@/services/order.service";
 import { 
@@ -61,14 +61,19 @@ function getPaymentMethodText(method: string): string {
     return methodMap[method] || method;
 }
 
-// Check if shipment is in delivering status
+// Check if shipment is in active delivery/transit status (show map)
+function isInTransitOrDelivering(status: string): boolean {
+    return ['picked_up', 'in_transit', 'out_for_delivery', 'delivering', 'shipping', 'ready_for_delivery'].includes(status);
+}
+
+// Check if shipment is actively being delivered (shipper on the way to customer)
 function isDelivering(status: string): boolean {
-    return ['out_for_delivery', 'delivering', 'shipping'].includes(status);
+    return ['out_for_delivery', 'delivering', 'shipping', 'ready_for_delivery'].includes(status);
 }
 
 // Check if shipper is assigned
 function hasShipperAssigned(status: string): boolean {
-    return ['assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'delivering', 'shipping', 'delivered'].includes(status);
+    return ['assigned', 'picked_up', 'in_transit', 'out_for_delivery', 'delivering', 'shipping', 'delivered', 'ready_for_delivery'].includes(status);
 }
 
 export default function OrderDetailPage() {
@@ -237,8 +242,8 @@ export default function OrderDetailPage() {
             });
             setTrackingData(tracking);
             
-            // If shipment is being delivered, fetch location and subscribe to updates
-            if (tracking.shipment && isDelivering(tracking.shipment.status)) {
+            // If shipment is in transit or being delivered, fetch location and subscribe to updates
+            if (tracking.shipment && isInTransitOrDelivering(tracking.shipment.status)) {
                 await fetchShipperLocation(shipmentId);
                 subscribeToLocationUpdates(shipmentId);
             } else {
@@ -261,9 +266,15 @@ export default function OrderDetailPage() {
         try {
             const location = await shipperService.getShipmentLocation(shipmentId);
             setShipperLocation(location);
-        } catch (error) {
-            console.error("Failed to fetch shipper location:", error);
-            // Don't clear location - might be temporary error
+        } catch (error: any) {
+            // 404 means shipper hasn't updated location yet - this is expected
+            if (error?.response?.status === 404) {
+                console.log("[OrderDetailPage] Shipper location not available yet");
+            } else {
+                console.error("Failed to fetch shipper location:", error);
+            }
+            // Set null to indicate no location available
+            setShipperLocation(null);
         }
     };
 
@@ -442,7 +453,9 @@ export default function OrderDetailPage() {
     // Get selected shipment data
     const selectedShipment = orderShipments.find(s => s.id === selectedShipmentId);
     const showTracking = orderShipments.length > 0;
-    const showMap = selectedShipment && isDelivering(selectedShipment.status) && shipperLocation;
+    // Show map when shipment is in transit or delivering (from picked_up onwards)
+    // Map will show even without shipper location - just pickup/delivery markers
+    const showMap = selectedShipment && isInTransitOrDelivering(selectedShipment.status);
 
     // Prepare shipper info for component
     const shipperInfoData: ShipperInfoData | null = trackingData?.shipper ? {
@@ -465,16 +478,17 @@ export default function OrderDetailPage() {
         updatedAt: shipperLocation.shipperLocation.updatedAt,
     } : null;
 
+    // Get delivery/pickup addresses from shipperLocation or trackingData
     const deliveryAddress: LocationPoint = {
-        lat: shipperLocation?.deliveryLocation?.lat || 0,
-        lng: shipperLocation?.deliveryLocation?.lng || 0,
+        lat: shipperLocation?.deliveryLocation?.lat || trackingData?.shipment?.deliveryLat || 0,
+        lng: shipperLocation?.deliveryLocation?.lng || trackingData?.shipment?.deliveryLng || 0,
         address: shipperLocation?.deliveryLocation?.address || order.shippingAddress,
     };
 
     const pickupAddress: LocationPoint = {
-        lat: shipperLocation?.pickupLocation?.lat || 0,
-        lng: shipperLocation?.pickupLocation?.lng || 0,
-        address: shipperLocation?.pickupLocation?.address || '',
+        lat: shipperLocation?.pickupLocation?.lat || trackingData?.shipment?.pickupLat || 0,
+        lng: shipperLocation?.pickupLocation?.lng || trackingData?.shipment?.pickupLng || 0,
+        address: shipperLocation?.pickupLocation?.address || selectedShipment?.pickup?.address || '',
     };
 
     return (
@@ -799,7 +813,8 @@ export default function OrderDetailPage() {
                 )}
 
                 {/* Map - Requirements 1.3, 4.2 */}
-                {showMap && shipperLocationData && (
+                {/* Show map when in transit - even without shipper location (will show pickup/delivery markers) */}
+                {showMap && (deliveryAddress.lat !== 0 || pickupAddress.lat !== 0) && (
                     <ShipperLocationMap
                         shipmentId={shipment.id}
                         initialShipperLocation={shipperLocationData}
@@ -825,6 +840,72 @@ export default function OrderDetailPage() {
                 ) : (
                     <div className="text-center py-8 text-gray-500">
                         Chưa có thông tin theo dõi
+                    </div>
+                )}
+
+                {/* Delivered info - show shipper and delivery photos */}
+                {shipment.status === 'delivered' && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <span className="text-green-700 font-medium">Giao hàng thành công</span>
+                        </div>
+                        
+                        {/* Shipper info who delivered */}
+                        {shipperInfoData && (
+                            <div className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                                <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                                    {shipperInfoData.avatarUrl ? (
+                                        <img src={shipperInfoData.avatarUrl} alt={shipperInfoData.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                        <Truck className="h-5 w-5 text-gray-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-medium text-sm">{shipperInfoData.name}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {shipperInfoData.vehicleType} • {shipperInfoData.vehiclePlate}
+                                    </div>
+                                </div>
+                                {shipperInfoData.rating && (
+                                    <div className="flex items-center gap-1 text-yellow-500">
+                                        <Star className="h-4 w-4 fill-current" />
+                                        <span className="text-sm font-medium">{shipperInfoData.rating.toFixed(1)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Delivery proof photos */}
+                        {trackingData?.events?.find(e => e.status === 'delivered')?.deliveryPhotoUrls && (
+                            <div>
+                                <div className="text-sm text-gray-600 mb-2">Ảnh xác nhận giao hàng:</div>
+                                <div className="flex gap-2 flex-wrap">
+                                    {trackingData.events.find(e => e.status === 'delivered')?.deliveryPhotoUrls?.map((url, idx) => (
+                                        <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                                            <img 
+                                                src={url} 
+                                                alt={`Ảnh giao hàng ${idx + 1}`}
+                                                className="h-24 w-24 object-cover rounded-lg border hover:opacity-80 transition-opacity cursor-pointer"
+                                            />
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Rate shipper button */}
+                        {shipment.shipper && !shipment.customerRating && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => setShowShipperRatingModal(true)}
+                            >
+                                <Star className="h-4 w-4" />
+                                Đánh giá shipper
+                            </Button>
+                        )}
                     </div>
                 )}
 

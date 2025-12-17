@@ -110,6 +110,50 @@ class ApiClient {
     }
   }
 
+  /// Upload file to backend
+  /// [path] - API endpoint
+  /// [fileBytes] - File content as bytes
+  /// [filename] - Name of the file
+  /// [fieldName] - Form field name (default: 'file')
+  /// [additionalFields] - Additional form fields to include
+  Future<Map<String, dynamic>> uploadFile(
+    String path,
+    List<int> fileBytes, {
+    required String filename,
+    String fieldName = 'file',
+    Map<String, dynamic>? additionalFields,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        fieldName: MultipartFile.fromBytes(
+          fileBytes,
+          filename: filename,
+        ),
+        if (additionalFields != null) ...additionalFields,
+      });
+      
+      final response = await _dio.post(
+        path,
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+        ),
+      );
+      
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        // Handle wrapped response { success: true, data: {...} }
+        if (data.containsKey('data') && data['data'] is Map<String, dynamic>) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return data;
+      }
+      return {'data': data};
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
   Exception _handleDioError(DioException e) {
     if (e.type == DioExceptionType.connectionTimeout || 
         e.type == DioExceptionType.receiveTimeout || 

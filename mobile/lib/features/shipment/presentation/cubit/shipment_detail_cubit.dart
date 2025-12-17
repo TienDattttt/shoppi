@@ -1,6 +1,10 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../injection.dart';
 import '../../domain/entities/shipment_entity.dart';
 import '../../domain/repositories/shipment_repository.dart';
 import '../../domain/usecases/mark_delivered_usecase.dart';
@@ -43,9 +47,9 @@ class ShipmentDetailCubit extends Cubit<ShipmentDetailState> {
     this._markFailedUseCase,
     this._shipmentRepository,
   ) : super(ShipmentDetailInitial());
-
-  // Usually we'd start with getting details, but here we assumme shipment is passed in or fetched via separate usecase.
-  // For simplicity, we just handle actions here.
+  
+  // Get ApiClient from getIt (lazy initialization)
+  ApiClient get _apiClient => getIt<ApiClient>();
 
   Future<void> pickUpShipment(String id) async {
     emit(ShipmentDetailLoading());
@@ -56,11 +60,91 @@ class ShipmentDetailCubit extends Cubit<ShipmentDetailState> {
     );
   }
 
-  Future<void> deliverShipment(String id, String photoPath, String? signaturePath) async {
+  /// Confirm delivery with multiple photos (1-3)
+  /// Requirements: 7.1 - At least 1 photo required
+  /// Requirements: 6.2 - COD collection confirmation required for COD orders
+  Future<void> confirmDelivery(
+    String shipmentId, {
+    required List<File> imageFiles,
+    Uint8List? signature,
+    required bool codCollected,
+  }) async {
+    emit(ShipmentDetailLoading());
+    
+    try {
+      // Upload all photos to Supabase Storage
+      final List<String> photoUrls = [];
+      
+      for (int i = 0; i < imageFiles.length; i++) {
+        final file = imageFiles[i];
+        final bytes = await file.readAsBytes();
+        
+        // Upload via backend API
+        final response = await _apiClient.uploadFile(
+          '/shipper/upload/photo',
+          bytes,
+          filename: 'delivery_${i + 1}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          fieldName: 'photo',
+          additionalFields: {
+            'shipmentId': shipmentId,
+            'type': 'delivery',
+          },
+        );
+        
+        if (response is Map<String, dynamic>) {
+          final url = response['url'] ?? response['data']?['url'];
+          if (url != null) {
+            photoUrls.add(url);
+          }
+        }
+      }
+      
+      if (photoUrls.isEmpty) {
+        emit(const ShipmentDetailError('Không thể upload ảnh. Vui lòng thử lại.'));
+        return;
+      }
+      
+      // Upload signature if provided
+      String? signatureUrl;
+      if (signature != null) {
+        final signatureResponse = await _apiClient.uploadFile(
+          '/shipper/upload/photo',
+          signature,
+          filename: 'signature_${DateTime.now().millisecondsSinceEpoch}.png',
+          fieldName: 'photo',
+          additionalFields: {
+            'shipmentId': shipmentId,
+            'type': 'signature',
+          },
+        );
+        
+        if (signatureResponse is Map<String, dynamic>) {
+          signatureUrl = signatureResponse['url'] ?? signatureResponse['data']?['url'];
+        }
+      }
+      
+      // Mark as delivered with photo URLs
+      final result = await _markDeliveredUseCase(MarkDeliveredParams(
+        id: shipmentId,
+        photoUrls: photoUrls,
+        signatureUrl: signatureUrl,
+        codCollected: codCollected,
+      ));
+      
+      result.fold(
+        (failure) => emit(ShipmentDetailError(failure.message)),
+        (shipment) => emit(ShipmentDetailUpdated(shipment)),
+      );
+    } catch (e) {
+      emit(ShipmentDetailError('Lỗi xác nhận giao hàng: ${e.toString()}'));
+    }
+  }
+
+  Future<void> deliverShipment(String id, List<String> photoUrls, String? signaturePath) async {
     emit(ShipmentDetailLoading());
     final result = await _markDeliveredUseCase(MarkDeliveredParams(
       id: id,
-      photoUrl: photoPath,
+      photoUrls: photoUrls,
       signatureUrl: signaturePath,
     ));
     result.fold(

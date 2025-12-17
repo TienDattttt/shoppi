@@ -138,21 +138,22 @@ async function getShipmentById(req, res) {
  * Body:
  * - status: string (required)
  * - reason: string (required for 'failed' status)
- * - photoUrl: string (required for 'delivered' status)
+ * - photoUrl: string (single photo - legacy support)
+ * - photoUrls: string[] (array of 1-3 photo URLs for delivered status)
  * - codCollected: boolean (required for 'delivered' status on COD orders)
  * - location: { lat, lng } (optional, updates shipper location)
  * 
  * Requirements:
  * - 6.2: Require COD collection confirmation for COD orders
  * - 6.3: Record COD collection and update shipper's daily COD balance
- * - 7.1: Require photo for delivered status
+ * - 7.1: Require at least 1 photo for delivered status (max 3)
  * - 8.1: Require reason for failed status (from predefined list)
  * - 13.3: Send update to backend and receive confirmation
  */
 async function updateShipmentStatus(req, res) {
   try {
     const { id } = req.params;
-    const { status, reason, photoUrl, signatureUrl, codCollected, location } = req.body;
+    const { status, reason, photoUrl, photoUrls, signatureUrl, codCollected, location } = req.body;
     
     // Get shipper profile
     const shipper = await shipperService.getShipperByUserId(req.user.userId);
@@ -180,13 +181,23 @@ async function updateShipmentStatus(req, res) {
     }
     
     // Validate requirements based on status
-    // Requirements 7.1: Photo required for delivered status
-    if (status === 'delivered' && !photoUrl) {
-      return errorResponse(res, {
-        code: 'SHIP_005',
-        message: 'Photo proof is required for delivery confirmation',
-        status: 400,
-      });
+    // Requirements 7.1: At least 1 photo required for delivered status (max 3)
+    if (status === 'delivered') {
+      const photos = photoUrls || (photoUrl ? [photoUrl] : []);
+      if (photos.length === 0) {
+        return errorResponse(res, {
+          code: 'SHIP_005',
+          message: 'At least 1 delivery proof photo is required',
+          status: 400,
+        });
+      }
+      if (photos.length > 3) {
+        return errorResponse(res, {
+          code: 'SHIP_007',
+          message: 'Maximum 3 delivery proof photos allowed',
+          status: 400,
+        });
+      }
     }
     
     // Requirements 6.2: COD collection confirmation required for COD orders
@@ -246,8 +257,10 @@ async function updateShipmentStatus(req, res) {
         break;
       case 'delivered':
         // Requirements 6.2, 6.3: Pass COD collection confirmation
+        // Support both single photoUrl (legacy) and photoUrls array (new)
         updatedShipment = await shipmentService.markDelivered(id, shipper.id, {
           photoUrl,
+          photoUrls: photoUrls || (photoUrl ? [photoUrl] : []),
           signatureUrl,
           codCollected,
         });
@@ -797,13 +810,13 @@ async function uploadPhoto(req, res) {
       });
     }
     
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage - using 'shipments' bucket for delivery proof photos
     const storageClient = require('../../shared/supabase/storage.client');
     const filename = `${type}_${Date.now()}.jpg`;
-    const path = `shipments/${shipmentId}/${filename}`;
+    const path = `${shipmentId}/${filename}`;
     
     const { url } = await storageClient.uploadFile(
-      'documents', // Using documents bucket for shipment photos
+      'shipments', // Using shipments bucket for delivery proof photos
       path,
       req.file.buffer,
       {

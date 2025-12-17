@@ -575,13 +575,19 @@ async function getShipmentLocation(req, res) {
     const shipment = await shipmentService.getShipmentById(id);
 
     if (!shipment.shipper_id) {
-      return errorResponse(res, { code: 'SHIP_003', message: 'Chưa có shipper được phân công', status: 404 });
+      return errorResponse(res, { code: 'SHIP_003', message: 'Chưa có shipper được phân công', statusCode: 404 });
     }
 
-    const location = await locationService.getCurrentLocation(shipment.shipper_id);
+    let location = null;
+    try {
+      location = await locationService.getCurrentLocation(shipment.shipper_id);
+    } catch (locError) {
+      console.error('[getShipmentLocation] Error getting location from Redis:', locError.message);
+      // Continue without location - will return null
+    }
 
     if (!location) {
-      return errorResponse(res, { code: 'LOC_001', message: 'Không có thông tin vị trí', status: 404 });
+      return errorResponse(res, { code: 'LOC_001', message: 'Shipper chưa cập nhật vị trí', statusCode: 404 });
     }
 
     // Calculate ETA based on shipper's current location and delivery address
@@ -706,22 +712,48 @@ async function getTrackingHistory(req, res) {
           deliveryAttempts: shipment.delivery_attempts || 0,
           nextDeliveryAttempt: shipment.next_delivery_attempt,
           failureReason: shipment.failure_reason,
+          // Coordinates for map display
+          pickupLat: shipment.pickup_lat ? parseFloat(shipment.pickup_lat) : null,
+          pickupLng: shipment.pickup_lng ? parseFloat(shipment.pickup_lng) : null,
+          deliveryLat: shipment.delivery_lat ? parseFloat(shipment.delivery_lat) : null,
+          deliveryLng: shipment.delivery_lng ? parseFloat(shipment.delivery_lng) : null,
         },
         shipper: shipperInfo,
-        events: events.map(e => ({
-          id: e.id,
-          status: e.status,
-          statusVi: e.status_vi,
-          description: e.description,
-          descriptionVi: e.description_vi,
-          locationName: e.location_name,
-          locationAddress: e.location_address,
-          lat: e.location_lat ? parseFloat(e.location_lat) : null,
-          lng: e.location_lng ? parseFloat(e.location_lng) : null,
-          actorType: e.actor_type,
-          actorName: e.actor_name,
-          eventTime: e.event_time,
-        })),
+        events: events.map(e => {
+          const event = {
+            id: e.id,
+            status: e.status,
+            statusVi: e.status_vi,
+            description: e.description,
+            descriptionVi: e.description_vi,
+            locationName: e.location_name,
+            locationAddress: e.location_address,
+            lat: e.location_lat ? parseFloat(e.location_lat) : null,
+            lng: e.location_lng ? parseFloat(e.location_lng) : null,
+            actorType: e.actor_type,
+            actorName: e.actor_name,
+            eventTime: e.event_time,
+          };
+          
+          // Add delivery proof photos for delivered status
+          if (e.status === 'delivered' && shipment.delivery_photo_urls) {
+            try {
+              const photoUrls = typeof shipment.delivery_photo_urls === 'string' 
+                ? JSON.parse(shipment.delivery_photo_urls) 
+                : shipment.delivery_photo_urls;
+              if (Array.isArray(photoUrls) && photoUrls.length > 0) {
+                event.deliveryPhotoUrls = photoUrls;
+              }
+            } catch (err) {
+              // If parsing fails, try single photo URL
+              if (shipment.delivery_photo_url) {
+                event.deliveryPhotoUrls = [shipment.delivery_photo_url];
+              }
+            }
+          }
+          
+          return event;
+        }),
       },
     });
   } catch (error) {
@@ -1093,6 +1125,131 @@ async function rejectShipper(req, res) {
   }
 }
 
+// ============================================
+// ROUTING ENDPOINTS
+// ============================================
+
+const goongClient = require('../../shared/goong/goong.client');
+
+/**
+ * Get route/directions between two points
+ * GET /shipments/:id/route
+ * 
+ * Returns polyline and turn-by-turn directions for map display
+ * Used by customer tracking UI to show shipper's route
+ */
+async function getShipmentRoute(req, res) {
+  try {
+    const { id } = req.params;
+    const { fromShipper } = req.query; // If true, get route from shipper's current location
+    
+    const shipment = await shipmentService.getShipmentById(id);
+    
+    let originLat, originLng;
+    
+    if (fromShipper === 'true' && shipment.shipper_id) {
+      // Get shipper's current location from Redis
+      const location = await locationService.getCurrentLocation(shipment.shipper_id);
+      if (location) {
+        originLat = location.lat;
+        originLng = location.lng;
+      }
+    }
+    
+    // Fallback to pickup location if no shipper location
+    if (!originLat || !originLng) {
+      originLat = parseFloat(shipment.pickup_lat);
+      originLng = parseFloat(shipment.pickup_lng);
+    }
+    
+    const destLat = parseFloat(shipment.delivery_lat);
+    const destLng = parseFloat(shipment.delivery_lng);
+    
+    if (!originLat || !originLng || !destLat || !destLng) {
+      return errorResponse(res, { 
+        code: 'ROUTE_001', 
+        message: 'Không đủ tọa độ để tính đường đi', 
+        statusCode: 400 
+      });
+    }
+    
+    // Get route from Goong Directions API
+    const route = await goongClient.getDirections(originLat, originLng, destLat, destLng, 'bike');
+    
+    if (!route) {
+      return errorResponse(res, { 
+        code: 'ROUTE_002', 
+        message: 'Không thể lấy đường đi', 
+        statusCode: 500 
+      });
+    }
+    
+    return successResponse(res, {
+      data: {
+        shipmentId: id,
+        origin: { lat: originLat, lng: originLng },
+        destination: { lat: destLat, lng: destLng },
+        route: {
+          overviewPolyline: route.overviewPolyline,
+          polylinePoints: route.polylinePoints,
+          distance: route.distance,
+          duration: route.duration,
+          bounds: route.bounds,
+          steps: route.steps,
+        },
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
+/**
+ * Get route between any two points (generic)
+ * POST /route
+ * 
+ * Body: { originLat, originLng, destLat, destLng, vehicle }
+ */
+async function getRoute(req, res) {
+  try {
+    const { originLat, originLng, destLat, destLng, vehicle = 'bike' } = req.body;
+    
+    if (!originLat || !originLng || !destLat || !destLng) {
+      return errorResponse(res, { 
+        code: 'ROUTE_001', 
+        message: 'Missing coordinates', 
+        statusCode: 400 
+      });
+    }
+    
+    const route = await goongClient.getDirections(
+      parseFloat(originLat), 
+      parseFloat(originLng), 
+      parseFloat(destLat), 
+      parseFloat(destLng), 
+      vehicle
+    );
+    
+    if (!route) {
+      return errorResponse(res, { 
+        code: 'ROUTE_002', 
+        message: 'Could not get route', 
+        statusCode: 500 
+      });
+    }
+    
+    return successResponse(res, {
+      data: {
+        origin: { lat: parseFloat(originLat), lng: parseFloat(originLng) },
+        destination: { lat: parseFloat(destLat), lng: parseFloat(destLng) },
+        route,
+      },
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+}
+
 module.exports = {
   // Shipper
   createShipper,
@@ -1141,5 +1298,9 @@ module.exports = {
   // Flagging (Admin)
   getFlaggedShippers,
   clearShipperFlag,
+
+  // Routing
+  getShipmentRoute,
+  getRoute,
 };
 

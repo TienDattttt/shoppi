@@ -498,6 +498,7 @@ async function confirmReceipt(orderId, userId) {
   
   // Get sub-orders and confirm each delivered one
   const subOrders = await orderRepository.findSubOrdersByOrderId(orderId);
+  let totalCoinsRewarded = 0;
   
   for (const subOrder of subOrders) {
     if (subOrder.status === SUB_ORDER_STATUS.DELIVERED) {
@@ -508,6 +509,26 @@ async function confirmReceipt(orderId, userId) {
         description: 'Receipt confirmed by customer',
         createdBy: userId,
       });
+      
+      // Update shipment customer_confirmed and reward coins
+      // Coins = 1% of order value, min 10, max 500
+      try {
+        const { supabaseAdmin } = require('../shared/supabase/supabase.client');
+        const subOrderTotal = parseFloat(subOrder.total || 0);
+        const coinsReward = Math.min(500, Math.max(10, Math.floor(subOrderTotal * 0.01)));
+        totalCoinsRewarded += coinsReward;
+        
+        await supabaseAdmin
+          .from('shipments')
+          .update({
+            customer_confirmed: true,
+            customer_confirmed_at: new Date().toISOString(),
+            coins_rewarded: coinsReward,
+          })
+          .eq('sub_order_id', subOrder.id);
+      } catch (e) {
+        console.error('[OrderService] Failed to update shipment confirmation:', e.message);
+      }
     }
   }
   
@@ -528,13 +549,16 @@ async function confirmReceipt(orderId, userId) {
         userId,
         completedAt: new Date().toISOString(),
         subOrderCount: updatedSubOrders.length,
+        coinsRewarded: totalCoinsRewarded,
       });
     } catch (e) {
       console.error('[OrderService] Failed to publish ORDER_COMPLETED event:', e.message);
     }
   }
   
-  return orderDTO.serializeOrder(await orderRepository.findOrderById(orderId));
+  const result = orderDTO.serializeOrder(await orderRepository.findOrderById(orderId));
+  result.coinsRewarded = totalCoinsRewarded;
+  return result;
 }
 
 /**
