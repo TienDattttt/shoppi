@@ -12,7 +12,7 @@
  */
 
 const shipperRepository = require('./shipper.repository');
-const redisClient = require('../../shared/redis/redis.client');
+const { getRedisClient } = require('../../shared/redis/redis.client');
 const shipperTrackingRepo = require('../../shared/cassandra/shipper-tracking.cassandra.repository');
 const realtimeClient = require('../../shared/supabase/realtime.client');
 const { emitShipperLocation } = require('../../shared/socket/socket.service');
@@ -101,7 +101,8 @@ async function updateLocation(shipperId, lat, lng, metadata = {}) {
  */
 async function setCurrentLocation(shipperId, locationData) {
   const key = `${LOCATION_KEY_PREFIX}${shipperId}`;
-  await redisClient.set(key, JSON.stringify(locationData), 'EX', LOCATION_TTL);
+  const redis = await getRedisClient();
+  await redis.set(key, JSON.stringify(locationData), { EX: LOCATION_TTL });
   
   // Also add to geo index for nearby queries
   await addToGeoIndex(shipperId, locationData.lat, locationData.lng);
@@ -114,7 +115,8 @@ async function setCurrentLocation(shipperId, locationData) {
  */
 async function getCurrentLocation(shipperId) {
   const key = `${LOCATION_KEY_PREFIX}${shipperId}`;
-  const data = await redisClient.get(key);
+  const redis = await getRedisClient();
+  const data = await redis.get(key);
   
   if (data) {
     return JSON.parse(data);
@@ -141,7 +143,8 @@ async function getCurrentLocation(shipperId) {
  */
 async function removeCurrentLocation(shipperId) {
   const key = `${LOCATION_KEY_PREFIX}${shipperId}`;
-  await redisClient.del(key);
+  const redis = await getRedisClient();
+  await redis.del(key);
   await removeFromGeoIndex(shipperId);
 }
 
@@ -159,7 +162,8 @@ const GEO_INDEX_KEY = 'shipper:geo:locations';
  */
 async function addToGeoIndex(shipperId, lat, lng) {
   try {
-    await redisClient.geoadd(GEO_INDEX_KEY, lng, lat, shipperId);
+    const redis = await getRedisClient();
+    await redis.geoAdd(GEO_INDEX_KEY, { longitude: lng, latitude: lat, member: shipperId });
   } catch (error) {
     console.error('Failed to add to geo index:', error.message);
   }
@@ -171,7 +175,8 @@ async function addToGeoIndex(shipperId, lat, lng) {
  */
 async function removeFromGeoIndex(shipperId) {
   try {
-    await redisClient.zrem(GEO_INDEX_KEY, shipperId);
+    const redis = await getRedisClient();
+    await redis.zRem(GEO_INDEX_KEY, shipperId);
   } catch (error) {
     console.error('Failed to remove from geo index:', error.message);
   }
@@ -187,30 +192,26 @@ async function removeFromGeoIndex(shipperId) {
  */
 async function findNearbyShippersGeo(lat, lng, radiusKm = 5, limit = 10) {
   try {
-    // GEORADIUS returns members within radius
-    const results = await redisClient.georadius(
+    const redis = await getRedisClient();
+    // GEOSEARCH returns members within radius (Redis 6.2+)
+    const results = await redis.geoSearchWith(
       GEO_INDEX_KEY,
-      lng,
-      lat,
-      radiusKm,
-      'km',
-      'WITHDIST',
-      'WITHCOORD',
-      'ASC',
-      'COUNT',
-      limit
+      { longitude: lng, latitude: lat },
+      { radius: radiusKm, unit: 'km' },
+      ['WITHDIST', 'WITHCOORD'],
+      { COUNT: limit, SORT: 'ASC' }
     );
 
     if (!results || results.length === 0) {
       return [];
     }
 
-    // Parse results: [memberId, distance, [lng, lat]]
+    // Parse results
     return results.map(result => ({
-      shipperId: result[0],
-      distanceKm: parseFloat(result[1]),
-      lng: parseFloat(result[2][0]),
-      lat: parseFloat(result[2][1]),
+      shipperId: result.member,
+      distanceKm: parseFloat(result.distance),
+      lng: result.coordinates ? parseFloat(result.coordinates.longitude) : 0,
+      lat: result.coordinates ? parseFloat(result.coordinates.latitude) : 0,
     }));
   } catch (error) {
     console.error('Geo search failed, falling back to database:', error.message);
@@ -228,15 +229,16 @@ async function findNearbyShippersGeo(lat, lng, radiusKm = 5, limit = 10) {
  */
 async function getDistanceToPoint(shipperId, lat, lng) {
   try {
+    const redis = await getRedisClient();
     // Add temporary point
     const tempKey = `temp:${Date.now()}`;
-    await redisClient.geoadd(GEO_INDEX_KEY, lng, lat, tempKey);
+    await redis.geoAdd(GEO_INDEX_KEY, { longitude: lng, latitude: lat, member: tempKey });
     
     // Get distance
-    const distance = await redisClient.geodist(GEO_INDEX_KEY, shipperId, tempKey, 'km');
+    const distance = await redis.geoDist(GEO_INDEX_KEY, shipperId, tempKey, 'km');
     
     // Remove temporary point
-    await redisClient.zrem(GEO_INDEX_KEY, tempKey);
+    await redis.zRem(GEO_INDEX_KEY, tempKey);
     
     return distance ? parseFloat(distance) : null;
   } catch (error) {
@@ -324,18 +326,18 @@ async function getShipmentLocationHistory(shipmentId, shipperId) {
  */
 async function getMultipleLocations(shipperIds) {
   const locations = {};
+  const redis = await getRedisClient();
   
-  // Use Redis pipeline for efficiency
-  const pipeline = redisClient.pipeline();
+  // Use Redis multi for efficiency
+  const multi = redis.multi();
   shipperIds.forEach(id => {
-    pipeline.get(`${LOCATION_KEY_PREFIX}${id}`);
+    multi.get(`${LOCATION_KEY_PREFIX}${id}`);
   });
   
-  const results = await pipeline.exec();
+  const results = await multi.exec();
   
-  results.forEach((result, index) => {
-    const [err, data] = result;
-    if (!err && data) {
+  results.forEach((data, index) => {
+    if (data) {
       locations[shipperIds[index]] = JSON.parse(data);
     }
   });
@@ -378,8 +380,9 @@ async function broadcastLocation(shipmentId, locationData) {
     
     // Fallback to Redis pub/sub
     try {
+      const redis = await getRedisClient();
       const channel = `shipment:${shipmentId}:location`;
-      await redisClient.publish(channel, JSON.stringify(locationData));
+      await redis.publish(channel, JSON.stringify(locationData));
     } catch (redisError) {
       console.error('Failed to broadcast location via Redis:', redisError.message);
     }
@@ -396,8 +399,9 @@ async function broadcastLocationUpdate(shipperId, locationData, subscriberIds = 
   // This is kept for backward compatibility
   // For shipment-specific broadcasts, use broadcastLocation
   try {
+    const redis = await getRedisClient();
     const channel = `shipper:${shipperId}:location`;
-    await redisClient.publish(channel, JSON.stringify(locationData));
+    await redis.publish(channel, JSON.stringify(locationData));
   } catch (error) {
     console.error('Failed to broadcast location:', error.message);
   }
@@ -498,8 +502,9 @@ const PROXIMITY_NOTIFICATION_TTL = 86400; // 24 hours
  */
 async function wasProximityNotificationSent(shipmentId) {
   try {
+    const redis = await getRedisClient();
     const key = `${PROXIMITY_NOTIFICATION_PREFIX}${shipmentId}`;
-    const result = await redisClient.get(key);
+    const result = await redis.get(key);
     return result !== null;
   } catch (error) {
     console.error('Failed to check proximity notification status:', error.message);
@@ -514,8 +519,9 @@ async function wasProximityNotificationSent(shipmentId) {
  */
 async function markProximityNotificationSent(shipmentId) {
   try {
+    const redis = await getRedisClient();
     const key = `${PROXIMITY_NOTIFICATION_PREFIX}${shipmentId}`;
-    await redisClient.set(key, new Date().toISOString(), 'EX', PROXIMITY_NOTIFICATION_TTL);
+    await redis.set(key, new Date().toISOString(), { EX: PROXIMITY_NOTIFICATION_TTL });
     return true;
   } catch (error) {
     console.error('Failed to mark proximity notification as sent:', error.message);

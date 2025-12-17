@@ -108,30 +108,64 @@ function MapBoundsUpdater({
     shipperLocation,
     deliveryAddress,
     pickupAddress,
+    followShipper = false,
 }: {
     shipperLocation: ShipperLocation | null;
     deliveryAddress: LocationPoint;
     pickupAddress: LocationPoint;
+    followShipper?: boolean;
 }) {
     const map = useMap();
     const hasSetBounds = useRef(false);
+    const lastShipperPos = useRef<string>("");
 
+    // Initial bounds setup
     useEffect(() => {
-        const points: L.LatLngExpression[] = [
-            [deliveryAddress.lat, deliveryAddress.lng],
-            [pickupAddress.lat, pickupAddress.lng],
-        ];
-
+        if (hasSetBounds.current) return;
+        
+        const points: L.LatLngExpression[] = [];
+        
+        if (deliveryAddress.lat && deliveryAddress.lng) {
+            points.push([deliveryAddress.lat, deliveryAddress.lng]);
+        }
+        if (pickupAddress.lat && pickupAddress.lng) {
+            points.push([pickupAddress.lat, pickupAddress.lng]);
+        }
         if (shipperLocation) {
             points.push([shipperLocation.lat, shipperLocation.lng]);
         }
 
-        if (points.length >= 2 && !hasSetBounds.current) {
+        if (points.length >= 2) {
             const bounds = L.latLngBounds(points);
             map.fitBounds(bounds, { padding: [50, 50] });
             hasSetBounds.current = true;
         }
-    }, [map, shipperLocation, deliveryAddress, pickupAddress]);
+    }, [map, deliveryAddress, pickupAddress]);
+
+    // Follow shipper when location updates (smooth pan)
+    useEffect(() => {
+        if (!shipperLocation) return;
+        
+        const posKey = `${shipperLocation.lat.toFixed(4)},${shipperLocation.lng.toFixed(4)}`;
+        if (posKey === lastShipperPos.current) return;
+        lastShipperPos.current = posKey;
+        
+        // If followShipper is enabled, pan to shipper location
+        if (followShipper) {
+            map.panTo([shipperLocation.lat, shipperLocation.lng], { animate: true, duration: 0.5 });
+        } else {
+            // Just ensure shipper is visible in current view
+            const bounds = map.getBounds();
+            if (!bounds.contains([shipperLocation.lat, shipperLocation.lng])) {
+                // Shipper moved out of view, fit bounds to include shipper and delivery
+                const newBounds = L.latLngBounds([
+                    [shipperLocation.lat, shipperLocation.lng],
+                    [deliveryAddress.lat, deliveryAddress.lng],
+                ]);
+                map.fitBounds(newBounds, { padding: [50, 50], animate: true });
+            }
+        }
+    }, [map, shipperLocation, deliveryAddress, followShipper]);
 
     return null;
 }
@@ -154,6 +188,7 @@ export function ShipperLocationMap({
     const [routeData, setRouteData] = useState<RouteResponse | null>(null);
     const [routeLoading, setRouteLoading] = useState(false);
     const lastRouteOriginRef = useRef<string>("");
+    const [followShipper, setFollowShipper] = useState(false);
     
     // Use realtime location if available, otherwise fall back to initial
     const shipperLocation: ShipperLocation | null = realtimeLocation ?? initialShipperLocation ?? null;
@@ -263,6 +298,7 @@ export function ShipperLocationMap({
                     shipperLocation={shipperLocation}
                     deliveryAddress={deliveryAddress}
                     pickupAddress={pickupAddress}
+                    followShipper={followShipper}
                 />
 
                 {/* Pickup marker (orange) */}
@@ -404,6 +440,27 @@ export function ShipperLocationMap({
                         <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                         Đang tải đường đi...
                     </div>
+                </div>
+            )}
+            
+            {/* Follow shipper button - only show when shipper location is available */}
+            {shipperLocation && (
+                <div className="absolute top-14 right-4 z-[1000]">
+                    <button
+                        onClick={() => setFollowShipper(!followShipper)}
+                        className={cn(
+                            "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium shadow-md transition-colors",
+                            followShipper 
+                                ? "bg-blue-500 text-white" 
+                                : "bg-white text-gray-700 hover:bg-gray-50"
+                        )}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        {followShipper ? "Đang theo dõi" : "Theo dõi shipper"}
+                    </button>
                 </div>
             )}
         </div>
