@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { User, MapPin, Lock, FileText, Bell, Ticket, Store, MessageSquare } from "lucide-react";
+import { User, MapPin, Lock, FileText, Bell, Ticket, Store, MessageSquare, Heart, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
@@ -24,6 +24,8 @@ export default function AccountLayout() {
         { icon: MapPin, label: "Địa chỉ", href: "/user/account/address" },
         { icon: Lock, label: "Đổi mật khẩu", href: "/user/account/password" },
         { icon: FileText, label: "Đơn mua", href: "/user/purchase" },
+        { icon: RotateCcw, label: "Trả hàng/Hoàn tiền", href: "/user/returns" },
+        { icon: Heart, label: "Sản phẩm yêu thích", href: "/user/wishlist" },
         { icon: MessageSquare, label: "Tin nhắn", href: "/user/chat", badge: unreadCount },
         { icon: Store, label: "Shop đang theo dõi", href: "/user/following" },
         { icon: Bell, label: "Thông báo", href: "/user/notifications" },

@@ -25,6 +25,7 @@ const BUCKETS = [
     { name: 'chat', public: true },
     { name: 'documents', public: false },
     { name: 'shipments', public: true }, // Delivery proof photos
+    { name: 'returns', public: true }, // Return request evidence photos
 ];
 
 async function initBuckets() {

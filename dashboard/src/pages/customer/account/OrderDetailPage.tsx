@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star, Package, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, MapPin, Truck, CreditCard, Loader2, Star, Package, CheckCircle2, RotateCcw } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { orderService, type Order } from "@/services/order.service";
 import { 
@@ -706,6 +706,26 @@ export default function OrderDetailPage() {
                         Đánh giá shipper
                     </Button>
                 )}
+
+                {/* Return Request Button - show for delivered sub-orders */}
+                {order.subOrders?.some(so => ['delivered', 'completed'].includes(so.status) && !['return_requested', 'return_approved', 'returned'].includes(so.status)) && (
+                    <Button 
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => {
+                            const deliveredSubOrder = order.subOrders?.find(so => 
+                                ['delivered', 'completed'].includes(so.status) && 
+                                !['return_requested', 'return_approved', 'returned'].includes(so.status)
+                            );
+                            if (deliveredSubOrder) {
+                                navigate(`/user/returns/request/${order.id}/${deliveredSubOrder.id}`);
+                            }
+                        }}
+                    >
+                        <RotateCcw className="h-4 w-4" />
+                        Yêu cầu trả hàng
+                    </Button>
+                )}
                 
                 <Button variant="outline" onClick={() => navigate("/user/purchase")}>
                     Quay lại
@@ -836,6 +856,15 @@ export default function OrderDetailPage() {
                         shipmentId={shipment.id}
                         events={trackingData.events}
                         currentStatus={trackingData.shipment?.status || shipment.status}
+                        shipperInfo={trackingData.shipper ? {
+                            id: trackingData.shipper.id,
+                            name: trackingData.shipper.name,
+                            phone: trackingData.shipper.maskedPhone,
+                            maskedPhone: trackingData.shipper.maskedPhone,
+                            avatarUrl: trackingData.shipper.avatarUrl,
+                            vehicleType: trackingData.shipper.vehicleType,
+                            vehiclePlate: trackingData.shipper.vehiclePlate,
+                        } : null}
                     />
                 ) : (
                     <div className="text-center py-8 text-gray-500">
