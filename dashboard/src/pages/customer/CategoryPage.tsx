@@ -1,24 +1,79 @@
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { FilterSidebar } from "@/components/customer/search/FilterSidebar";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { ProductCard, type Product } from "@/components/customer/product/ProductCard";
-import { TopSearchSection } from "@/components/customer/home/TopSearchSection";
-
-// Mock Data (reused or expanded)
-const CATEGORY_PRODUCTS: Product[] = [
-    { id: "c1", name: "Category Item 1", slug: "cat-item-1", price: 299000, image: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=300", rating: 4.5, soldCount: 100, shopLocation: "Hanoi" },
-    { id: "c2", name: "Category Item 2", slug: "cat-item-2", price: 599000, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300", rating: 4.8, soldCount: 200, shopLocation: "HCM", isMall: true },
-    { id: "c3", name: "Category Item 3", slug: "cat-item-3", price: 150000, image: "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=300", rating: 4.2, soldCount: 50, shopLocation: "Danang" },
-    { id: "c4", name: "Category Item 4", slug: "cat-item-4", price: 890000, image: "https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=300", rating: 4.6, soldCount: 150, shopLocation: "Hanoi" },
-    { id: "c5", name: "Category Item 5", slug: "cat-item-5", price: 1200000, image: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=300", rating: 4.9, soldCount: 300, shopLocation: "HCM" },
-];
+import { productService } from "@/services/product.service";
+import { Loader2 } from "lucide-react";
 
 export default function CategoryPage() {
     const { slug } = useParams(); // This is the category ID from the route /categories/:slug
+    const [searchParams] = useSearchParams();
+    const [products, setProducts] = useState<Product[]>([]);
+    const [categoryName, setCategoryName] = useState<string>("");
+    const [loading, setLoading] = useState(true);
+    const [totalProducts, setTotalProducts] = useState(0);
+
+    useEffect(() => {
+        const fetchCategoryProducts = async () => {
+            if (!slug) return;
+            
+            setLoading(true);
+            try {
+                // Fetch category info
+                const categoryRes = await productService.getCategoryById(slug);
+                setCategoryName(categoryRes.data?.name || categoryRes.name || `Category ${slug}`);
+
+                // Fetch products in this category
+                const params: Record<string, any> = {
+                    categoryId: slug,
+                    page: searchParams.get('page') || 1,
+                    limit: 20,
+                };
+                
+                // Add filter params
+                const minPrice = searchParams.get('minPrice');
+                const maxPrice = searchParams.get('maxPrice');
+                const sort = searchParams.get('sort');
+                
+                if (minPrice) params.minPrice = minPrice;
+                if (maxPrice) params.maxPrice = maxPrice;
+                if (sort) params.sort = sort;
+
+                const res = await productService.searchProducts(params);
+                const productData = res.data?.products || res.products || [];
+                
+                setProducts(productData.map((p: any) => ({
+                    id: p.id,
+                    name: p.name,
+                    slug: p.slug || p.id,
+                    price: p.price || p.minPrice || 0,
+                    originalPrice: p.originalPrice,
+                    image: p.images?.[0] || p.thumbnail || 'https://placehold.co/300x300?text=No+Image',
+                    rating: p.avgRating || p.rating || 0,
+                    soldCount: p.soldCount || 0,
+                    shopLocation: p.shop?.city || p.shopLocation || '',
+                    isMall: p.shop?.isMall || false,
+                    discount: p.discount,
+                })));
+                setTotalProducts(res.data?.total || res.total || productData.length);
+            } catch (error) {
+                console.error("Failed to fetch category products:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCategoryProducts();
+    }, [slug, searchParams]);
 
     return (
         <div className="container mx-auto px-4 py-8">
-            <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Categories", href: "#" }, { label: `Category ${slug}` }]} />
+            <Breadcrumbs items={[
+                { label: "Trang chủ", href: "/" }, 
+                { label: "Danh mục", href: "#" }, 
+                { label: categoryName || `Category ${slug}` }
+            ]} />
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-6">
                 {/* Filter Sidebar */}
@@ -28,16 +83,26 @@ export default function CategoryPage() {
 
                 {/* Main Content */}
                 <div className="lg:col-span-3">
-                    <h1 className="text-2xl font-bold mb-6">Category {slug}</h1>
-
-                    {/* Reusing Top Search as a "Trending in this category" or just generic */}
-                    {/* <TopSearchSection /> */}
-
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {CATEGORY_PRODUCTS.map(product => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-2xl font-bold">{categoryName || `Category ${slug}`}</h1>
+                        <span className="text-sm text-muted-foreground">{totalProducts} sản phẩm</span>
                     </div>
+
+                    {loading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <Loader2 className="h-8 w-8 animate-spin text-shopee-orange" />
+                        </div>
+                    ) : products.length === 0 ? (
+                        <div className="text-center py-20 text-muted-foreground">
+                            Không có sản phẩm nào trong danh mục này
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {products.map(product => (
+                                <ProductCard key={product.id} product={product} />
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -151,8 +151,21 @@ export default function UserDetail() {
     };
 
     const handleResetPassword = async () => {
-        toast.info("Password reset email sent (mock)");
-        // TODO: Implement actual password reset API
+        if (!user?.email && !user?.phone) {
+            toast.error("Người dùng không có email hoặc số điện thoại để gửi OTP");
+            return;
+        }
+        
+        setActionLoading(true);
+        try {
+            const identifier = user.email || user.phone;
+            await userService.requestPasswordReset(identifier);
+            toast.success(`Đã gửi OTP đặt lại mật khẩu đến ${identifier}`);
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Không thể gửi yêu cầu đặt lại mật khẩu");
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;

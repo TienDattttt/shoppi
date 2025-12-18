@@ -118,4 +118,10 @@ export const userService = {
         const response = await api.get(`/admin/users/${id}/shipper`);
         return response.data;
     },
+
+    // Admin: Request password reset for user
+    requestPasswordReset: async (identifier: string) => {
+        const response = await api.post("/auth/password/reset/request", { identifier });
+        return response.data;
+    },
 };

@@ -11,6 +11,7 @@ class ShipperEntity extends Equatable {
   final bool isOnline;
   final double avgRating;
   final int totalDeliveries;
+  final double successRate; // Tỷ lệ giao hàng thành công
 
   const ShipperEntity({
     required this.id,
@@ -23,6 +24,7 @@ class ShipperEntity extends Equatable {
     required this.isOnline,
     required this.avgRating,
     required this.totalDeliveries,
+    this.successRate = 0.0,
   });
 
   @override
@@ -37,5 +39,6 @@ class ShipperEntity extends Equatable {
         isOnline,
         avgRating,
         totalDeliveries,
+        successRate,
       ];
 }

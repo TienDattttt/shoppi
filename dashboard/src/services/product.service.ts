@@ -100,6 +100,7 @@ export interface ProductFilters {
     minRating?: number;
     page?: number;
     limit?: number;
+    sort?: string; // 'best_selling', 'newest', 'price_asc', 'price_desc', 'rating'
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
 }

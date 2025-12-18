@@ -12,6 +12,7 @@ class ShipperModel extends ShipperEntity {
     required super.isOnline,
     required super.avgRating,
     required super.totalDeliveries,
+    super.successRate,
   });
 
   /// Parse from backend response (snake_case)
@@ -32,9 +33,14 @@ class ShipperModel extends ShipperEntity {
       status: data['status'] as String? ?? 'pending',
       isOnline: data['is_online'] as bool? ?? data['isOnline'] as bool? ?? false,
       avgRating: (data['avg_rating'] as num?)?.toDouble() ?? 
-                 (data['avgRating'] as num?)?.toDouble() ?? 0.0,
+                 (data['avgRating'] as num?)?.toDouble() ?? 
+                 (data['statistics'] as Map<String, dynamic>?)?['avgRating'] as double? ?? 0.0,
       totalDeliveries: data['total_deliveries'] as int? ?? 
-                       data['totalDeliveries'] as int? ?? 0,
+                       data['totalDeliveries'] as int? ?? 
+                       (data['statistics'] as Map<String, dynamic>?)?['totalDeliveries'] as int? ?? 0,
+      successRate: (data['success_rate'] as num?)?.toDouble() ?? 
+                   (data['successRate'] as num?)?.toDouble() ?? 
+                   (data['statistics'] as Map<String, dynamic>?)?['successRate'] as double? ?? 0.0,
     );
   }
 
@@ -50,6 +56,7 @@ class ShipperModel extends ShipperEntity {
       'is_online': isOnline,
       'avg_rating': avgRating,
       'total_deliveries': totalDeliveries,
+      'success_rate': successRate,
     };
   }
 }
