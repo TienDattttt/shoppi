@@ -11,7 +11,8 @@ import {
     Ticket,
     Settings,
     Users,
-    Warehouse
+    Warehouse,
+    RotateCcw
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import { useAuthStore } from "@/store/authStore";
 const baseSidebarItems = [
     { title: "Kênh Người Bán", icon: LayoutDashboard, href: "/partner" },
     { title: "Quản Lý Đơn Hàng", icon: ShoppingCart, href: "/partner/orders" },
+    { title: "Trả Hàng/Hoàn Tiền", icon: RotateCcw, href: "/partner/returns" },
     { title: "Quản Lý Sản Phẩm", icon: Package2, href: "/partner/products" },
     { title: "Quản Lý Tồn Kho", icon: Warehouse, href: "/partner/inventory" },
     { title: "Mã Giảm Giá", icon: Ticket, href: "/partner/vouchers" },

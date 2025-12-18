@@ -11,7 +11,8 @@ import {
     Ticket,
     Settings,
     LogOut,
-    Building2
+    Building2,
+    Zap
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const sidebarItems = [
     { title: "Duyệt sản phẩm", icon: CheckSquare, href: "/admin/products/approval" },
     { title: "Danh mục", icon: Layers, href: "/admin/categories" },
     { title: "Đơn hàng", icon: ClipboardList, href: "/admin/orders" },
+    { title: "Flash Sale", icon: Zap, href: "/admin/flash-sales" },
     { title: "Vouchers", icon: Ticket, href: "/admin/vouchers" },
     { title: "Shipper", icon: Truck, href: "/admin/shippers" },
     { title: "Bưu cục", icon: Building2, href: "/admin/post-offices" },

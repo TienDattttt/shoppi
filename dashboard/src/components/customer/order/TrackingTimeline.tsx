@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
     Package,
@@ -12,8 +13,17 @@ import {
     Building2,
     Warehouse,
     ArrowRight,
+    Phone,
+    Image,
 } from "lucide-react";
 import dayjs from "dayjs";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 export interface TrackingEvent {
     id: string;
@@ -33,11 +43,23 @@ export interface TrackingEvent {
     deliveryPhotoUrls?: string[];
 }
 
+export interface ShipperContactInfo {
+    id: string;
+    name: string;
+    phone?: string;
+    maskedPhone?: string;
+    avatarUrl?: string;
+    vehicleType?: string;
+    vehiclePlate?: string;
+}
+
 interface TrackingTimelineProps {
     shipmentId: string;
     events: TrackingEvent[];
     currentStatus: string;
     className?: string;
+    // Shipper info for contact button
+    shipperInfo?: ShipperContactInfo | null;
 }
 
 // Map status to icon - including transit simulation statuses
@@ -146,7 +168,13 @@ export function TrackingTimeline({
     events,
     currentStatus,
     className,
+    shipperInfo,
 }: TrackingTimelineProps) {
+    // State for dialogs
+    const [showContactDialog, setShowContactDialog] = useState(false);
+    const [showPhotosDialog, setShowPhotosDialog] = useState(false);
+    const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+
     // Debug log
     console.log('[TrackingTimeline] Rendering for shipment:', shipmentId);
     console.log('[TrackingTimeline] Current status:', currentStatus);
@@ -162,6 +190,10 @@ export function TrackingTimeline({
     const sortedEvents = [...events].sort(
         (a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime()
     );
+
+    // Get delivery photos from delivered event
+    const deliveredEvent = sortedEvents.find(e => e.status === 'delivered');
+    const deliveryPhotos = deliveredEvent?.deliveryPhotoUrls || [];
 
     if (sortedEvents.length === 0) {
         console.log('[TrackingTimeline] No events to display');
@@ -248,29 +280,37 @@ export function TrackingTimeline({
                                     )}
                                 </div>
 
-                                {/* Delivery proof photos - Requirements 7.1 */}
-                                {event.status === 'delivered' && event.deliveryPhotoUrls && event.deliveryPhotoUrls.length > 0 && (
-                                    <div className="mt-3">
-                                        <div className="text-xs text-muted-foreground mb-2">
-                                            Ảnh xác nhận giao hàng:
-                                        </div>
-                                        <div className="flex gap-2 flex-wrap">
-                                            {event.deliveryPhotoUrls.map((url, photoIndex) => (
-                                                <a
-                                                    key={photoIndex}
-                                                    href={url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="block"
-                                                >
-                                                    <img
-                                                        src={url}
-                                                        alt={`Ảnh giao hàng ${photoIndex + 1}`}
-                                                        className="h-20 w-20 object-cover rounded-lg border hover:opacity-80 transition-opacity cursor-pointer"
-                                                    />
-                                                </a>
-                                            ))}
-                                        </div>
+                                {/* Delivery action buttons - Requirements 7.1 */}
+                                {event.status === 'delivered' && (
+                                    <div className="mt-3 flex gap-2">
+                                        {/* Contact button */}
+                                        {shipperInfo && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-2"
+                                                onClick={() => setShowContactDialog(true)}
+                                            >
+                                                <Phone className="h-4 w-4" />
+                                                Liên hệ
+                                            </Button>
+                                        )}
+                                        
+                                        {/* Photos button */}
+                                        {event.deliveryPhotoUrls && event.deliveryPhotoUrls.length > 0 && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-2"
+                                                onClick={() => {
+                                                    setSelectedPhotoIndex(0);
+                                                    setShowPhotosDialog(true);
+                                                }}
+                                            >
+                                                <Image className="h-4 w-4" />
+                                                Hình ảnh ({event.deliveryPhotoUrls.length})
+                                            </Button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -278,6 +318,122 @@ export function TrackingTimeline({
                     );
                 })}
             </div>
+
+            {/* Contact Dialog */}
+            <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Thông tin Shipper</DialogTitle>
+                    </DialogHeader>
+                    {shipperInfo && (
+                        <div className="space-y-4">
+                            {/* Shipper avatar and name */}
+                            <div className="flex items-center gap-4">
+                                <div className="h-16 w-16 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                                    {shipperInfo.avatarUrl ? (
+                                        <img 
+                                            src={shipperInfo.avatarUrl} 
+                                            alt={shipperInfo.name} 
+                                            className="h-full w-full object-cover" 
+                                        />
+                                    ) : (
+                                        <Truck className="h-8 w-8 text-gray-400" />
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="font-medium text-lg">{shipperInfo.name}</div>
+                                    {shipperInfo.vehicleType && (
+                                        <div className="text-sm text-muted-foreground">
+                                            {shipperInfo.vehicleType}
+                                            {shipperInfo.vehiclePlate && ` • ${shipperInfo.vehiclePlate}`}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Phone number */}
+                            {(shipperInfo.phone || shipperInfo.maskedPhone) && (
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <div className="text-sm text-muted-foreground mb-1">Số điện thoại</div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-medium text-lg">
+                                            {shipperInfo.phone || shipperInfo.maskedPhone}
+                                        </span>
+                                        <a 
+                                            href={`tel:${shipperInfo.phone || shipperInfo.maskedPhone}`}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                                        >
+                                            <Phone className="h-4 w-4" />
+                                            Gọi ngay
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Photos Dialog */}
+            <Dialog open={showPhotosDialog} onOpenChange={setShowPhotosDialog}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Ảnh xác nhận giao hàng</DialogTitle>
+                    </DialogHeader>
+                    {deliveryPhotos.length > 0 && (
+                        <div className="space-y-4">
+                            {/* Main photo */}
+                            <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                                <img
+                                    src={deliveryPhotos[selectedPhotoIndex]}
+                                    alt={`Ảnh giao hàng ${selectedPhotoIndex + 1}`}
+                                    className="w-full h-full object-contain"
+                                />
+                                {/* Photo counter */}
+                                <div className="absolute bottom-2 right-2 bg-black/60 text-white text-sm px-2 py-1 rounded">
+                                    {selectedPhotoIndex + 1} / {deliveryPhotos.length}
+                                </div>
+                            </div>
+
+                            {/* Thumbnail navigation */}
+                            {deliveryPhotos.length > 1 && (
+                                <div className="flex gap-2 justify-center">
+                                    {deliveryPhotos.map((url, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setSelectedPhotoIndex(idx)}
+                                            className={cn(
+                                                "h-16 w-16 rounded-lg overflow-hidden border-2 transition-all",
+                                                selectedPhotoIndex === idx 
+                                                    ? "border-shopee-orange ring-2 ring-shopee-orange/30" 
+                                                    : "border-gray-200 hover:border-gray-300"
+                                            )}
+                                        >
+                                            <img
+                                                src={url}
+                                                alt={`Thumbnail ${idx + 1}`}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* View full size link */}
+                            <div className="text-center">
+                                <a
+                                    href={deliveryPhotos[selectedPhotoIndex]}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-shopee-orange hover:underline"
+                                >
+                                    Xem ảnh gốc
+                                </a>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

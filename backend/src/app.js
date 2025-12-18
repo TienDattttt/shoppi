@@ -114,6 +114,17 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/shippers', adminShippersRoutes); // Mounted at /api/shippers as frontend expects
 // Note: /api/admin/products is handled by product.module.js
 
+// Flash Sale Routes
+const { adminRouter: flashSaleAdminRouter, publicRouter: flashSalePublicRouter } = require('./modules/admin/flash-sale.routes');
+app.use('/api/admin/flash-sales', flashSaleAdminRouter);
+app.use('/api/flash-sales', flashSalePublicRouter);
+
+// Return Request Routes
+const { customerRouter: returnCustomerRouter, partnerRouter: returnPartnerRouter, adminRouter: returnAdminRouter } = require('./modules/order/return.routes');
+app.use('/api/returns', returnCustomerRouter);
+app.use('/api/partner/returns', returnPartnerRouter);
+app.use('/api/admin/returns', returnAdminRouter);
+
 // 404 handler
 app.use((req, res, next) => {
   res.status(404).json({

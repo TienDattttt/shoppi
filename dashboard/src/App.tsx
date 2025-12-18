@@ -56,6 +56,7 @@ const Chat = lazy(() => import("@/pages/partner/Chat"));
 const PartnerSettings = lazy(() => import("@/pages/partner/PartnerSettings"));
 const PartnerReports = lazy(() => import("@/pages/partner/PartnerReports"));
 const ShipmentTrackingPage = lazy(() => import("@/pages/partner/ShipmentTrackingPage"));
+const ReturnManagement = lazy(() => import("@/pages/partner/ReturnManagement"));
 
 // Lazy Load Customer Pages
 const HomePage = lazy(() => import("@/pages/customer/HomePage"));
@@ -77,6 +78,12 @@ const VoucherWalletPage = lazy(() => import("@/pages/customer/account/VoucherWal
 const FollowedShopsPage = lazy(() => import("@/pages/customer/account/FollowedShopsPage"));
 const VoucherHuntPage = lazy(() => import("@/pages/customer/VoucherHuntPage"));
 const CustomerChatPage = lazy(() => import("@/pages/customer/account/ChatPage"));
+const WishlistPage = lazy(() => import("@/pages/customer/account/WishlistPage"));
+const ReturnListPage = lazy(() => import("@/pages/customer/account/ReturnListPage"));
+const ReturnRequestPage = lazy(() => import("@/pages/customer/account/ReturnRequestPage"));
+
+// Admin Flash Sale
+const FlashSaleManagement = lazy(() => import("@/pages/admin/FlashSaleManagement"));
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: ('admin' | 'partner')[] }) => {
   const user = useAuthStore((state) => state.user);
@@ -130,6 +137,9 @@ function App() {
               <Route path="voucher-wallet" element={<VoucherWalletPage />} />
               <Route path="following" element={<FollowedShopsPage />} />
               <Route path="chat" element={<CustomerChatPage />} />
+              <Route path="wishlist" element={<WishlistPage />} />
+              <Route path="returns" element={<ReturnListPage />} />
+              <Route path="returns/request/:orderId/:subOrderId" element={<ReturnRequestPage />} />
             </Route>
           </Route>
 
@@ -151,6 +161,7 @@ function App() {
             <Route path="/admin/shippers/:id" element={<AdminLayout><ShipperDetail /></AdminLayout>} />
             <Route path="/admin/post-offices" element={<AdminLayout><PostOfficeManagement /></AdminLayout>} />
             <Route path="/admin/reports" element={<AdminLayout><Reports /></AdminLayout>} />
+            <Route path="/admin/flash-sales" element={<AdminLayout><FlashSaleManagement /></AdminLayout>} />
             <Route path="/admin/notifications" element={<AdminLayout><NotificationPage /></AdminLayout>} />
             <Route path="/admin/settings" element={<AdminLayout><AdminSettings /></AdminLayout>} />
           </Route>
@@ -166,6 +177,7 @@ function App() {
             <Route path="/partner/profile" element={<PartnerLayout><ShopProfile /></PartnerLayout>} />
             <Route path="/partner/orders" element={<PartnerLayout><PartnerOrderManagement /></PartnerLayout>} />
             <Route path="/partner/orders/:id" element={<PartnerLayout><OrderDetail /></PartnerLayout>} />
+            <Route path="/partner/returns" element={<PartnerLayout><ReturnManagement /></PartnerLayout>} />
             <Route path="/partner/shipments/:shipmentId" element={<PartnerLayout><ShipmentTrackingPage /></PartnerLayout>} />
             <Route path="/partner/vouchers" element={<PartnerLayout><PartnerVoucherManagement /></PartnerLayout>} />
             <Route path="/partner/reviews" element={<PartnerLayout><ReviewManagement /></PartnerLayout>} />

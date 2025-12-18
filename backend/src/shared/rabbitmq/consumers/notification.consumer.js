@@ -191,7 +191,7 @@ async function handleSmsNotification(payload, timestamp) {
  * Build notification content based on type
  */
 function buildNotificationContent(type, payload) {
-  const { orderId, totalAmount, itemCount, reason, message } = payload;
+  const { orderId, totalAmount, itemCount, reason, message, trackingNumber, distanceMeters } = payload;
   
   const contentMap = {
     'NEW_ORDER': {
@@ -225,6 +225,10 @@ function buildNotificationContent(type, payload) {
     'ORDER_CANCELLED': {
       title: 'Đơn hàng đã hủy',
       body: `Đơn hàng${orderId ? ` #${orderId.substring(0, 8)}` : ''} đã bị hủy${reason ? `. Lý do: ${reason}` : ''}`,
+    },
+    'SHIPPER_NEARBY': {
+      title: 'Shipper đang đến! 🚚',
+      body: `Shipper đang trên đường giao hàng đến bạn${trackingNumber ? ` (${trackingNumber})` : ''}${distanceMeters ? `, còn khoảng ${distanceMeters}m` : ''}. Chú ý điện thoại!`,
     },
   };
   
