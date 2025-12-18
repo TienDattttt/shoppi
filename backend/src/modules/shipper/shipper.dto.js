@@ -34,6 +34,9 @@ function toShipperResponse(shipper) {
       totalDeliveries: shipper.total_deliveries || 0,
       successfulDeliveries: shipper.successful_deliveries || 0,
       failedDeliveries: shipper.failed_deliveries || 0,
+      successRate: shipper.total_deliveries > 0 
+        ? Math.round((shipper.successful_deliveries || 0) / shipper.total_deliveries * 100) / 100
+        : 0,
       avgRating: shipper.avg_rating || 0,
       totalRatings: shipper.total_ratings || 0,
     },

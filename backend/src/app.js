@@ -119,6 +119,10 @@ const { adminRouter: flashSaleAdminRouter, publicRouter: flashSalePublicRouter }
 app.use('/api/admin/flash-sales', flashSaleAdminRouter);
 app.use('/api/flash-sales', flashSalePublicRouter);
 
+// Banner Routes
+const bannerRoutes = require('./modules/admin/banner.routes');
+app.use('/api/banners', bannerRoutes);
+
 // Return Request Routes
 const { customerRouter: returnCustomerRouter, partnerRouter: returnPartnerRouter, adminRouter: returnAdminRouter } = require('./modules/order/return.routes');
 app.use('/api/returns', returnCustomerRouter);

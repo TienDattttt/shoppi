@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddressSection } from "@/components/customer/checkout/AddressSection";
 import { ShippingSection } from "@/components/customer/checkout/ShippingSection";
@@ -7,6 +7,8 @@ import { VoucherSection } from "@/components/customer/checkout/VoucherSection";
 import { useCartStore } from "@/store/cartStore";
 import { useAuthStore } from "@/store/authStore";
 import { orderService } from "@/services/order.service";
+import { shippingService } from "@/services/shipping.service";
+import { addressService } from "@/services/address.service";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -26,8 +28,84 @@ export default function CheckoutPage() {
         discount: number;
         voucherId: string;
     } | null>(null);
+    const [shippingFee, setShippingFee] = useState<number>(0);
+    const [shippingLoading, setShippingLoading] = useState(false);
+    const [shippingInfo, setShippingInfo] = useState<{
+        zoneLabel: string;
+        estimatedDelivery: string;
+    } | null>(null);
 
     const selectedItems = items.filter(i => i.selected);
+
+    // Calculate shipping fee when address changes
+    useEffect(() => {
+        const calculateShipping = async () => {
+            if (!selectedAddressId || selectedItems.length === 0) {
+                setShippingFee(0);
+                setShippingInfo(null);
+                return;
+            }
+
+            setShippingLoading(true);
+            try {
+                // Get delivery address details
+                const addresses = await addressService.getAddresses();
+                const deliveryAddress = addresses.find((a: any) => a.id === selectedAddressId);
+                
+                if (!deliveryAddress) {
+                    setShippingFee(30000); // Default fallback
+                    return;
+                }
+
+                // Get shop location from first item (assuming single shop checkout)
+                // In real scenario, we'd need shop coordinates from cart items
+                const firstItem = selectedItems[0];
+                
+                // Geocode delivery address if no coordinates
+                let deliveryLat = deliveryAddress.lat;
+                let deliveryLng = deliveryAddress.lng;
+                
+                if (!deliveryLat || !deliveryLng) {
+                    const fullAddr = deliveryAddress.fullAddress || 
+                        `${deliveryAddress.addressLine}, ${deliveryAddress.ward}, ${deliveryAddress.district}, ${deliveryAddress.province}`;
+                    const geoResult = await addressService.geocode(fullAddr);
+                    if (geoResult) {
+                        deliveryLat = geoResult.lat;
+                        deliveryLng = geoResult.lng;
+                    }
+                }
+
+                if (!deliveryLat || !deliveryLng) {
+                    setShippingFee(30000); // Default if geocoding fails
+                    return;
+                }
+
+                // Use default shop location (Hanoi center) if not available from cart
+                // In production, this should come from the shop's actual location
+                const shopLat = (firstItem as any).shopLat || 21.0285;
+                const shopLng = (firstItem as any).shopLng || 105.8542;
+
+                const result = await shippingService.calculateFee({
+                    fromAddress: { lat: shopLat, lng: shopLng },
+                    toAddress: { lat: deliveryLat, lng: deliveryLng },
+                    weight: selectedItems.reduce((sum, item) => sum + (item.quantity * 0.5), 0), // Estimate 0.5kg per item
+                });
+
+                setShippingFee(result.fee);
+                setShippingInfo({
+                    zoneLabel: result.zoneLabel,
+                    estimatedDelivery: result.estimatedDelivery,
+                });
+            } catch (error) {
+                console.error("Failed to calculate shipping fee:", error);
+                setShippingFee(30000); // Default fallback
+            } finally {
+                setShippingLoading(false);
+            }
+        };
+
+        calculateShipping();
+    }, [selectedAddressId, selectedItems.length]);
 
     if (!token) {
         return (
@@ -47,7 +125,6 @@ export default function CheckoutPage() {
         );
     }
 
-    const shippingFee = 30000; // TODO: Calculate from API
     const discountAmount = appliedVoucher?.discount || 0;
     const finalTotal = subtotal() + shippingFee - discountAmount;
 
@@ -166,8 +243,20 @@ export default function CheckoutPage() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Phí vận chuyển:</span>
-                                <span>{formatCurrency(shippingFee)}</span>
+                                <span className="flex items-center gap-2">
+                                    {shippingLoading ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        formatCurrency(shippingFee)
+                                    )}
+                                </span>
                             </div>
+                            {shippingInfo && (
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>{shippingInfo.zoneLabel}</span>
+                                    <span>{shippingInfo.estimatedDelivery}</span>
+                                </div>
+                            )}
                             {discountAmount > 0 && (
                                 <div className="flex justify-between text-green-600">
                                     <span>Giảm giá voucher:</span>

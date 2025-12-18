@@ -152,7 +152,7 @@ class ProfilePage extends StatelessWidget {
                               Expanded(
                                 child: _buildStatItem(
                                   icon: Icons.check_circle,
-                                  value: '98%',
+                                  value: '${(shipper.successRate * 100).toStringAsFixed(0)}%',
                                   label: 'Thành công',
                                 ),
                               ),
