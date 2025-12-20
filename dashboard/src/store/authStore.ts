@@ -6,9 +6,13 @@ interface User {
     email: string | null;
     phone: string | null;
     fullName: string;
+    name?: string; // Alias for fullName
     role: 'admin' | 'partner' | 'customer' | 'shipper';
     status: string;
     avatarUrl?: string;
+    avatar?: string; // Alias for avatarUrl
+    gender?: string;
+    dateOfBirth?: string;
 }
 
 interface AuthState {

@@ -21,9 +21,12 @@ export default function VoucherManagement() {
         setLoading(true);
         try {
             const response = await voucherService.getAllVouchers();
+            // Handle nested data structure from API
             const data = response?.data || response || [];
-            setVouchers(Array.isArray(data) ? data : []);
+            const voucherList = Array.isArray(data) ? data : ((data as any)?.vouchers || []);
+            setVouchers(voucherList);
         } catch (error) {
+            console.error("Load vouchers error:", error);
             toast.error("Failed to load vouchers");
         } finally {
             setLoading(false);
@@ -55,7 +58,7 @@ export default function VoucherManagement() {
         try {
             if (editingVoucher) {
                 const voucherId = (editingVoucher as any)._id || (editingVoucher as any).id;
-                await voucherService.updateVoucher(voucherId, data);
+                await voucherService.updateVoucher(voucherId, data as any);
                 toast.success("Voucher updated");
             } else {
                 await voucherService.createSystemVoucher(data as any);
@@ -101,9 +104,9 @@ export default function VoucherManagement() {
                                     <div>
                                         <h3 className="font-bold text-lg tracking-wide">{voucher.code}</h3>
                                         <p className="text-sm text-foreground/80">
-                                            {voucher.discountType === 'fixed' ? formatCurrency(voucher.value) : `${voucher.value}%`} Off
+                                            {voucher.discountType === 'fixed' ? formatCurrency(voucher.value || 0) : `${voucher.value || 0}%`} Off
                                         </p>
-                                        <p className="text-xs text-muted-foreground">Min Order: {formatCurrency(voucher.minOrderValue)}</p>
+                                        <p className="text-xs text-muted-foreground">Min Order: {formatCurrency(voucher.minOrderValue || 0)}</p>
                                     </div>
                                     <div className="space-y-1 pt-2">
                                         <div className="flex items-center text-xs text-muted-foreground">
@@ -123,7 +126,7 @@ export default function VoucherManagement() {
                                             variant="outline"
                                             size="sm"
                                             className={`flex-1 ${voucher.status === 'active' ? 'text-destructive border-destructive hover:bg-destructive/10' : 'text-green-600 border-green-600 hover:bg-green-50'}`}
-                                            onClick={() => handleToggleStatus(voucher._id, voucher.status)}
+                                            onClick={() => handleToggleStatus(voucher._id || voucher.id, voucher.status || 'inactive')}
                                         >
                                             {voucher.status === 'active' ? <><Ban className="mr-1 h-3 w-3" /> Deactivate</> : <><CheckCircle className="mr-1 h-3 w-3" /> Activate</>}
                                         </Button>

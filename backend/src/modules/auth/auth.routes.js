@@ -5,6 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 
 const authController = require('./auth.controller');
 const authMiddleware = require('./auth.middleware');
@@ -27,6 +28,19 @@ const {
   otpLimiter,
   passwordResetLimiter,
 } = require('../../shared/middleware/rate-limit.middleware');
+
+// Multer config for avatar upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1024 * 1024 }, // 1MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
 
 /**
  * Public Routes (No authentication required)
@@ -154,6 +168,21 @@ router.get(
   '/me',
   authMiddleware.authenticate,
   authController.getCurrentUser
+);
+
+// Update Profile
+router.patch(
+  '/me',
+  authMiddleware.authenticate,
+  authController.updateProfile
+);
+
+// Upload Avatar
+router.post(
+  '/me/avatar',
+  authMiddleware.authenticate,
+  upload.single('file'),
+  authController.uploadAvatar
 );
 
 /**

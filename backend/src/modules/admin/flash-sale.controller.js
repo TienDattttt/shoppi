@@ -4,7 +4,7 @@
  */
 
 const flashSaleService = require('../product/services/flash-sale.service');
-const { successResponse, errorResponse } = require('../../shared/utils/response.util');
+const { sendSuccess, sendCreated } = require('../../shared/utils/response.util');
 
 // ============================================
 // FLASH SALE CRUD
@@ -18,7 +18,7 @@ async function createFlashSale(req, res, next) {
     try {
         const userId = req.user.userId;
         const flashSale = await flashSaleService.createFlashSale(req.body, userId);
-        return successResponse(res, { flashSale }, 201);
+        return sendCreated(res, { flashSale });
     } catch (error) {
         next(error);
     }
@@ -32,7 +32,7 @@ async function updateFlashSale(req, res, next) {
     try {
         const { id } = req.params;
         const flashSale = await flashSaleService.updateFlashSale(id, req.body);
-        return successResponse(res, { flashSale });
+        return sendSuccess(res, { flashSale });
     } catch (error) {
         next(error);
     }
@@ -46,7 +46,7 @@ async function deleteFlashSale(req, res, next) {
     try {
         const { id } = req.params;
         await flashSaleService.deleteFlashSale(id);
-        return successResponse(res, { message: 'Flash sale deleted' });
+        return sendSuccess(res, { message: 'Flash sale deleted' });
     } catch (error) {
         next(error);
     }
@@ -60,7 +60,7 @@ async function getFlashSale(req, res, next) {
     try {
         const { id } = req.params;
         const flashSale = await flashSaleService.getFlashSaleWithProducts(id);
-        return successResponse(res, { flashSale });
+        return sendSuccess(res, { flashSale });
     } catch (error) {
         next(error);
     }
@@ -79,7 +79,7 @@ async function listFlashSales(req, res, next) {
             page: page ? parseInt(page, 10) : 1,
             limit: limit ? parseInt(limit, 10) : 20,
         });
-        return successResponse(res, result);
+        return sendSuccess(res, result);
     } catch (error) {
         next(error);
     }
@@ -97,7 +97,7 @@ async function addProduct(req, res, next) {
     try {
         const { id } = req.params;
         const product = await flashSaleService.addProductToFlashSale(id, req.body);
-        return successResponse(res, { product }, 201);
+        return sendCreated(res, { product });
     } catch (error) {
         next(error);
     }
@@ -111,7 +111,7 @@ async function updateProduct(req, res, next) {
     try {
         const { productId } = req.params;
         const product = await flashSaleService.updateFlashSaleProduct(productId, req.body);
-        return successResponse(res, { product });
+        return sendSuccess(res, { product });
     } catch (error) {
         next(error);
     }
@@ -125,7 +125,7 @@ async function removeProduct(req, res, next) {
     try {
         const { productId } = req.params;
         await flashSaleService.removeProductFromFlashSale(productId);
-        return successResponse(res, { message: 'Product removed from flash sale' });
+        return sendSuccess(res, { message: 'Product removed from flash sale' });
     } catch (error) {
         next(error);
     }
@@ -139,7 +139,7 @@ async function getProducts(req, res, next) {
     try {
         const { id } = req.params;
         const products = await flashSaleService.getFlashSaleProducts(id);
-        return successResponse(res, { products });
+        return sendSuccess(res, { products });
     } catch (error) {
         next(error);
     }
@@ -156,7 +156,7 @@ async function getProducts(req, res, next) {
 async function getActiveFlashSales(req, res, next) {
     try {
         const flashSales = await flashSaleService.getActiveFlashSales();
-        return successResponse(res, { flashSales });
+        return sendSuccess(res, { flashSales });
     } catch (error) {
         next(error);
     }
@@ -171,10 +171,10 @@ async function getPublicFlashSaleProducts(req, res, next) {
         const { id } = req.params;
         const flashSale = await flashSaleService.getFlashSaleById(id);
         if (!flashSale || flashSale.status !== 'active') {
-            return successResponse(res, { products: [] });
+            return sendSuccess(res, { products: [] });
         }
         const products = await flashSaleService.getFlashSaleProducts(id);
-        return successResponse(res, { flashSale, products });
+        return sendSuccess(res, { flashSale, products });
     } catch (error) {
         next(error);
     }

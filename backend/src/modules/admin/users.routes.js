@@ -291,9 +291,20 @@ router.get('/:id/shop', authenticate, requireAdmin, async (req, res) => {
                 .eq('shop_id', shop.id)
         ]);
 
+        // Handle potential errors in stats queries
+        if (productsResult.error) {
+            console.error('Products query error:', productsResult.error);
+        }
+        if (ordersResult.error) {
+            console.error('Orders query error:', ordersResult.error);
+        }
+
         const totalProducts = productsResult.count || 0;
         const totalOrders = ordersResult.count || 0;
-        const totalRevenue = (ordersResult.data || []).reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+        const totalRevenue = (ordersResult.data || []).reduce((sum, o) => {
+            const amount = parseFloat(o.total_amount) || 0;
+            return sum + amount;
+        }, 0);
 
         res.json({
             success: true,
