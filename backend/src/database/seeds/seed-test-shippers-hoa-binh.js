@@ -12,14 +12,14 @@ const PASSWORD = 'Test@123';
 
 const TEST_SHIPPERS = [
   {
-    phone: '0901111001',
+    phone: '+84901111001',
     fullName: 'Nguyễn Văn Shipper A',
     idCardNumber: '079201001001',
     vehicleType: 'motorbike',
     vehiclePlate: '59A1-11111',
   },
   {
-    phone: '0901111002',
+    phone: '+84901111002',
     fullName: 'Trần Thị Shipper B',
     idCardNumber: '079201001002',
     vehicleType: 'motorbike',
@@ -135,7 +135,9 @@ async function main() {
   console.log('✅ Done!');
   console.log(`\nLogin credentials:`);
   TEST_SHIPPERS.forEach(s => {
-    console.log(`  Phone: ${s.phone} | Password: ${PASSWORD}`);
+    // Display phone in 0xxx format for user convenience
+    const displayPhone = s.phone.replace('+84', '0');
+    console.log(`  Phone: ${displayPhone} | Password: ${PASSWORD}`);
   });
   console.log('='.repeat(60));
 }

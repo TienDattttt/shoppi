@@ -958,6 +958,31 @@ async function getCurrentUser(userId) {
 }
 
 /**
+ * Update user profile
+ * @param {string} userId
+ * @param {object} data - { fullName, gender, dateOfBirth, avatarUrl }
+ * @returns {Promise<object>}
+ */
+async function updateProfile(userId, data) {
+  const { fullName, gender, dateOfBirth, avatarUrl } = data;
+  
+  const updates = {};
+  if (fullName !== undefined) updates.full_name = fullName;
+  if (gender !== undefined) updates.gender = gender;
+  if (dateOfBirth !== undefined) updates.date_of_birth = dateOfBirth;
+  if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
+  updates.updated_at = new Date().toISOString();
+  
+  const user = await authRepository.updateUser(userId, updates);
+  
+  if (!user) {
+    throw new AuthenticationError('AUTH_USER_NOT_FOUND', 'User not found');
+  }
+  
+  return serializeUser(user);
+}
+
+/**
  * Request password reset
  * @param {string} identifier - Email or phone
  * @returns {Promise<object>}
@@ -1341,6 +1366,7 @@ module.exports = {
   logout,
   logoutAllDevices,
   getCurrentUser,
+  updateProfile,
 
   // Password Reset
   requestPasswordReset,

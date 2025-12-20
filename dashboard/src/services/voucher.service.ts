@@ -2,7 +2,10 @@ import api from "./api";
 
 export interface Voucher {
     id: string;
+    _id?: string; // Alias from backend
     code: string;
+    name?: string;
+    description?: string;
     type: 'platform' | 'shop';
     shop_id: string | null;
     discount_type: 'percentage' | 'fixed';
@@ -10,7 +13,7 @@ export interface Voucher {
     max_discount: number | null;
     min_order_value: number;
     usage_limit: number | null;
-    usage_count: number;
+    used_count: number;
     per_user_limit: number;
     start_date: string;
     end_date: string;
@@ -18,13 +21,14 @@ export interface Voucher {
     created_at: string;
     estimated_discount?: number;
     is_collected?: boolean;
-    // Aliases for camelCase access
+    // Aliases for camelCase access (from backend transform)
+    status?: 'active' | 'inactive';
     shopId?: string | null;
-    discountType?: 'percentage' | 'fixed';
-    discountValue?: number;
+    discountType?: 'percentage' | 'fixed' | 'percent';
+    value?: number;
     maxDiscount?: number | null;
     minOrderValue?: number;
-    usageLimit?: number | null;
+    usageLimit?: number | string | null;
     usedCount?: number;
     perUserLimit?: number;
     startDate?: string;
@@ -124,5 +128,68 @@ export const voucherService = {
     // Delete shop voucher (partner)
     deleteShopVoucher: async (voucherId: string): Promise<void> => {
         await api.delete(`/shop/vouchers/${voucherId}`);
+    },
+
+    // ============================================
+    // ADMIN VOUCHER MANAGEMENT
+    // ============================================
+
+    // Get all vouchers (admin)
+    getAllVouchers: async (params?: {
+        type?: 'platform' | 'shop';
+        status?: 'active' | 'inactive';
+        page?: number;
+        limit?: number;
+    }): Promise<{ data: Voucher[]; pagination?: any }> => {
+        const response = await api.get("/admin/vouchers", { params });
+        return response.data;
+    },
+
+    // Create system/platform voucher (admin)
+    createSystemVoucher: async (data: {
+        code: string;
+        name?: string;
+        description?: string;
+        discount_type: 'percentage' | 'fixed';
+        discount_value: number;
+        max_discount?: number;
+        min_order_value?: number;
+        usage_limit?: number;
+        per_user_limit?: number;
+        start_date: string;
+        end_date: string;
+    }): Promise<Voucher> => {
+        const response = await api.post("/admin/vouchers", data);
+        return response.data;
+    },
+
+    // Update voucher (admin)
+    updateVoucher: async (voucherId: string, data: Partial<{
+        code: string;
+        name: string;
+        description: string;
+        discount_type: 'percentage' | 'fixed';
+        discount_value: number;
+        max_discount: number;
+        min_order_value: number;
+        usage_limit: number;
+        per_user_limit: number;
+        start_date: string;
+        end_date: string;
+        is_active: boolean;
+    }>): Promise<Voucher> => {
+        const response = await api.put(`/admin/vouchers/${voucherId}`, data);
+        return response.data;
+    },
+
+    // Toggle voucher status (admin)
+    toggleVoucherStatus: async (voucherId: string, status: 'active' | 'inactive'): Promise<Voucher> => {
+        const response = await api.patch(`/admin/vouchers/${voucherId}/status`, { isActive: status });
+        return response.data;
+    },
+
+    // Delete voucher (admin)
+    deleteVoucher: async (voucherId: string): Promise<void> => {
+        await api.delete(`/admin/vouchers/${voucherId}`);
     },
 };

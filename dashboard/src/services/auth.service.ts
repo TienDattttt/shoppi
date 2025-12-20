@@ -114,6 +114,12 @@ export const authService = {
         return response.data;
     },
 
+    // Update profile
+    updateProfile: async (data: { fullName?: string; gender?: string; dateOfBirth?: string; avatarUrl?: string }) => {
+        const response = await api.patch("/auth/me", data);
+        return response.data;
+    },
+
     // Get sessions
     getSessions: async () => {
         const response = await api.get("/auth/sessions");

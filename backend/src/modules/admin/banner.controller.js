@@ -12,20 +12,34 @@ const { sendSuccess, sendError } = require('../../shared/utils/response.util');
  */
 async function getActiveBanners(req, res, next) {
     try {
-        const now = new Date().toISOString();
-        
+        // Simple query - just get active banners ordered by position
+        // Date filtering can be done in application if needed
         const { data: banners, error } = await supabaseAdmin
             .from('banners')
             .select('*')
             .eq('is_active', true)
-            .or(`start_date.is.null,start_date.lte.${now}`)
-            .or(`end_date.is.null,end_date.gte.${now}`)
             .order('position', { ascending: true });
 
-        if (error) throw error;
+        // If table doesn't exist yet (schema cache not refreshed), return empty array
+        if (error) {
+            if (error.code === 'PGRST205') {
+                // Table not found in schema cache - return empty array
+                console.warn('Banners table not found in schema cache, returning empty array');
+                return sendSuccess(res, { banners: [] });
+            }
+            throw error;
+        }
+
+        // Filter by date in application code
+        const now = new Date();
+        const filteredBanners = (banners || []).filter(b => {
+            const startOk = !b.start_date || new Date(b.start_date) <= now;
+            const endOk = !b.end_date || new Date(b.end_date) >= now;
+            return startOk && endOk;
+        });
 
         return sendSuccess(res, {
-            banners: banners.map(b => ({
+            banners: filteredBanners.map(b => ({
                 id: b.id,
                 title: b.title,
                 description: b.description,

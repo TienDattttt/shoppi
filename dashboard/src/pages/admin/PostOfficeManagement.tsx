@@ -109,12 +109,23 @@ export default function PostOfficeManagement() {
         office_type: typeFilter || undefined,
       });
       
-      const data = response.data || response;
-      setPostOffices(data.data || []);
-      if (data.pagination) {
-        setPagination(prev => ({ ...prev, ...data.pagination }));
+      console.log('PostOffice API response:', response);
+      
+      // Response structure after axios interceptor: { data: [...], pagination: {...} }
+      // Or if interceptor didn't extract: { data: { data: [...], pagination: {...} } }
+      const responseData = response.data || response;
+      const postOfficeList = responseData.data || responseData || [];
+      const paginationData = responseData.pagination;
+      
+      console.log('Parsed postOfficeList:', postOfficeList);
+      console.log('Parsed pagination:', paginationData);
+      
+      setPostOffices(Array.isArray(postOfficeList) ? postOfficeList : []);
+      if (paginationData) {
+        setPagination(prev => ({ ...prev, ...paginationData }));
       }
     } catch (error) {
+      console.error('PostOffice API error:', error);
       toast.error("Không thể tải danh sách bưu cục");
     } finally {
       setLoading(false);
@@ -297,23 +308,23 @@ export default function PostOfficeManagement() {
                 />
               </div>
             </div>
-            <Select value={regionFilter} onValueChange={setRegionFilter}>
+            <Select value={regionFilter || "all"} onValueChange={(v) => setRegionFilter(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Tất cả miền" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tất cả miền</SelectItem>
+                <SelectItem value="all">Tất cả miền</SelectItem>
                 <SelectItem value="north">Miền Bắc</SelectItem>
                 <SelectItem value="central">Miền Trung</SelectItem>
                 <SelectItem value="south">Miền Nam</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select value={typeFilter || "all"} onValueChange={(v) => setTypeFilter(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Tất cả loại" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tất cả loại</SelectItem>
+                <SelectItem value="all">Tất cả loại</SelectItem>
                 <SelectItem value="local">Bưu cục</SelectItem>
                 <SelectItem value="regional">Kho trung chuyển</SelectItem>
               </SelectContent>

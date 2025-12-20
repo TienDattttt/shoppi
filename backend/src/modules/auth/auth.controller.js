@@ -270,6 +270,53 @@ async function getCurrentUser(req, res) {
 }
 
 /**
+ * Update current user profile
+ * PATCH /api/auth/me
+ */
+async function updateProfile(req, res) {
+  try {
+    const { userId } = req.user;
+    const { fullName, gender, dateOfBirth, avatarUrl } = req.body;
+    const user = await authService.updateProfile(userId, { fullName, gender, dateOfBirth, avatarUrl });
+    return sendSuccess(res, { user });
+  } catch (error) {
+    return sendError(res, error.code || 'UPDATE_ERROR', error.message, error.statusCode || 400);
+  }
+}
+
+/**
+ * Upload avatar
+ * POST /api/auth/me/avatar
+ */
+async function uploadAvatar(req, res) {
+  try {
+    const { userId } = req.user;
+    const storageClient = require('../../shared/supabase/storage.client');
+    
+    if (!req.file) {
+      return sendError(res, 'UPLOAD_ERROR', 'No file provided', 400);
+    }
+    
+    const ext = req.file.originalname.split('.').pop() || 'jpg';
+    const path = `avatars/${userId}.${ext}`;
+    
+    const result = await storageClient.uploadFile(
+      storageClient.BUCKETS.AVATARS,
+      path,
+      req.file.buffer,
+      { contentType: req.file.mimetype, upsert: true }
+    );
+    
+    // Update user avatar_url
+    const user = await authService.updateProfile(userId, { avatarUrl: result.url });
+    
+    return sendSuccess(res, { url: result.url, user });
+  } catch (error) {
+    return sendError(res, error.code || 'UPLOAD_ERROR', error.message, error.statusCode || 500);
+  }
+}
+
+/**
  * Approve account (Admin only)
  * POST /api/auth/admin/approve/:userId
  */
@@ -425,6 +472,8 @@ module.exports = {
   
   // User
   getCurrentUser,
+  updateProfile,
+  uploadAvatar,
   
   // Admin
   approveAccount,
