@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+#include "MapConfigDefaults.xcconfig"
+#include? "Secrets.xcconfig"

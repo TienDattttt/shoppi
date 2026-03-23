@@ -17,6 +17,14 @@ class NavigationService {
     String profile = 'driving', // driving, walking, cycling
   }) async {
     try {
+      if (!AppConfig.hasMapboxAccessToken) {
+        print(
+          'NavigationService error: MAPBOX_ACCESS_TOKEN is missing. '
+          'Pass it with --dart-define=MAPBOX_ACCESS_TOKEN=...',
+        );
+        return null;
+      }
+
       final url = '$_baseUrl/$profile/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}';
       
       final response = await _dio.get(url, queryParameters: {

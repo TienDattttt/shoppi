@@ -29,15 +29,17 @@ class AppConfig {
   // ========================================
 
   /// Google Maps API Key (for geocoding, distance matrix)
-  /// Get from: https://console.cloud.google.com
+  /// Provide with --dart-define=GOOGLE_MAPS_API_KEY=...
   static const String googleMapsApiKey =
-      'GOOGLE_MAPS_API_KEY_REDACTED';
+      String.fromEnvironment('GOOGLE_MAPS_API_KEY');
 
   /// Mapbox Access Token (for navigation, turn-by-turn directions)
-  /// Get from: https://account.mapbox.com
-  /// Free tier: 50,000 map loads/month
+  /// Provide with --dart-define=MAPBOX_ACCESS_TOKEN=...
   static const String mapboxAccessToken =
-      'MAPBOX_PUBLIC_TOKEN_REDACTED';
+      String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
+
+  static bool get hasGoogleMapsApiKey => googleMapsApiKey.isNotEmpty;
+  static bool get hasMapboxAccessToken => mapboxAccessToken.isNotEmpty;
 
   /// Default map center (Ho Chi Minh City)
   static const double defaultLatitude = 10.8231;

@@ -1,16 +1,27 @@
 # mobile
 
-A new Flutter project.
+Flutter app for the Shoppi mobile client.
 
-## Getting Started
+## Local secrets setup
 
-This project is a starting point for a Flutter application.
+This project no longer stores Mapbox or Google Maps keys in git.
 
-A few resources to get you started if this is your first Flutter project:
+1. Add your Google Maps Android key to `mobile/android/local.properties`:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```properties
+google.maps.api.key=your_google_maps_api_key
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+2. Create `mobile/ios/Flutter/Secrets.xcconfig` from the example file and fill in your iOS Google Maps key:
+
+```xcconfig
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+```
+
+3. Pass the Mapbox access token when you run or build Flutter:
+
+```bash
+flutter run --dart-define=MAPBOX_ACCESS_TOKEN=your_mapbox_public_token
+```
+
+Use the same `--dart-define` flag for `flutter build ...` commands.
